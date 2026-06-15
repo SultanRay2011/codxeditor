@@ -1468,6 +1468,7 @@ let collabSocket = null;
 let collabParticipants = [];
 let collabTimeline = [];
 let lastParticipantsSnapshot = new Map();
+let previousParticipantCount = 0;
 let activeSessionId = null;
 let isApplyingRemoteState = false;
 let currentTypingIndicator = null;
@@ -10172,6 +10173,19 @@ function ensureCollabSocket() {
   collabSocket.on("collab:participants", (participants) => {
     const nextParticipants = Array.isArray(participants) ? participants : [];
     updateTimelineFromParticipants(nextParticipants);
+
+    // Detect new joiners and show notification
+    if (nextParticipants.length > previousParticipantCount) {
+      const prevNames = new Set(collabParticipants.map(p => String(p.name || "").trim().toLowerCase()));
+      const newJoiners = nextParticipants.filter(p => {
+        const pKey = String(p.name || "").trim().toLowerCase();
+        return !prevNames.has(pKey);
+      });
+      newJoiners.forEach(joiner => {
+        showNotification(`${escapeHtml(joiner.name)} has joined this session`, "info");
+      });
+    }
+    previousParticipantCount = nextParticipants.length;
     collabParticipants = nextParticipants;
     const hostFromParticipants = collabParticipants.find((p) => p.role === "host")?.name;
     if (hostFromParticipants) {
