@@ -1000,6 +1000,8 @@
       const contactMessage = document.getElementById("contactMessage");
       const contactMessageCount = document.getElementById("contactMessageCount");
       const contactSuccess = document.getElementById("contactSuccess");
+      const contactCardEl = document.querySelector('.contact-card');
+      const pageHeader = document.querySelector('header');
 
       menuToggle.addEventListener("click", () => {
         menuToggle.classList.toggle("active");
@@ -1116,10 +1118,20 @@
           contactForm.style.display = "none";
           if (contactSuccess) {
             contactSuccess.classList.add("visible");
+            contactSuccess.setAttribute('tabindex', '-1');
+            if (typeof contactSuccess.focus === 'function') {
+              contactSuccess.focus({ preventScroll: true });
+            }
           }
-          requestAnimationFrame(() => {
-            window.scrollTo({ top: currentScrollY, behavior: "auto" });
-          });
+          setTimeout(() => {
+            if (contactCardEl) {
+              const headerHeight = pageHeader ? pageHeader.offsetHeight : 0;
+              const top = contactCardEl.getBoundingClientRect().top + window.scrollY - headerHeight - 10;
+              window.scrollTo({ top, behavior: 'smooth' });
+            } else {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }, 50);
         });
       }
     </script>
