@@ -79,6 +79,7 @@ const headerMorePanel = document.getElementById("headerMorePanel");
 const undoEditorBtn = document.getElementById("undoEditorBtn");
 const redoEditorBtn = document.getElementById("redoEditorBtn");
 
+
 function getModalDoneBtn() {
   return document.getElementById("modalDoneBtn");
 }
@@ -11074,7 +11075,7 @@ function showSessionDetails(sid) {
       </div>
     </div>
     <div class="collab-section-card">
-      <h4 class="collab-section-title">Participants</h4>
+      <h4 class="collab-section-title">Participants <span style="font-weight:normal;color:var(--text-muted);font-size:13px;">(${orderedParticipants.length})</span></h4>
       <div class="collab-participant-list">${listItems}</div>
     </div>
     <div class="collab-section-card">
