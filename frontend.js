@@ -9565,6 +9565,7 @@ function renderCollabChatMessages() {
   listEl.scrollTop = listEl.scrollHeight;
 }
 
+
 function buildCollabChatPanelHtml() {
   const privateCandidates = getPrivateChatCandidates();
   if (!collabChatTarget && privateCandidates.length) {
@@ -10303,8 +10304,17 @@ function ensureCollabSocket() {
     collabGroupMessages.push(message);
     if (collabGroupMessages.length > 300) collabGroupMessages.shift();
     renderCollabChatMessages();
-    if (message.name) {
-      addTimelineEntry(`${message.name} sent a group message.`, "chat");
+    const senderName = String(message.from || message.name || "").trim();
+    if (senderName) {
+      addTimelineEntry(`${senderName} sent a group message.`, "chat");
+      if (senderName !== String(myInfo.name)) {
+        if (!collabModal || collabModal.style.display !== "flex" || collabModalView !== "session") {
+          showNotificationHtml(
+            `<strong>${escapeHtml(senderName)}</strong> has sent a message publicly.`,
+            "info",
+          );
+        }
+      }
     }
   });
 
