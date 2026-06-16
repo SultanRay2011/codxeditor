@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -716,6 +717,133 @@
         }
       }
 
+      /* ── Comparison Table ── */
+      .comparison-section { margin: 40px 0 0; }
+
+      .comparison-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.10);
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        min-width: 660px;
+        border-radius: 20px;
+        overflow: hidden;
+      }
+
+      .comparison-table thead th {
+        padding: 20px 10px 16px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 0.82em;
+        color: #555;
+        border-bottom: 2px solid #f0f0f0;
+        vertical-align: middle;
+        background: #fff;
+      }
+
+      .comparison-table thead th:first-child {
+        text-align: left;
+        padding-left: 24px;
+        width: 190px;
+        color: #aaa;
+        font-weight: 600;
+        font-size: 0.75em;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .comparison-table thead th.col-codx {
+        background: linear-gradient(170deg, #3ecf5a 0%, #2e9e45 100%);
+        color: #fff;
+        border-radius: 18px 18px 0 0;
+        padding: 26px 14px 18px;
+        min-width: 130px;
+      }
+
+      .col-logo-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .col-logo-wrap img {
+        display: block;
+        object-fit: contain;
+        /* each header specifies its own width/height inline */
+      }
+
+      .col-label {
+        font-weight: 800;
+        font-size: 0.95em;
+        color: #333;
+        margin-top: 2px;
+      }
+
+      .col-codx .col-label { color: #fff; font-size: 1em; }
+
+      .col-codx-btn {
+        display: inline-block;
+        margin-top: 12px;
+        background: #111;
+        color: #fff;
+        text-decoration: none;
+        padding: 9px 18px;
+        border-radius: 30px;
+        font-weight: 700;
+        font-size: 0.78em;
+        letter-spacing: 0.02em;
+        transition: background 0.2s, transform 0.2s;
+        white-space: nowrap;
+      }
+
+      .col-codx-btn:hover { background: #333; transform: translateY(-2px); }
+
+      .comparison-table tbody tr:nth-child(odd)  { background: #f8f8f8; }
+      .comparison-table tbody tr:nth-child(even) { background: #ffffff; }
+
+      .comparison-table tbody td {
+        padding: 18px 10px;
+        text-align: center;
+        font-size: 0.93em;
+        color: #444;
+        border-bottom: 1px solid #efefef;
+        vertical-align: middle;
+      }
+
+      .comparison-table tbody td:first-child {
+        text-align: left;
+        padding-left: 24px;
+        font-weight: 600;
+        color: #333;
+        font-size: 0.9em;
+      }
+
+      .comparison-table tbody td.col-codx {
+        background: linear-gradient(160deg, rgba(76,175,80,0.14), rgba(76,175,80,0.06));
+        font-weight: 700;
+        color: #1b6b1e;
+      }
+
+      .comparison-table tbody tr:nth-child(odd) td.col-codx {
+        background: linear-gradient(160deg, rgba(76,175,80,0.19), rgba(76,175,80,0.09));
+      }
+
+      .comparison-table tbody tr:last-child td { border-bottom: none; }
+      .comparison-table tbody tr:last-child td.col-codx { border-radius: 0 0 18px 18px; }
+
+      .check-icon { color: #4caf50; font-size: 1.1em; }
+      .cross-icon { color: #e53935; font-size: 1.05em; }
+      .partial-text { color: #f57c00; font-size: 0.82em; font-weight: 700; }
+      .speed-val { font-weight: 700; }
+      .codx-speed { color: #2e7d32; font-size: 1.08em; }
+
       @media (max-width: 900px) {
         .feature-showcase,
         .how-grid,
@@ -1082,6 +1210,156 @@
           </div>
         </div>
 
+        <!-- ── Comparison Table ── -->
+        <div class="comparison-section">
+          <h3 class="section-title">How CodX Editor Compares</h3>
+          <p style="color:#555;font-size:0.93em;margin-bottom:18px;text-align:left;">
+            See how CodX Editor stacks up against the most popular online code editors.
+          </p>
+          <div class="comparison-wrapper">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th></th>
+
+                  <!-- CodX — highlighted -->
+                  <th class="col-codx">
+                    <div class="col-logo-wrap">
+                      <img src="cx.png" alt="CodX Editor" width="44" height="44" style="filter:brightness(0) invert(1);" />
+                      <span class="col-label">CodX Editor</span>
+                      <a href="welcome.html" class="col-codx-btn">Open Editor</a>
+                    </div>
+                  </th>
+
+                  <!-- CodePen -->
+                  <th>
+                    <div class="col-logo-wrap">
+                      <img src="https://cpwebassets.codepen.io/assets/favicon/favicon-aec34940fbc1a6e787974dcd360f2c6b63348d4dccd4e6e2c4a1468d073fc2 87.png"
+                           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+                           alt="CodePen" width="36" height="36" style="border-radius:8px;" />
+                      <span style="display:none;width:36px;height:36px;background:#1e1f26;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:1em;">CP</span>
+                      <span class="col-label">CodePen</span>
+                    </div>
+                  </th>
+
+                  <!-- JSFiddle -->
+                  <th>
+                    <div class="col-logo-wrap">
+                      <img src="https://jsfiddle.net/img/favicon.png"
+                           onerror="this.style.display='none';"
+                           alt="JSFiddle" width="36" height="36" style="border-radius:8px;" />
+                      <span class="col-label">JSFiddle</span>
+                    </div>
+                  </th>
+
+                  <!-- StackBlitz -->
+                  <th>
+                    <div class="col-logo-wrap">
+                      <img src="https://c.staticblitz.com/assets/favicon_sb-861fe1b85c0dc928750c62de15fed96fc75e57ee366bd937bad9a76f2cf1c4f.png"
+                           onerror="this.style.display='none';"
+                           alt="StackBlitz" width="36" height="36" style="border-radius:8px;" />
+                      <span class="col-label">StackBlitz</span>
+                    </div>
+                  </th>
+
+                  <!-- Replit -->
+                  <th>
+                    <div class="col-logo-wrap">
+                      <img src="https://replit.com/public/icons/favicon-196.png"
+                           onerror="this.style.display='none';"
+                           alt="Replit" width="36" height="36" style="border-radius:8px;" />
+                      <span class="col-label">Replit</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Instant live preview</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>100% Free</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><span class="partial-text">Free tier</span></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><span class="partial-text">Free tier</span></td>
+                  <td><span class="partial-text">Free tier</span></td>
+                </tr>
+                <tr>
+                  <td>No account needed</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Real-time collaboration</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><span class="partial-text">Pro only</span></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Built-in chat</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Live collaborator cursors</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Error jump &amp; highlights</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><span class="partial-text">Partial</span></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>ZIP import / export</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><span class="partial-text">Export only</span></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Zen / focus mode</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                </tr>
+                <tr>
+                  <td>Custom fonts tool</td>
+                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- ── /Comparison Table ── -->
+
         <h3 class="section-title">Why CodX Editor Feels Better</h3>
         <div class="feature-showcase">
           <article class="showcase-card">
@@ -1170,7 +1448,6 @@
             </p>
           </article>
         </div>
-
         <div class="strong-cta">
           <h2>Start Your Next Project Today</h2>
           <p>
@@ -1178,9 +1455,7 @@
             projects in minutes.
           </p>
           <div class="cta-actions">
-            <a href="welcome.html" class="mini-btn primary"
-              >Launch CodX Editor</a
-            >
+            <a href="welcome.html" class="mini-btn primary">Launch CodX Editor</a>
             <a href="about.html" class="mini-btn secondary">Learn More</a>
           </div>
         </div>
