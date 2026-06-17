@@ -610,6 +610,238 @@ htmlTagMetaMap.set("lorem", {
   insertText:
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
 });
+[
+  {
+    tag: "a:blank",
+    desc: "Anchor link that opens in a new tab",
+    insertText: '<a href="" target="_blank" rel="noopener noreferrer"></a>',
+  },
+  {
+    tag: "a:link",
+    desc: "Anchor link with an HTTP URL",
+    insertText: '<a href="http://"></a>',
+  },
+  {
+    tag: "a:mail",
+    desc: "Email anchor link",
+    insertText: '<a href="mailto:"></a>',
+  },
+  {
+    tag: "a:tel",
+    desc: "Telephone anchor link",
+    insertText: '<a href="tel:"></a>',
+  },
+  {
+    tag: "area:blank",
+    desc: "Image map area link that opens in a new tab",
+    insertText: '<area href="" target="_blank" rel="noopener noreferrer" alt="">',
+  },
+  {
+    tag: "base:blank",
+    desc: "Base URL target that opens links in a new tab",
+    insertText: '<base href="" target="_blank">',
+  },
+  {
+    tag: "button:button",
+    desc: "Button element with button type",
+    insertText: '<button type="button"></button>',
+  },
+  {
+    tag: "button:reset",
+    desc: "Button element with reset type",
+    insertText: '<button type="reset"></button>',
+  },
+  {
+    tag: "button:submit",
+    desc: "Button element with submit type",
+    insertText: '<button type="submit"></button>',
+  },
+  {
+    tag: "form:get",
+    desc: "Form element using GET",
+    insertText: '<form action="" method="get"></form>',
+  },
+  {
+    tag: "form:post",
+    desc: "Form element using POST",
+    insertText: '<form action="" method="post"></form>',
+  },
+  {
+    tag: "html:5",
+    desc: "HTML5 document shell",
+    insertText:
+      '<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title></title>\n</head>\n<body>\n\n</body>\n</html>',
+  },
+  {
+    tag: "img:srcset",
+    desc: "Responsive image with srcset and sizes",
+    insertText: '<img src="" srcset="" sizes="" alt="">',
+  },
+  {
+    tag: "input:button",
+    desc: "Button input",
+    insertText: '<input type="button" value="">',
+  },
+  {
+    tag: "input:checkbox",
+    desc: "Checkbox input",
+    insertText: '<input type="checkbox" name="" id="">',
+  },
+  {
+    tag: "input:color",
+    desc: "Color input",
+    insertText: '<input type="color" name="" id="">',
+  },
+  {
+    tag: "input:date",
+    desc: "Date input",
+    insertText: '<input type="date" name="" id="">',
+  },
+  {
+    tag: "input:email",
+    desc: "Email input",
+    insertText: '<input type="email" name="" id="">',
+  },
+  {
+    tag: "input:file",
+    desc: "File input",
+    insertText: '<input type="file" name="" id="">',
+  },
+  {
+    tag: "input:hidden",
+    desc: "Hidden input",
+    insertText: '<input type="hidden" name="" value="">',
+  },
+  {
+    tag: "input:image",
+    desc: "Image submit input",
+    insertText: '<input type="image" src="" alt="">',
+  },
+  {
+    tag: "input:number",
+    desc: "Number input",
+    insertText: '<input type="number" name="" id="">',
+  },
+  {
+    tag: "input:password",
+    desc: "Password input",
+    insertText: '<input type="password" name="" id="">',
+  },
+  {
+    tag: "input:radio",
+    desc: "Radio input",
+    insertText: '<input type="radio" name="" id="">',
+  },
+  {
+    tag: "input:range",
+    desc: "Range input",
+    insertText: '<input type="range" name="" id="">',
+  },
+  {
+    tag: "input:reset",
+    desc: "Reset input",
+    insertText: '<input type="reset" value="">',
+  },
+  {
+    tag: "input:search",
+    desc: "Search input",
+    insertText: '<input type="search" name="" id="">',
+  },
+  {
+    tag: "input:submit",
+    desc: "Submit input",
+    insertText: '<input type="submit" value="">',
+  },
+  {
+    tag: "input:tel",
+    desc: "Telephone input",
+    insertText: '<input type="tel" name="" id="">',
+  },
+  {
+    tag: "input:text",
+    desc: "Text input",
+    insertText: '<input type="text" name="" id="">',
+  },
+  {
+    tag: "input:url",
+    desc: "URL input",
+    insertText: '<input type="url" name="" id="">',
+  },
+  {
+    tag: "link:atom",
+    desc: "Atom feed link",
+    insertText: '<link rel="alternate" href="" type="application/atom+xml" title="">',
+  },
+  {
+    tag: "link:css",
+    desc: "Stylesheet link",
+    insertText: '<link rel="stylesheet" href="">',
+  },
+  {
+    tag: "link:favicon",
+    desc: "Favicon link",
+    insertText: '<link rel="icon" href="">',
+  },
+  {
+    tag: "link:manifest",
+    desc: "Web app manifest link",
+    insertText: '<link rel="manifest" href="">',
+  },
+  {
+    tag: "link:rss",
+    desc: "RSS feed link",
+    insertText: '<link rel="alternate" href="" type="application/rss+xml" title="">',
+  },
+  {
+    tag: "link:touch",
+    desc: "Apple touch icon link",
+    insertText: '<link rel="apple-touch-icon" href="">',
+  },
+  {
+    tag: "meta:compat",
+    desc: "IE compatibility meta tag",
+    insertText: '<meta http-equiv="X-UA-Compatible" content="IE=edge">',
+  },
+  {
+    tag: "meta:refresh",
+    desc: "Refresh meta tag",
+    insertText: '<meta http-equiv="refresh" content="0; url=">',
+  },
+  {
+    tag: "meta:utf",
+    desc: "UTF-8 charset meta tag",
+    insertText: '<meta charset="UTF-8">',
+  },
+  {
+    tag: "meta:vp",
+    desc: "Responsive viewport meta tag",
+    insertText: '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+  },
+  {
+    tag: "script:module",
+    desc: "JavaScript module script",
+    insertText: '<script type="module" src=""></script>',
+  },
+  {
+    tag: "script:src",
+    desc: "External JavaScript file",
+    insertText: '<script src=""></script>',
+  },
+  {
+    tag: "style:scoped",
+    desc: "Scoped style element",
+    insertText: '<style scoped></style>',
+  },
+].forEach((item, index) => {
+  htmlTagMetaMap.set(item.tag, {
+    ...item,
+    attrs: [],
+    category: "emmet",
+    icon: "</>",
+    kind: "Emmet Abbreviation",
+    suggestionPriority: 100 - index,
+  });
+});
 const tagSuggestionPool = Array.from(htmlTagMetaMap.values());
 let currentSuggestionContext = null;
 const globalHtmlAttributes = [
@@ -5927,6 +6159,24 @@ function handleSuggestions(e) {
   const isHtmlScriptContext =
     activeFile.type === "html" && isInsideScriptTag(textBefore);
 
+  const currentLineText = textBefore.slice(textBefore.lastIndexOf("\n") + 1);
+  const lastLt = textBefore.lastIndexOf("<");
+  const lastGt = textBefore.lastIndexOf(">");
+  const outsideTag = lastGt >= lastLt;
+  const emmetOpeningMatch = textBefore.match(/<([a-zA-Z][a-zA-Z0-9:-]*:)$/);
+  const emmetPlainMatch = currentLineText.match(/([a-zA-Z][a-zA-Z0-9:-]*:)$/);
+  if (activeFile.type === "html" && (emmetOpeningMatch || (outsideTag && emmetPlainMatch))) {
+    const prefix = emmetOpeningMatch ? emmetOpeningMatch[1] : emmetPlainMatch[1];
+    const suggestions = getRankedTagSuggestions(prefix, { includeSnippets: true }).filter(
+      (entry) => entry.insertText,
+    );
+    if (suggestions.length) {
+      currentSuggestionContext = null;
+      showSuggestions(editor, suggestions, prefix, emmetOpeningMatch ? "tag-opening" : "tag-plain");
+      return;
+    }
+  }
+
   if (isCssFile || isHtmlStyleContext) {
     const cssContext = getCssSuggestionContext(textBefore);
     if (!cssContext) {
@@ -6076,14 +6326,10 @@ function handleSuggestions(e) {
   }
 
   const closingMatch = textBefore.match(/<\/([a-zA-Z0-9-]*)$/);
-  const openingMatch = textBefore.match(/<([a-zA-Z0-9-]*)$/);
-  const currentLineText = textBefore.slice(textBefore.lastIndexOf("\n") + 1);
-  const plainMatch = currentLineText.match(/([a-zA-Z][a-zA-Z0-9-]*)$/);
+  const openingMatch = textBefore.match(/<([a-zA-Z][a-zA-Z0-9:-]*)$/);
+  const plainMatch = currentLineText.match(/([a-zA-Z][a-zA-Z0-9:-]*)$/);
   const isClosing = Boolean(closingMatch);
   const isOpening = Boolean(openingMatch);
-  const lastLt = textBefore.lastIndexOf("<");
-  const lastGt = textBefore.lastIndexOf(">");
-  const outsideTag = lastGt >= lastLt;
   const isPlain = !isClosing && !isOpening && outsideTag && Boolean(plainMatch);
   const prefix = isClosing
     ? closingMatch[1]
@@ -6098,7 +6344,7 @@ function handleSuggestions(e) {
     return;
   }
 
-  const suggestions = getRankedTagSuggestions(prefix);
+  const suggestions = getRankedTagSuggestions(prefix, { includeSnippets: !isClosing });
   if (!suggestions.length) {
     hideSuggestions();
     return;
@@ -6132,15 +6378,23 @@ function hideSuggestions() {
   activeSuggestion = -1;
 }
 
-function getRankedTagSuggestions(prefix) {
+function getRankedTagSuggestions(prefix, options = {}) {
   const q = (prefix || "").toLowerCase();
-  const matches = tagSuggestionPool.filter((entry) => entry.tag.includes(q));
+  const includeSnippets = options.includeSnippets !== false;
+  const matches = tagSuggestionPool.filter(
+    (entry) => entry.tag.includes(q) && (includeSnippets || !entry.insertText),
+  );
   matches.sort((a, b) => {
     const aTag = a.tag.toLowerCase();
     const bTag = b.tag.toLowerCase();
     const aStarts = aTag.startsWith(q) ? 1 : 0;
     const bStarts = bTag.startsWith(q) ? 1 : 0;
     if (aStarts !== bStarts) return bStarts - aStarts;
+    if (q && aTag === q) return -1;
+    if (q && bTag === q) return 1;
+    const aPriority = Number(a.suggestionPriority || 0);
+    const bPriority = Number(b.suggestionPriority || 0);
+    if (aPriority !== bPriority) return bPriority - aPriority;
     if (aTag.length !== bTag.length) return aTag.length - bTag.length;
     return aTag.localeCompare(bTag);
   });
@@ -6661,14 +6915,16 @@ function showSuggestions(editor, suggestions, prefix, mode) {
       tagMeta.attrs && tagMeta.attrs.length
         ? tagMeta.attrs.slice(0, 3).join(", ")
         : "";
-    const badge = tagMeta.badge
-      ? `<span class="suggestion-badge">${escapeHtml(tagMeta.badge)}</span>`
+    const badgeLabel = tagMeta.badge || tagMeta.kind || (tagMeta.insertText ? "snippet" : "");
+    const badge = badgeLabel
+      ? `<span class="suggestion-badge">${escapeHtml(badgeLabel)}</span>`
       : "";
-    const safeIcon = mode === "tag-closing" ? "</>" : "<>";
+    const safeIcon = mode === "tag-closing" ? "</>" : tagMeta.icon || "<>";
+    const displayTag = tagMeta.insertText ? highlightedTag : `&lt;${highlightedTag}&gt;`;
     suggestionItem.innerHTML = `
       <span class="suggestion-icon">${escapeHtml(safeIcon)}</span>
       <span class="suggestion-content">
-        <div class="suggestion-tag">&lt;${highlightedTag}&gt;${badge}</div>
+        <div class="suggestion-tag">${displayTag}${badge}</div>
         <div class="suggestion-desc">${escapeHtml(tagMeta.desc || "HTML element")}${attrs ? ` - ${escapeHtml(attrs)}` : ""}</div>
       </span>
     `;
@@ -6909,8 +7165,8 @@ function selectSuggestion(tag) {
   const triggerMatch = isClosing
     ? textBefore.match(/<\/([a-zA-Z0-9-]*)$/)
     : isPlain
-      ? textBefore.match(/(?:^|[\s>])([a-zA-Z][a-zA-Z0-9-]*)$/)
-      : textBefore.match(/<([a-zA-Z0-9-]*)$/);
+      ? textBefore.match(/(?:^|[\s>])([a-zA-Z][a-zA-Z0-9:-]*)$/)
+      : textBefore.match(/<([a-zA-Z][a-zA-Z0-9:-]*)$/);
 
   if (!triggerMatch) return;
 
@@ -6923,9 +7179,18 @@ function selectSuggestion(tag) {
   const suggestionMeta = htmlTagMetaMap.get(tag);
 
   if (suggestionMeta && suggestionMeta.insertText) {
-    const replaceStart = textBefore.length - prefix.length;
+    const replaceStart = isPlain
+      ? textBefore.length - prefix.length
+      : textBefore.length - prefix.length - 1;
     const insertedText = suggestionMeta.insertText;
-    const caretPos = replaceStart + insertedText.length;
+    const emptyQuoteIndex = insertedText.indexOf('""');
+    const emptyTagIndex = insertedText.indexOf("></");
+    const caretPos =
+      emptyQuoteIndex > -1
+        ? replaceStart + emptyQuoteIndex + 1
+        : emptyTagIndex > -1
+          ? replaceStart + emptyTagIndex + 1
+          : replaceStart + insertedText.length;
     applyEditorMutation(
       editor,
       replaceStart,
