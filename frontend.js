@@ -1746,6 +1746,7 @@ let activeParticipantActionName = "";
 let followedParticipantName = "";
 let collabPendingJoins = [];
 let collabShareLink = "";
+let collabSessionPin = "";
 let collabBans = [];
 let joinRequestContext = { sessionId: "", name: "" };
 let lastAnnouncementText = "";
@@ -8729,6 +8730,19 @@ function validateUsername(u) {
   return { valid: true };
 }
 
+function normalizeSessionPin(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function validateSessionPin(value) {
+  const pin = normalizeSessionPin(value);
+  if (!pin) return { valid: false, error: "Enter a session pin." };
+  if (!/^[A-Z0-9]{6}$/.test(pin)) {
+    return { valid: false, error: "Session pin must be 6 letters or numbers." };
+  }
+  return { valid: true, pin };
+}
+
 function getMyParticipant() {
   const target = String(myInfo.name || "").trim().toLowerCase();
   return (
@@ -10543,6 +10557,7 @@ function ensureCollabSocket() {
     collabPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
     collabBans = Array.isArray(meta.bans) ? meta.bans : [];
     collabShareLink = meta.shareLink || collabShareLink;
+    collabSessionPin = meta.sessionPin || collabSessionPin;
     const nextAnnouncement = String(collabPermissions.announcementBar || "").trim();
     if (nextAnnouncement) {
       if (nextAnnouncement !== previousAnnouncement || nextAnnouncement !== lastAnnouncementText) {
@@ -10576,6 +10591,7 @@ function ensureCollabSocket() {
     collabPendingJoins = [];
     collabBans = [];
     collabShareLink = "";
+    collabSessionPin = "";
     collabPermissions = { ...defaultCollabPermissions };
     setCollabCloseButtonVisible(false);
     modalTitle.innerHTML = "<strong>BANNED FROM SESSION</strong>";
@@ -10701,6 +10717,7 @@ function ensureCollabSocket() {
       collabHostName;
     collabPermissions = normalizeCollabPermissions(res.permissions);
     collabShareLink = res.shareLink || collabShareLink;
+    collabSessionPin = res.sessionPin || collabSessionPin;
     collabGroupMessages = [];
     collabPrivateMessages = [];
     collabChatMode = "group";
@@ -10730,6 +10747,7 @@ function ensureCollabSocket() {
     collabParticipants = [];
     collabPendingJoins = [];
     collabShareLink = "";
+    collabSessionPin = "";
     collabPermissions = { ...defaultCollabPermissions };
     setCollabCloseButtonVisible(false);
     const reason = String(payload?.reason || "The collaboration session ended.");
@@ -11085,6 +11103,10 @@ function setModalActions(html) {
   const actions = document.getElementById("modalActions");
   if (!actions) return;
   actions.innerHTML = html;
+  if (!String(html || "").trim()) {
+    actions.style.display = "none";
+    return;
+  }
   actions.style.display = "flex";
   actions.style.gap = "10px";
   actions.style.alignItems = "center";
@@ -11103,16 +11125,57 @@ function setCollabCloseButtonVisible(visible) {
   closeModalBtn.style.display = visible ? "block" : "none";
 }
 
+function renderCollabStartMenu() {
+  collabModalView = "start";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = "<strong>COLLAB SESSION</strong>";
+  modalBody.innerHTML = `
+    <div class="collab-choice-grid">
+      <button type="button" id="createSessionChoiceBtn" class="collab-choice-card">
+        <i class="fa-solid fa-plus"></i>
+        <span>Create a session</span>
+      </button>
+      <button type="button" id="joinSessionChoiceBtn" class="collab-choice-card">
+        <i class="fa-solid fa-right-to-bracket"></i>
+        <span>Join a session</span>
+      </button>
+    </div>
+  `;
+  errorMsgEl.style.display = "none";
+  setModalActions("");
+  collabModal.style.display = "flex";
+
+  const createBtn = document.getElementById("createSessionChoiceBtn");
+  const joinBtn = document.getElementById("joinSessionChoiceBtn");
+  if (createBtn) createBtn.onclick = () => renderHostNameStep(sessionData.host || "");
+  if (joinBtn) joinBtn.onclick = () => renderJoinSessionStep();
+}
+
 function renderHostNameStep(prefill = "") {
   setCollabCloseButtonVisible(true);
-  modalTitle.innerHTML = "<strong>START COLLAB</strong>";
-  modalBody.innerHTML =
-    `<p><strong>Your name:</strong></p><input type="text" id="userNameInput" placeholder="Name" style="width:80%;padding:8px;" maxlength="20" value="${escapeHtml(prefill)}">`;
+  modalTitle.innerHTML = "<strong>CREATE SESSION</strong>";
+  modalBody.innerHTML = `
+    <button type="button" id="modalBackBtn" class="collab-back-button" aria-label="Go back">&#8592;</button>
+    <div class="collab-form-grid">
+      <label class="collab-form-field">
+        <span>Name</span>
+        <input type="text" id="userNameInput" placeholder="Your name" maxlength="20" value="${escapeHtml(prefill)}">
+      </label>
+      <div class="collab-form-field">
+        <span>Color</span>
+        ${buildCollabColorPickerHtml("#4CAF50", [])}
+      </div>
+    </div>
+  `;
   collabModal.style.display = "flex";
   errorMsgEl.style.display = "none";
   setModalActions(
-    `<button id="modalDoneBtn" class="run-button"><strong>NEXT</strong></button>`,
+    `<button id="modalDoneBtn" class="run-button"><strong>CREATE SESSION</strong></button>`,
   );
+  bindCollabColorPicker("#4CAF50");
+
+  const backBtn = document.getElementById("modalBackBtn");
+  if (backBtn) backBtn.onclick = renderCollabStartMenu;
 
   const doneBtn = getModalDoneBtn();
   if (!doneBtn) return;
@@ -11126,7 +11189,8 @@ function renderHostNameStep(prefill = "") {
     }
     errorMsgEl.style.display = "none";
     sessionData.host = name;
-    promptForTheme(name);
+    sessionData.theme = document.getElementById("userThemeInput").value;
+    createNumericSession();
   };
 }
 
@@ -11157,13 +11221,73 @@ function renderJoinNameStep(sid, prefill = "") {
   };
 }
 
+function renderJoinSessionStep(prefill = {}) {
+  collabHostName = "";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = "<strong>JOIN SESSION</strong>";
+  modalBody.innerHTML = `
+    <button type="button" id="modalBackBtn" class="collab-back-button" aria-label="Go back">&#8592;</button>
+    <div class="collab-form-grid">
+      <label class="collab-form-field">
+        <span>Name</span>
+        <input type="text" id="userNameInput" placeholder="Your name" maxlength="20" value="${escapeHtml(prefill.name || "")}">
+      </label>
+      <label class="collab-form-field">
+        <span>Session pin</span>
+        <input type="text" id="sessionPinInput" class="collab-pin-input" placeholder="ABC123" maxlength="6" value="${escapeHtml(prefill.pin || "")}" autocomplete="off">
+      </label>
+      <div class="collab-form-field">
+        <span>Color</span>
+        ${buildCollabColorPickerHtml(prefill.theme || "#2196F3", [])}
+      </div>
+    </div>
+  `;
+  collabModal.style.display = "flex";
+  errorMsgEl.style.display = "none";
+  setModalActions(
+    `<button id="modalDoneBtn" class="run-button"><strong>JOIN SESSION</strong></button>`,
+  );
+  bindCollabColorPicker(prefill.theme || "#2196F3");
+
+  const pinInput = document.getElementById("sessionPinInput");
+  if (pinInput) {
+    pinInput.addEventListener("input", () => {
+      const normalized = normalizeSessionPin(pinInput.value);
+      pinInput.value = normalized.slice(0, 6);
+    });
+  }
+
+  const backBtn = document.getElementById("modalBackBtn");
+  if (backBtn) backBtn.onclick = renderCollabStartMenu;
+
+  const doneBtn = getModalDoneBtn();
+  if (!doneBtn) return;
+  doneBtn.onclick = () => {
+    const name = document.getElementById("userNameInput").value.trim();
+    const theme = document.getElementById("userThemeInput").value;
+    const nameResult = validateUsername(name);
+    if (!nameResult.valid) {
+      errorMsgEl.textContent = nameResult.error;
+      errorMsgEl.style.display = "block";
+      return;
+    }
+    const pinResult = validateSessionPin(document.getElementById("sessionPinInput").value);
+    if (!pinResult.valid) {
+      errorMsgEl.textContent = pinResult.error;
+      errorMsgEl.style.display = "block";
+      return;
+    }
+    joinSessionWithPin(pinResult.pin, name, theme);
+  };
+}
+
 function startCollaboration() {
   if (!ensureCollabSocket()) return;
   if (activeSessionId && myInfo.name) {
     showSessionDetails(activeSessionId);
     return;
   }
-  renderHostNameStep();
+  renderCollabStartMenu();
 }
 
 const collabColorPalette = [
@@ -11319,6 +11443,24 @@ function promptForTheme(hostName) {
   };
 }
 
+function showCreatedSessionPin(pin) {
+  collabModalView = "created-pin";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = "<strong>SESSION PIN</strong>";
+  modalBody.innerHTML = `
+    <div class="collab-pin-card">
+      <span class="collab-meta-label">Your session pin</span>
+      <div class="collab-session-pin">${escapeHtml(pin)}</div>
+    </div>
+  `;
+  errorMsgEl.style.display = "none";
+  setModalActions(`<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`);
+  collabModal.style.display = "flex";
+
+  const doneBtn = getModalDoneBtn();
+  if (doneBtn) doneBtn.onclick = closeModal;
+}
+
 function createNumericSession() {
   if (!ensureCollabSocket()) return;
   resetTransientCollabUiState();
@@ -11341,9 +11483,11 @@ function createNumericSession() {
       }
 
       const sid = res.sessionId;
+      const pin = res.sessionPin || sid;
       const link = res.shareLink || `${window.location.origin}/frontend.html/${sid}`;
       activeSessionId = sid;
       collabShareLink = link;
+      collabSessionPin = pin;
       myInfo = { name: sessionData.host, theme: sessionData.theme };
       collabParticipants = res.participants || [myInfo];
       collabHostName = res.hostName || sessionData.host;
@@ -11356,7 +11500,55 @@ function createNumericSession() {
       setCollabCloseButtonVisible(true);
       enforceCollabPermissionsUI();
       startSyncing();
-      showSessionDetails(sid);
+      showCreatedSessionPin(pin);
+    },
+  );
+}
+
+function joinSessionWithPin(sid, name, theme) {
+  if (!ensureCollabSocket()) return;
+  resetTransientCollabUiState();
+  errorMsgEl.style.display = "none";
+
+  collabSocket.emit(
+    "collab:join",
+    { sessionId: sid, name, theme, deviceId: getOrCreateDeviceId() },
+    (res) => {
+      if (!res || !res.ok) {
+        if (res && res.pending) {
+          myInfo = { name, theme };
+          showJoinPendingState(sid, name);
+          return;
+        }
+        const rawError = String((res && res.error) || "");
+        errorMsgEl.textContent = rawError.toLowerCase().includes("session not found")
+          ? "Invalid code"
+          : rawError || "Cannot join session.";
+        errorMsgEl.style.display = "block";
+        return;
+      }
+
+      const resolvedSessionId = res.sessionId || sid;
+      activeSessionId = resolvedSessionId;
+      myInfo = { name, theme };
+      collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${resolvedSessionId}`;
+      collabSessionPin = res.sessionPin || sid;
+      collabParticipants = res.participants || [];
+      collabHostName =
+        (collabParticipants.find((p) => p.role === "host") || {}).name ||
+        res.hostName ||
+        "";
+      collabPermissions = normalizeCollabPermissions(res.permissions);
+      collabGroupMessages = [];
+      collabPrivateMessages = [];
+      collabChatMode = "group";
+      collabChatTarget = "";
+      window.history.replaceState({}, "", `/frontend.html/${resolvedSessionId}`);
+      applyRemoteSessionState(res.files, res.activeFileName, true);
+      enforceCollabPermissionsUI();
+      showNotification(`Welcome, ${name}!`, "success");
+      startSyncing();
+      closeModal();
     },
   );
 }
@@ -11405,6 +11597,10 @@ function showSessionDetails(sid) {
           </span>
         </div>
         <div class="collab-meta-item">
+          <span class="collab-meta-label">Session Pin</span>
+          <span class="collab-meta-value collab-inline-pin">${escapeHtml(collabSessionPin || sid)}</span>
+        </div>
+        <div class="collab-meta-item">
           <span class="collab-meta-label">Host</span>
           <span class="collab-meta-value">${escapeHtml(getCurrentHostName() || "Unknown")}</span>
         </div>
@@ -11433,9 +11629,9 @@ function showSessionDetails(sid) {
     ${buildCollabChatPanelHtml()}
   `;
 
-  document.getElementById("modalActions").innerHTML = `
+  setModalActions(`
     ${canUseCoHostTools() ? `<button id="groupControlsBtn" class="run-button"><strong>${isHost() ? "GROUP CONTROLS" : "TEAM TOOLS"}${isHost() && collabPendingJoins.length ? ` (${collabPendingJoins.length})` : ""}</strong></button>` : ""}
-    <button class="run-button" onclick="closeModal()"><strong>CLOSE</strong></button>`;
+    <button class="run-button" onclick="closeModal()"><strong>CLOSE</strong></button>`);
   collabModal.style.display = "flex";
 
   const groupControlsBtn = document.getElementById("groupControlsBtn");
@@ -11491,8 +11687,7 @@ function closeModal() {
   activeParticipantActionName = "";
   collabModal.style.display = "none";
   setCollabCloseButtonVisible(true);
-  document.getElementById("modalActions").innerHTML =
-    `<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`;
+  setModalActions(`<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`);
 }
 
 function isReloadNavigation() {
@@ -11580,7 +11775,8 @@ function promptJoinTheme(name, sid) {
 
           activeSessionId = sid;
           myInfo = { name, theme };
-          collabShareLink = `${window.location.origin}/frontend.html/${sid}`;
+          collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${sid}`;
+          collabSessionPin = res.sessionPin || collabSessionPin;
           collabParticipants = res.participants || [];
           collabHostName =
             (collabParticipants.find((p) => p.role === "host") || {}).name ||

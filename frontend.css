@@ -1846,6 +1846,104 @@ header {
   line-height: 1.5;
 }
 
+.collab-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.collab-choice-card {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 132px;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.collab-choice-card i {
+  font-size: 24px;
+  color: var(--accent-color);
+}
+
+.collab-choice-card:hover {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-primary));
+  transform: translateY(-1px);
+}
+
+.collab-form-grid {
+  display: grid;
+  gap: 14px;
+  text-align: left;
+}
+
+.collab-form-field {
+  display: grid;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.collab-form-field input[type="text"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.collab-pin-input,
+.collab-session-pin,
+.collab-inline-pin {
+  letter-spacing: 0.16em;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.collab-back-button {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 34px;
+  height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.collab-pin-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+}
+
+.collab-session-pin {
+  color: var(--text-primary);
+  font-size: clamp(32px, 8vw, 52px);
+  font-weight: 900;
+}
+
 .collab-meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2193,6 +2291,7 @@ header {
 }
 
 @media (max-width: 680px) {
+  .collab-choice-grid,
   .collab-meta-grid,
   .collab-action-grid {
     grid-template-columns: 1fr;
