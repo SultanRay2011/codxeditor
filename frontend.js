@@ -6379,28 +6379,333 @@ function hideSuggestions() {
   activeSuggestion = -1;
 }
 
+let __codxProjectSuggestionCache = {
+  hash: "",
+  html: {
+    tagFreq: new Map(),
+    attrFreq: new Map(),
+    valueFreq: new Map(),
+    ids: new Set(),
+    classes: new Set(),
+  },
+  css: {
+    selectorFreq: new Map(),
+    propertyFreq: new Map(),
+    valueFreq: new Map(),
+    vars: new Set(),
+  },
+  js: {
+    identFreq: new Map(),
+    memberKeys: new Set(),
+    domIds: new Set(),
+    domClasses: new Set(),
+  },
+};
+
+function __codxHashProjectFiles(files) {
+  try {
+    const sig = (files || [])
+      .map((f) => `${f.name}|${f.type}|${String(f.content || "").length}`)
+      .join("\n");
+    let h = 0;
+    for (let i = 0; i < sig.length; i++) {
+      h = (h * 31 + sig.charCodeAt(i)) >>> 0;
+    }
+    return String(h);
+  } catch {
+    return "0";
+  }
+}
+
+function __codxIncFreq(map, key, inc = 1) {
+  const k = String(key || "").trim();
+  if (!k) return;
+  map.set(k, (map.get(k) || 0) + inc);
+}
+
+function __codxTokenizeHtml(projectFiles) {
+  const tagFreq = new Map();
+  const attrFreq = new Map();
+  const valueFreq = new Map();
+  const ids = new Set();
+  const classes = new Set();
+
+  for (const file of projectFiles) {
+    if (file.type !== "html") continue;
+    const text = String(file.content || "");
+
+    // Tag names (opening only). Very lightweight regex.
+    const tagRe = /<\/?\s*([a-zA-Z][a-zA-Z0-9-]*)(\s[^>]*?)?>/g;
+    let m;
+    while ((m = tagRe.exec(text)) !== null) {
+      const full = m[0] || "";
+      const tag = (m[1] || "").toLowerCase();
+      if (!tag) continue;
+      if (full.startsWith("</")) continue;
+      if (tag.includes("?")) continue;
+      __codxIncFreq(tagFreq, tag, 1);
+    }
+
+    // Attributes names + quoted values
+    // name="value" and name='value'
+    const attrValRe = /\b([a-zA-Z_][a-zA-Z0-9_:\-]*)\s*=\s*("([^"]*)"|'([^']*)')/g;
+    while ((m = attrValRe.exec(text)) !== null) {
+      const attr = (m[1] || "").trim();
+      const val = (m[3] || m[4] || "").trim();
+      if (attr) __codxIncFreq(attrFreq, attr, 2);
+      if (val) __codxIncFreq(valueFreq, val, 1);
+
+      if (attr.toLowerCase() === "id") ids.add(val);
+      if (attr.toLowerCase() === "class") {
+        val
+          .split(/\s+/)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .forEach((c) => classes.add(c));
+      }
+    }
+
+    // Boolean attributes (no value)
+    const boolAttrRe = /\b([a-zA-Z_][a-zA-Z0-9_:\-]*)\b(?=(\s|>))/g;
+    // Avoid counting the same thing too much: only count custom-ish attrs.
+    // (Keep this lightweight; we don't want to explode noise.)
+    while ((m = boolAttrRe.exec(text)) !== null) {
+      const attr = (m[1] || "").trim();
+      if (!attr) continue;
+      const lower = attr.toLowerCase();
+      if (lower === "class" || lower === "id") continue;
+      if (lower.startsWith("aria-") || lower.startsWith("data-") || lower === "disabled" || lower === "required" || lower === "checked" || lower === "selected") {
+        __codxIncFreq(attrFreq, attr, 1);
+      }
+    }
+  }
+
+  return { tagFreq, attrFreq, valueFreq, ids, classes };
+}
+
+function __codxTokenizeCss(projectFiles) {
+  const selectorFreq = new Map();
+  const propertyFreq = new Map();
+  const valueFreq = new Map();
+  const vars = new Set();
+
+  for (const file of projectFiles) {
+    if (file.type !== "css") continue;
+    let text = String(file.content || "");
+
+    // Strip comments
+    text = text.replace(/\/\*[\s\S]*?\*\//g, " ");
+
+    // Vars
+    const varRe = /--[a-zA-Z0-9_-]+/g;
+    let m;
+    while ((m = varRe.exec(text)) !== null) {
+      vars.add(m[0]);
+    }
+
+    // Properties
+    const propRe = /(^|[;{]\s*)([a-zA-Z-]+)\s*:/gm;
+    while ((m = propRe.exec(text)) !== null) {
+      const prop = String(m[2] || "").trim();
+      if (!prop || prop.startsWith("--")) continue;
+      __codxIncFreq(propertyFreq, prop, 2);
+    }
+
+    // Selector fragments: `.a`, `#b`, `tag`, `[attr="v"]`
+    const selRe = /(#[-a-zA-Z0-9_]+)|(\.[-a-zA-Z0-9_]+)|\b([a-zA-Z][a-zA-Z0-9_-]*)\b(?=\s*[{,])|\[([^\]]+)\]/g;
+    while ((m = selRe.exec(text)) !== null) {
+      const sel = (m[0] || "").trim();
+      if (!sel) continue;
+      // Reduce noise: ignore plain tags that are too common.
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(sel) && sel.length <= 2) continue;
+      __codxIncFreq(selectorFreq, sel, 1);
+    }
+
+    // Values: capture after ':' up to ';' or '}'
+    const valRe = /:\s*([^;}{\n]+)(?=[;}\n])/g;
+    while ((m = valRe.exec(text)) !== null) {
+      const val = String(m[1] || "").trim();
+      if (!val) continue;
+      // Split by whitespace/functions a bit
+      const parts = val
+        .split(/\s+/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      parts.slice(0, 12).forEach((p) => __codxIncFreq(valueFreq, p, 1));
+    }
+  }
+
+  return { selectorFreq, propertyFreq, valueFreq, vars };
+}
+
+function __codxTokenizeJs(projectFiles) {
+  const identFreq = new Map();
+  const memberKeys = new Set();
+  const domIds = new Set();
+  const domClasses = new Set();
+
+  const addIdent = (name, inc = 1) => {
+    const n = String(name || "").trim();
+    if (!n) return;
+    if (!/^[$A-Z_][0-9A-Z_$]*$/i.test(n)) return;
+    __codxIncFreq(identFreq, n, inc);
+  };
+
+  for (const file of projectFiles) {
+    if (file.type !== "js") continue;
+    const text = String(file.content || "");
+
+    // const/let/var X
+    let m;
+    const declRe = /\b(?:const|let|var)\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
+    while ((m = declRe.exec(text)) !== null) addIdent(m[1], 2);
+
+    // function X
+    const fnRe = /\bfunction\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
+    while ((m = fnRe.exec(text)) !== null) addIdent(m[1], 2);
+
+    // class X
+    const clsRe = /\bclass\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
+    while ((m = clsRe.exec(text)) !== null) addIdent(m[1], 2);
+
+    // member keys: obj.someKey or obj["someKey"]
+    const memberDotRe = /\.([$A-Z_][0-9A-Z_$]*)\b/gim;
+    while ((m = memberDotRe.exec(text)) !== null) {
+      const key = m[1];
+      if (key) memberKeys.add(key);
+    }
+
+    // getElementById("id")
+    const idCallRe = /getElementById\s*\(\s*("([^"]+)"|'([^']+)')/gim;
+    while ((m = idCallRe.exec(text)) !== null) {
+      const id = String(m[2] || m[3] || "").trim();
+      if (id) domIds.add(id);
+    }
+
+    // querySelector(".class" / "#id")
+    const qsRe = /querySelector(All)?\s*\(\s*("([^"]+)"|'([^']+)')/gim;
+    while ((m = qsRe.exec(text)) !== null) {
+      const sel = String(m[4] || m[5] || "").trim();
+      if (!sel) continue;
+      if (sel.startsWith("#")) domIds.add(sel.slice(1));
+      if (sel.startsWith(".")) sel.split(/\s*,\s*/).forEach((s) => { if (s.startsWith('.')) domClasses.add(s.slice(1)); });
+    }
+  }
+
+  // add member keys into identFreq a bit
+  Array.from(memberKeys).forEach((k) => __codxIncFreq(identFreq, k, 1));
+
+  return { identFreq, memberKeys, domIds, domClasses };
+}
+
+let __codxProjectScannerTimer = null;
+function __codxRescanProjectSuggestionCacheSoon() {
+  clearTimeout(__codxProjectScannerTimer);
+  __codxProjectScannerTimer = setTimeout(() => {
+    const nextHash = __codxHashProjectFiles(projectFiles);
+    if (nextHash === __codxProjectSuggestionCache.hash) return;
+    __codxProjectSuggestionCache.hash = nextHash;
+
+    // Build caches
+    try {
+      __codxProjectSuggestionCache.html = __codxTokenizeHtml(projectFiles);
+      __codxProjectSuggestionCache.css = __codxTokenizeCss(projectFiles);
+      __codxProjectSuggestionCache.js = __codxTokenizeJs(projectFiles);
+    } catch (e) {
+      // fail safe
+    }
+  }, 300);
+}
+
+function __codxProjectIsReady() {
+  // Ensure at least one scan has occurred.
+  if (!__codxProjectSuggestionCache || !__codxProjectSuggestionCache.hash) {
+    __codxRescanProjectSuggestionCacheSoon();
+  }
+}
+
 function getRankedTagSuggestions(prefix, options = {}) {
+  __codxProjectIsReady();
+
   const q = (prefix || "").toLowerCase();
   const includeSnippets = options.includeSnippets !== false;
-  const matches = tagSuggestionPool.filter(
+
+  const staticMatches = tagSuggestionPool.filter(
     (entry) => entry.tag.includes(q) && (includeSnippets || !entry.insertText),
   );
-  matches.sort((a, b) => {
-    const aTag = a.tag.toLowerCase();
-    const bTag = b.tag.toLowerCase();
+
+  const projectTags = __codxProjectSuggestionCache.html.tagFreq;
+  const projectTagEntries = Array.from(projectTags.keys())
+    .filter((t) => t && t.includes(q))
+    .slice(0, 300);
+
+  const merged = [];
+  const seen = new Set();
+
+  const toSuggestion = (tag) => {
+    // Try to keep metadata if we know the tag.
+    if (htmlTagMetaMap.has(tag)) {
+      const meta = htmlTagMetaMap.get(tag);
+      return {
+        ...meta,
+        tag,
+      };
+    }
+    return {
+      tag,
+      icon: "</>",
+      desc: "Project-used HTML element",
+      attrs: [],
+      category: "project",
+    };
+  };
+
+  // Prefer-project behavior: items starting with prefix come first.
+  const scoredProject = projectTagEntries
+    .map((t) => {
+      const starts = t.toLowerCase().startsWith(q);
+      const freq = projectTags.get(t) || 1;
+      return { entry: toSuggestion(t), starts: starts ? 1 : 0, freq };
+    })
+    .sort((a, b) => b.starts - a.starts || b.freq - a.freq || a.entry.tag.length - b.entry.tag.length);
+
+  for (const item of scoredProject) {
+    const tag = item.entry.tag;
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    merged.push({ ...item.entry, _projectScore: item.starts * 1000 + item.freq });
+    if (merged.length >= 60) break;
+  }
+
+  // Add static suggestions (still present, but de-prioritized)
+  for (const s of staticMatches) {
+    if (seen.has(s.tag)) continue;
+    seen.add(s.tag);
+    merged.push({ ...s, _projectScore: -1000 });
+  }
+
+  // Final sort
+  merged.sort((a, b) => {
+    const aTag = String(a.tag || "").toLowerCase();
+    const bTag = String(b.tag || "").toLowerCase();
     const aStarts = aTag.startsWith(q) ? 1 : 0;
     const bStarts = bTag.startsWith(q) ? 1 : 0;
     if (aStarts !== bStarts) return bStarts - aStarts;
-    if (q && aTag === q) return -1;
-    if (q && bTag === q) return 1;
+
+    const aProject = Number(a._projectScore || 0);
+    const bProject = Number(b._projectScore || 0);
+    if (aProject !== bProject) return bProject - aProject;
+
     const aPriority = Number(a.suggestionPriority || 0);
     const bPriority = Number(b.suggestionPriority || 0);
     if (aPriority !== bPriority) return bPriority - aPriority;
-    if (aTag.length !== bTag.length) return aTag.length - bTag.length;
+
     return aTag.localeCompare(bTag);
   });
-  return matches.slice(0, 40);
+
+  return merged.slice(0, 40).map(({ _projectScore, ...rest }) => rest);
 }
+
 
 function isInsideStyleTag(textBefore) {
   const opens = (textBefore.match(/<style\b[^>]*>/gi) || []).length;
