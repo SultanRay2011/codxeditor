@@ -24,6 +24,7 @@ const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "");
 const ADMIN_COOKIE = "codx_admin_session";
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
+const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
 const LEGACY_SESSION_ID_RE = /^\d{10,}$/;
 const SESSION_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const DEFAULT_PERMISSIONS = {
@@ -101,6 +102,50 @@ app.get(/^\/frontend\.html\/([A-Za-z0-9-]+)$/, (req, res) => {
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, sessions: sessions.size });
+});
+
+// AI Code Assistant endpoint
+const GROQ_API_KEY = "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";
+app.post("/api/ai", async (req, res) => {
+  try {
+    const { code, prompt } = req.body || {};
+    if (!prompt) {
+      return res.status(400).json({ ok: false, error: "Prompt is required" });
+    }
+    
+    console.log("AI request received with prompt:", prompt.substring(0, 50));
+    
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "mixtral-8x7b-32768",
+        messages: [
+          { role: "system", content: "You are an expert code assistant. Help with code improvements, suggestions, and explanations. Keep responses concise and practical." },
+          { role: "user", content: code ? `Code:\n\`\`\`\n${code}\n\`\`\`\n\nRequest: ${prompt}` : prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      }),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error("Groq API error:", data);
+      return res.status(response.status).json({ ok: false, error: data.error?.message || "Groq API error" });
+    }
+    
+    const message = data.choices?.[0]?.message?.content || "";
+    console.log("AI response generated successfully");
+    res.json({ ok: true, message });
+  } catch (error) {
+    console.error("AI endpoint error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 app.post("/admin/api/auth", (req, res) => {
@@ -365,7 +410,7 @@ function normalizeSessionId(value) {
 }
 
 function isValidSessionId(value) {
-  return MODERN_SESSION_ID_RE.test(value) || LEGACY_SESSION_ID_RE.test(value);
+  return PIN_SESSION_ID_RE.test(value) || MODERN_SESSION_ID_RE.test(value) || LEGACY_SESSION_ID_RE.test(value);
 }
 
 function generateSessionId() {
@@ -380,6 +425,26 @@ function generateSessionId() {
     id = `${part()}-${part()}-${part()}-${part()}`;
   } while (sessions.has(id));
   return id;
+}
+
+function generateSessionPin() {
+  let pin = "";
+  do {
+    pin = Array.from(
+      { length: 6 },
+      () => SESSION_CHARS[Math.floor(Math.random() * SESSION_CHARS.length)],
+    ).join("");
+  } while (findSessionIdByPin(pin));
+  return pin;
+}
+
+function findSessionIdByPin(pin) {
+  const normalizedPin = normalizeSessionId(pin);
+  if (!PIN_SESSION_ID_RE.test(normalizedPin)) return "";
+  for (const [sessionId, session] of sessions.entries()) {
+    if (normalizeSessionId(session?.pin) === normalizedPin) return sessionId;
+  }
+  return "";
 }
 
 function buildShareLink(baseUrl, sessionId) {
@@ -579,6 +644,7 @@ function summarizeSession(sessionId, session) {
   const pendingJoins = Array.isArray(session?.pendingJoins) ? session.pendingJoins : [];
   return {
     sessionId,
+    sessionPin: session?.pin || "",
     hostName: session?.hostName || "Unknown",
     shareLink: buildShareLink(session?.baseUrl || "", sessionId),
     participantCount: participants.length,
@@ -848,6 +914,7 @@ function emitSessionMeta(sessionId) {
       requestedAt: entry.requestedAt,
     })),
     bans: (session.bans || []).map(sanitizeBanEntry),
+    sessionPin: session.pin || "",
     shareLink: buildShareLink(session.baseUrl || "", sessionId),
   });
   emitAdminUpdate("meta");
@@ -908,6 +975,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
   io.to(socketId).emit("collab:join-approved", {
     ok: true,
     sessionId,
+    sessionPin: session.pin || "",
     files: cloneFiles(session.files),
     activeFileName: session.activeFileName || null,
     hostName: session.hostName,
@@ -939,6 +1007,7 @@ io.on("connection", (socket) => {
       const activeFileName = payload?.activeFileName || null;
       const baseUrl = String(payload?.baseUrl || "");
       const deviceId = String(payload?.deviceId || "").trim();
+      const pin = generateSessionPin();
 
       if (!isValidSessionId(sessionId)) {
         ack?.({ ok: false, error: "Invalid session id." });
@@ -973,6 +1042,7 @@ io.on("connection", (socket) => {
         participants,
         hostSocketId: socket.id,
         hostName: name,
+        pin,
         baseUrl,
         permissions: normalizePermissions(payload?.permissions, files),
         chat: { group: [], private: {} },
@@ -985,6 +1055,7 @@ io.on("connection", (socket) => {
       ack?.({
         ok: true,
         sessionId,
+        sessionPin: pin,
         shareLink: buildShareLink(baseUrl, sessionId),
         hostName: name,
         permissions: sessions.get(sessionId).permissions,
@@ -1000,7 +1071,10 @@ io.on("connection", (socket) => {
 
   socket.on("collab:join", (payload, ack) => {
     try {
-      const sessionId = normalizeSessionId(payload?.sessionId);
+      const requestedSessionId = normalizeSessionId(payload?.sessionId);
+      const sessionId = sessions.has(requestedSessionId)
+        ? requestedSessionId
+        : findSessionIdByPin(requestedSessionId);
       const name = String(payload?.name || "").trim();
       const theme = String(payload?.theme || "#2196F3");
       const deviceId = String(payload?.deviceId || "").trim();
@@ -1077,11 +1151,14 @@ io.on("connection", (socket) => {
 
       ack?.({
         ok: true,
+        sessionId,
+        sessionPin: session.pin || "",
         files: cloneFiles(session.files),
         activeFileName: session.activeFileName || null,
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
+        shareLink: buildShareLink(session.baseUrl || "", sessionId),
       });
       logAdminEvent("Participant joined", `${name} joined session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
@@ -2000,7 +2077,3 @@ setInterval(() => {
     }
   });
 }, 1000);
-
-
-
-
