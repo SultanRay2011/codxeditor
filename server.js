@@ -317,11 +317,25 @@ app.post("/api/publish", (req, res) => {
   const files = cloneFiles(req.body?.files);
   const activeFileName = String(req.body?.activeFileName || "");
   const projectName = String(req.body?.projectName || "CodX Project").trim().slice(0, 80);
+  const id = String(req.body?.publishId || "").trim();
   if (!Array.isArray(files) || !files.length) {
     res.status(400).json({ ok: false, error: "No project files to publish." });
     return;
   }
-  const id = `PUB-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(id)) {
+    res.status(400).json({
+      ok: false,
+      error: "Use 1–80 letters, numbers, or hyphens for the link name.",
+    });
+    return;
+  }
+  const duplicateLink = Array.from(publishedProjects.keys()).some(
+    (publishedId) => String(publishedId).toLowerCase() === id.toLowerCase(),
+  );
+  if (duplicateLink) {
+    res.status(409).json({ ok: false, error: "That published link name is already in use." });
+    return;
+  }
   publishedProjects.set(id, {
     id,
     projectName,

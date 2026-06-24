@@ -2692,6 +2692,75 @@ function showAppPrompt(title, message, inputValue = "", inputPlaceholder = "") {
   });
 }
 
+function showPublishUrlPrompt() {
+  const publishBase = `${window.location.origin}/published/`;
+  const defaultSlug = "my-project";
+  const dialog = showAppDialog({
+    title: "PUBLISH PROJECT",
+    messageHtml: `Choose the end of your published link.<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + defaultSlug)}</code>`,
+    input: true,
+    inputValue: defaultSlug,
+    inputPlaceholder: "my-project",
+    okText: "DONE",
+    cancelText: "CANCEL",
+  });
+  const updatePreview = () => {
+    const preview = document.getElementById("publishUrlPreview");
+    if (!preview || !appDialogInput) return;
+    preview.textContent = publishBase + encodeURIComponent(appDialogInput.value.trim());
+  };
+  if (appDialogInput) appDialogInput.addEventListener("input", updatePreview, { once: false });
+  return dialog.finally(() => {
+    if (appDialogInput) appDialogInput.removeEventListener("input", updatePreview);
+  });
+}
+
+function showPublishedProjectDialog(shareLink) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialogTitle) appDialogTitle.textContent = "PROJECT PUBLISHED";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `<span style="display:block;margin-bottom:6px">Your custom link is ready:</span><a id="publishedProjectLink" target="_blank" rel="noopener noreferrer" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(shareLink)}</a><span style="display:block;margin:16px 0 8px;font-size:12px;color:var(--text-muted)">Share it</span><div id="publishedShareShortcuts" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="run-button" data-share="whatsapp" style="background:#25d366"><i class="fa-brands fa-whatsapp"></i> <strong>WHATSAPP</strong></button><button type="button" class="run-button" data-share="discord" style="background:#5865f2"><i class="fa-brands fa-discord"></i> <strong>DISCORD</strong></button><button type="button" class="run-button" data-share="snapchat" style="background:#fffc00;color:#161616"><i class="fa-brands fa-snapchat"></i> <strong>SNAPCHAT</strong></button></div>`;
+    }
+    const publishedProjectLink = document.getElementById("publishedProjectLink");
+    if (publishedProjectLink) publishedProjectLink.href = shareLink;
+    if (appDialogInput) appDialogInput.style.display = "none";
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `<button type="button" id="appDialogCopyLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-regular fa-copy"></i> <strong>COPY LINK</strong></button><button type="button" id="appDialogDoneBtn" class="run-button"><strong>DONE</strong></button>`;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+
+    const copyLink = async () => {
+      try {
+        await navigator.clipboard.writeText(shareLink);
+        showNotification("Published link copied.", "success");
+      } catch (_err) {
+        showNotification("Copy the published link from this dialog.", "error");
+      }
+    };
+    document.getElementById("appDialogCopyLinkBtn").onclick = copyLink;
+    document.getElementById("appDialogDoneBtn").onclick = () => closeAppDialog({ ok: true });
+    document.querySelectorAll("#publishedShareShortcuts [data-share]").forEach((button) => {
+      button.onclick = async () => {
+        const service = button.dataset.share;
+        if (service === "whatsapp") {
+          window.open(`https://wa.me/?text=${encodeURIComponent(shareLink)}`, "_blank", "noopener,noreferrer");
+          return;
+        }
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: "Published project", url: shareLink });
+            return;
+          } catch (_err) {}
+        }
+        await copyLink();
+        showNotification(`Link copied — paste it into ${service === "discord" ? "Discord" : "Snapchat"}.`, "success");
+      };
+    });
+    setTimeout(() => document.getElementById("appDialogDoneBtn")?.focus(), 0);
+  });
+}
+
 function showAppConfirm(title, message, okText = "YES", cancelText = "NO", okVariant = "") {
   return showAppDialog({
     title,
@@ -3705,20 +3774,19 @@ async function publishCurrentProject() {
     showNotification("The host disabled publish/share for participants.", "error");
     return;
   }
-  const dialog = await showAppPrompt(
-    "PUBLISH PROJECT",
-    "Enter a name for the published project:",
-    "CodX Project",
-    "CodX Project",
-  );
+  const dialog = await showPublishUrlPrompt();
   if (!dialog?.ok) return;
-  const projectName = String(dialog.value || "").trim() || "CodX Project";
+  const publishId = String(dialog.value || "").trim();
+  if (!publishId) {
+    showNotification("Enter a link name to publish your project.", "error");
+    return;
+  }
   try {
     const response = await fetch("/api/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        projectName,
+        publishId,
         files: projectFiles,
         activeFileName: activeFile ? activeFile.name : "",
       }),
@@ -3732,22 +3800,8 @@ async function publishCurrentProject() {
         await navigator.clipboard.writeText(payload.shareLink);
       } catch (_err) {}
     }
-    const dialog = await showAppPrompt(
-      "PROJECT PUBLISHED",
-      "Your project link is ready. It was copied to your clipboard if your browser allowed it.",
-      payload.shareLink || "",
-      payload.shareLink || "",
-    );
-    if (dialog?.ok && dialog.value && navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(dialog.value);
-        showNotification("Published link copied.", "success");
-      } catch (_err) {
-        showNotification("Project published successfully.", "success");
-      }
-    } else {
-      showNotification("Project published successfully.", "success");
-    }
+    await showPublishedProjectDialog(payload.shareLink || "");
+    showNotification("Project published successfully.", "success");
   } catch (error) {
     showNotification(error.message || "Failed to publish project.", "error");
   }
