@@ -6471,7 +6471,12 @@ function handleSuggestions(e) {
   const outsideTag = lastGt >= lastLt;
   const emmetOpeningMatch = textBefore.match(/<([a-zA-Z][a-zA-Z0-9:-]*:)$/);
   const emmetPlainMatch = currentLineText.match(/([a-zA-Z][a-zA-Z0-9:-]*:)$/);
-  if (activeFile.type === "html" && (emmetOpeningMatch || (outsideTag && emmetPlainMatch))) {
+  if (
+    activeFile.type === "html" &&
+    !isHtmlStyleContext &&
+    !isHtmlScriptContext &&
+    (emmetOpeningMatch || (outsideTag && emmetPlainMatch))
+  ) {
     const prefix = emmetOpeningMatch ? emmetOpeningMatch[1] : emmetPlainMatch[1];
     const suggestions = getRankedTagSuggestions(prefix, { includeSnippets: true }).filter(
       (entry) => entry.insertText,
@@ -8672,6 +8677,72 @@ function shouldCaptureEditorKeyMutation(e) {
   ].includes(key);
 }
 
+function handleEditorTabIndentation(editor, options = {}) {
+  if (!editor) return false;
+  const { unindent = false } = options;
+  const start = Number(editor.selectionStart || 0);
+  const end = Number(editor.selectionEnd || start);
+  const hasSelection = end > start;
+
+  if (!hasSelection) {
+    const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+    const currentLinePrefix = editor.value.slice(lineStart, start);
+
+    if (unindent) {
+      const removable = currentLinePrefix.match(/(?: {1,4}|\t)$/)?.[0] || "";
+      if (!removable) return true;
+      const removeStart = start - removable.length;
+      applyEditorMutation(editor, removeStart, start, "", removeStart, removeStart);
+      return true;
+    }
+
+    applyEditorMutation(
+      editor,
+      start,
+      end,
+      INDENT_UNIT,
+      start + INDENT_UNIT.length,
+      start + INDENT_UNIT.length,
+    );
+    return true;
+  }
+
+  const blockStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+  const blockEnd =
+    end > start && editor.value[end - 1] === "\n"
+      ? end - 1
+      : end;
+  const selectedBlock = editor.value.slice(blockStart, blockEnd);
+  const lines = selectedBlock.split("\n");
+  let firstLineDelta = 0;
+  let totalDelta = 0;
+
+  const nextLines = lines.map((line, index) => {
+    if (unindent) {
+      const removable = line.match(/^(?: {1,4}|\t)/)?.[0] || "";
+      if (!removable) return line;
+      const delta = -removable.length;
+      if (index === 0) firstLineDelta = delta;
+      totalDelta += delta;
+      return line.slice(removable.length);
+    }
+    if (index === 0) firstLineDelta = INDENT_UNIT.length;
+    totalDelta += INDENT_UNIT.length;
+    return INDENT_UNIT + line;
+  });
+
+  if (totalDelta === 0) return true;
+  applyEditorMutation(
+    editor,
+    blockStart,
+    blockEnd,
+    nextLines.join("\n"),
+    Math.max(blockStart, start + firstLineDelta),
+    Math.max(blockStart, end + totalDelta),
+  );
+  return true;
+}
+
 function handleEditorKeyDown(e) {
   const editor = e.target;
   const mod = e.ctrlKey || e.metaKey;
@@ -8729,6 +8800,9 @@ function handleEditorKeyDown(e) {
     activeFile.type === "html" && isInsideStyleTag(caretContextBefore);
   const isHtmlScriptContext =
     activeFile.type === "html" && isInsideScriptTag(caretContextBefore);
+  const isCssEditorContext = activeFile.type === "css" || isHtmlStyleContext;
+  const isCodeEditorContext =
+    isCssEditorContext || activeFile.type === "js" || isHtmlScriptContext;
 
   if (
     activeFile.type === "html" &&
@@ -8754,7 +8828,12 @@ function handleEditorKeyDown(e) {
       // If popup is open but empty, still allow Enter/Tab for default action
       if (e.key === "Enter" || e.key === "Tab") {
         hideSuggestions();
-        if (e.key === "Tab") e.preventDefault(); // Prevent tabbing out
+        if (e.key === "Tab") {
+          e.preventDefault();
+          if (isCodeEditorContext) {
+            handleEditorTabIndentation(editor, { unindent: e.shiftKey });
+          }
+        }
       }
       return;
     }
@@ -8830,7 +8909,7 @@ function handleEditorKeyDown(e) {
 
   // --- 3. Auto-Closing & Indentation (CSS and JS) ---
   if (
-    activeFile.type === "css" ||
+    isCssEditorContext ||
     activeFile.type === "js" ||
     isHtmlStyleContext ||
     isHtmlScriptContext
@@ -8849,16 +8928,7 @@ function handleEditorKeyDown(e) {
   // --- 5. Tab for Indentation (Fallback for all file types) ---
   if (e.key === "Tab") {
     e.preventDefault();
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    applyEditorMutation(
-      editor,
-      start,
-      end,
-      INDENT_UNIT,
-      start + INDENT_UNIT.length,
-      start + INDENT_UNIT.length,
-    );
+    handleEditorTabIndentation(editor, { unindent: e.shiftKey });
     return;
   }
 
