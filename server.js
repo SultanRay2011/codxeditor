@@ -370,24 +370,26 @@ app.post("/api/publish", (req, res) => {
       updatedAt: Date.now(),
     });
   } else {
+    const newVerificationKey = generatePublishVerificationKey();
     publishedProjects.set(id, {
       id,
       projectName,
       files,
       activeFileName,
-      verificationKey: generatePublishVerificationKey(),
+      verificationKey: newVerificationKey,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
   }
   savePublishedProjects();
   const published = findPublishedProjectEntry(id)?.project || publishedProjects.get(id);
+  const responseVerificationKey = String(published?.verificationKey || "").trim();
   res.json({
     ok: true,
     id: published?.id || id,
     mode,
     shareLink: `${req.protocol}://${req.get("host")}/published/${published?.id || id}`,
-    verificationKey: mode === "create" ? published?.verificationKey || "" : "",
+    verificationKey: mode === "create" ? responseVerificationKey : "",
   });
 });
 
@@ -429,6 +431,19 @@ function findPublishedProjectEntry(id) {
 
 function generatePublishVerificationKey() {
   return `${crypto.randomBytes(3).toString("hex")}-${crypto.randomBytes(3).toString("hex")}`.toUpperCase();
+}
+
+function extractHtmlTitle(html) {
+  const match = String(html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!match) return "";
+  return String(match[1] || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
 }
 
 function loadPublishedProjects() {
@@ -651,18 +666,16 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     },
   );
 
-  const publishTitle = escapeHtmlAttribute(requestTitleText || project?.projectName || htmlFile.name);
+  const publishTitle = escapeHtmlAttribute(
+    requestTitleText || extractHtmlTitle(html) || project?.projectName || htmlFile.name,
+  );
   if (!/<title\b/i.test(html)) {
     html = html.replace(
       /<head([^>]*)>/i,
       `<head$1><title>${publishTitle}</title>`,
     );
   } else {
-    html = html.replace(/<title[^>]*>([\s\S]*?)<\/title>/i, (_m, existing) => {
-      const base = String(existing || "").trim();
-      if (!base) return `<title>${publishTitle}</title>`;
-      return `<title>${escapeHtmlAttribute(base)} | ${publishTitle}</title>`;
-    });
+    html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${publishTitle}</title>`);
   }
 
   const publishBaseReset =

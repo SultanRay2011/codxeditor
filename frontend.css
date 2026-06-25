@@ -1056,6 +1056,11 @@ textarea::-webkit-scrollbar-thumb:hover {
   transform: translateY(0);
 }
 
+#appDialog > div {
+  max-height: min(82vh, 720px);
+  overflow-y: auto;
+}
+
 .run-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
