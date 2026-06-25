@@ -317,7 +317,7 @@ app.post("/admin/api/session/:sessionId/end", (req, res) => {
 app.post("/api/publish", (req, res) => {
   const files = cloneFiles(req.body?.files);
   const activeFileName = String(req.body?.activeFileName || "");
-  const projectName = String(req.body?.projectName || "CodX Project").trim().slice(0, 80);
+  const projectName = String(req.body?.projectName || "CodX Editor Project").trim().slice(0, 80);
   const id = String(req.body?.publishId || "").trim();
   const mode = String(req.body?.mode || "create").trim().toLowerCase();
   const verificationKey = String(req.body?.verificationKey || "").trim();
@@ -456,7 +456,7 @@ function loadPublishedProjects() {
       if (!entry || !entry.id || !Array.isArray(entry.files)) return;
       publishedProjects.set(String(entry.id), {
         id: String(entry.id),
-        projectName: String(entry.projectName || "CodX Project"),
+        projectName: String(entry.projectName || "CodX Editor Project"),
         files: cloneFiles(entry.files),
         activeFileName: String(entry.activeFileName || ""),
         verificationKey: String(entry.verificationKey || ""),
