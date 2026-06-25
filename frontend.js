@@ -1820,7 +1820,7 @@ const starterTemplates = [
       <section id="features" class="features">
         <article><h2>Sharper messaging</h2><p>Swap in your offer, proof points, and CTA without rebuilding the page structure.</p></article>
         <article><h2>Client-ready layout</h2><p>Start from a cleaner visual system that looks presentable in demos and quick handoffs.</p></article>
-        <article><h2>Faster iteration</h2><p>Refine copy, layout, and styling quickly inside CodX without relying on a framework.</p></article>
+        <article><h2>Faster iteration</h2><p>Refine copy, layout, and styling quickly inside CodX Editor without relying on a framework.</p></article>
       </section>
       <section id="results" class="results">
         <article><span>3 core sections</span><strong>Hero, features, and conversion block</strong></article>
@@ -2472,7 +2472,7 @@ function openDeveloperConsole() {
   if (!developerConsoleModal) return;
   developerConsoleModal.style.display = "flex";
   clearDeveloperConsoleOutput();
-  appendDeveloperConsoleLine("CodX Developer Tools");
+  appendDeveloperConsoleLine("CodX Editor Developer Tools");
   appendDeveloperConsoleLine("Type 'help' to see available commands.");
   appendDeveloperConsoleLine("");
   runDeveloperCommand("state", false);
@@ -3137,7 +3137,7 @@ let projectFiles = [
 <body>
     <main class="shell">
       <section class="hero">
-        <img class="brand-logo" src="cx.png" alt="CodX logo">
+        <img class="brand-logo" src="cx.png" alt="CodX Editor logo">
         <p class="eyebrow">CodX Editor Starter</p>
         <h1>Build and preview web apps instantly</h1>
         <p class="lead">
@@ -5908,10 +5908,11 @@ function finalizeEditorHistoryCapture(editor) {
     updateEditorHistoryButtons();
     return;
   }
-  const before = cloneEditorSnapshot(pendingHistorySnapshot);
-  pendingHistorySnapshot = null;
   const after = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, after);
+  const before =
+    cloneEditorSnapshot(pendingHistorySnapshot) || cloneEditorSnapshot(history.current);
+  pendingHistorySnapshot = null;
   if (!before || editorSnapshotsMatch(before, after)) {
     history.current = cloneEditorSnapshot(after);
     updateEditorHistoryButtons();
@@ -5951,6 +5952,7 @@ function restoreEditorHistorySnapshot(editor, snapshot) {
 
 function undoEditorHistory(editor = document.getElementById("activeEditor")) {
   if (!editor || !activeFile) return false;
+  pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
   history.current = cloneEditorSnapshot(currentSnapshot);
@@ -5969,6 +5971,7 @@ function undoEditorHistory(editor = document.getElementById("activeEditor")) {
 
 function redoEditorHistory(editor = document.getElementById("activeEditor")) {
   if (!editor || !activeFile) return false;
+  pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
   history.current = cloneEditorSnapshot(currentSnapshot);
@@ -6109,22 +6112,184 @@ function highlightHtml(code) {
 }
 
 function highlightCss(code) {
-  const patterns = [
-    { className: "comment", regex: /\/\*[\s\S]*?\*\//g },
-    { className: "string", regex: /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g },
-    { className: "hex", regex: /#[0-9a-fA-F]{3,8}\b/g },
-    { className: "keyword", regex: /@[a-z-]+/gi },
-    { className: "important", regex: /!important\b/g },
-    { className: "property", regex: /--[a-z0-9-]+(?=\s*:)|\b[a-z-]+(?=\s*:)/gi },
-    { className: "variable", regex: /var\(--[a-zA-Z0-9-_]+\)/g },
-    { className: "function", regex: /\b(?:calc|var|rgb|rgba|hsl|hsla|url|min|max|clamp|repeat|fit-content|attr|counter|cubic-bezier)\b(?=\s*\()/gi },
-    { className: "pseudo", regex: /::?[a-zA-Z-]+/g },
-    { className: "value", regex: /(?<=:)[^;}{\n]+(?=\s*[;}])/g },
-    { className: "number", regex: /\b\d+(\.\d+)?(px|rem|em|%|vh|vw|s|ms|ch|fr|deg|rad|turn)?\b/g },
-    { className: "selector", regex: /(?:\.[a-zA-Z_][a-zA-Z0-9_-]*|#[a-zA-Z_][a-zA-Z0-9_-]*|\b[a-zA-Z][a-zA-Z0-9_-]*\b)(?=\s*[{,])/g },
-    { className: "punctuation", regex: /[{}:;(),.]/g },
-  ];
-  return wrapTokens(code, patterns);
+  let result = "";
+  let index = 0;
+  let blockDepth = 0;
+  let expectingProperty = false;
+  let afterPropertyColon = false;
+
+  const append = (text, className = "") => {
+    if (!text) return;
+    result += className
+      ? `<span class="token ${className}">${escapeHtml(text)}</span>`
+      : escapeHtml(text);
+  };
+  const isIdentifierStart = (char) => /[a-zA-Z_-]/.test(char || "");
+  const isIdentifierPart = (char) => /[a-zA-Z0-9_-]/.test(char || "");
+  const consumeWhile = (test) => {
+    const start = index;
+    while (index < code.length && test(code[index])) index += 1;
+    return code.slice(start, index);
+  };
+  const consumeIdentifier = () => consumeWhile(isIdentifierPart);
+  const consumeString = (quote) => {
+    const start = index;
+    index += 1;
+    while (index < code.length) {
+      if (code[index] === "\\") {
+        index += 2;
+        continue;
+      }
+      if (code[index] === quote) {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+    return code.slice(start, index);
+  };
+
+  while (index < code.length) {
+    const char = code[index];
+    const next = code[index + 1];
+
+    if (char === "/" && next === "*") {
+      const end = code.indexOf("*/", index + 2);
+      const commentEnd = end === -1 ? code.length : end + 2;
+      append(code.slice(index, commentEnd), "comment");
+      index = commentEnd;
+      continue;
+    }
+
+    if (char === "\"" || char === "'") {
+      append(consumeString(char), "string");
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      append(consumeWhile((value) => /\s/.test(value)));
+      continue;
+    }
+
+    if (char === "{") {
+      append(char, "punctuation");
+      index += 1;
+      blockDepth += 1;
+      expectingProperty = true;
+      afterPropertyColon = false;
+      continue;
+    }
+
+    if (char === "}") {
+      append(char, "punctuation");
+      index += 1;
+      blockDepth = Math.max(0, blockDepth - 1);
+      expectingProperty = blockDepth > 0;
+      afterPropertyColon = false;
+      continue;
+    }
+
+    if (char === ";" && blockDepth > 0) {
+      append(char, "punctuation");
+      index += 1;
+      expectingProperty = true;
+      afterPropertyColon = false;
+      continue;
+    }
+
+    if (char === ":" && blockDepth > 0 && expectingProperty) {
+      append(char, "punctuation");
+      index += 1;
+      expectingProperty = false;
+      afterPropertyColon = true;
+      continue;
+    }
+
+    if (char === "@" && /[a-zA-Z-]/.test(next || "")) {
+      index += 1;
+      append("@" + consumeIdentifier(), "keyword");
+      continue;
+    }
+
+    if (char === "!" && code.slice(index, index + 10).toLowerCase() === "!important") {
+      append(code.slice(index, index + 10), "important");
+      index += 10;
+      continue;
+    }
+
+    if (char === ":" && /:?[a-zA-Z-]/.test(next || "")) {
+      const start = index;
+      index += next === ":" ? 2 : 1;
+      consumeIdentifier();
+      append(code.slice(start, index), "pseudo");
+      continue;
+    }
+
+    if (char === "#" && blockDepth === 0 && /[a-zA-Z0-9_-]/.test(next || "")) {
+      index += 1;
+      append("#" + consumeIdentifier(), "selector");
+      continue;
+    }
+
+    if (char === "#" && blockDepth > 0 && /[0-9a-fA-F]/.test(next || "")) {
+      const start = index;
+      index += 1;
+      consumeWhile((value) => /[0-9a-fA-F]/.test(value));
+      append(code.slice(start, index), "hex");
+      continue;
+    }
+
+    if (char === "." && blockDepth === 0 && /[a-zA-Z_-]/.test(next || "")) {
+      index += 1;
+      append("." + consumeIdentifier(), "selector");
+      continue;
+    }
+
+    if (char === "-" && next === "-" && /[a-zA-Z0-9_-]/.test(code[index + 2] || "")) {
+      const start = index;
+      index += 2;
+      consumeIdentifier();
+      append(code.slice(start, index), expectingProperty ? "property" : "variable");
+      continue;
+    }
+
+    if (/\d/.test(char)) {
+      const start = index;
+      consumeWhile((value) => /[0-9.]/.test(value));
+      consumeWhile((value) => /[a-zA-Z%]/.test(value));
+      append(code.slice(start, index), "number");
+      continue;
+    }
+
+    if (isIdentifierStart(char)) {
+      const start = index;
+      const word = consumeIdentifier();
+      const upcoming = code.slice(index).match(/^\s*\(/);
+      if (blockDepth === 0) {
+        append(word, "selector");
+      } else if (expectingProperty && code.slice(index).match(/^\s*:/)) {
+        append(word, "property");
+      } else if (upcoming) {
+        append(word, "function");
+      } else if (afterPropertyColon) {
+        append(word, "value");
+      } else {
+        append(code.slice(start, index));
+      }
+      continue;
+    }
+
+    if ("[](),>+~=|^$*.".includes(char)) {
+      append(char, "punctuation");
+      index += 1;
+      continue;
+    }
+
+    append(char);
+    index += 1;
+  }
+
+  return result || " ";
 }
 
 function highlightJs(code) {
@@ -6191,9 +6356,19 @@ function initializeEditor() {
 
   editor.addEventListener("beforeinput", (e) => {
     lastEditorInputType = String(e.inputType || "");
-    if (lastEditorInputType !== "historyUndo" && lastEditorInputType !== "historyRedo") {
-      beginEditorHistoryCapture(editor);
+    if (lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo") {
+      if (e.cancelable) {
+        e.preventDefault();
+        if (lastEditorInputType === "historyRedo") {
+          redoEditorHistory(editor);
+        } else {
+          undoEditorHistory(editor);
+        }
+        lastEditorInputType = "";
+      }
+      return;
     }
+    beginEditorHistoryCapture(editor);
   });
 
   // MODIFIED: Combined input listener
@@ -6222,6 +6397,12 @@ function initializeEditor() {
       handleSuggestions(e);
     }
     syncInlineHtmlCorrectionDisplay(editor);
+    if (isHistoryRestore) {
+      pendingHistorySnapshot = null;
+      lastEditorInputType = "";
+      syncEditorHistoryState(editor);
+      return;
+    }
     lastEditorInputType = "";
     finalizeEditorHistoryCapture(editor);
   });
@@ -8477,6 +8658,20 @@ function expandEmmetAbbreviation(editor, options = {}) {
 /**
  * Handles all keydown events in the editor for suggestions, tab, and auto-closing. (REVISED)
  */
+function shouldCaptureEditorKeyMutation(e) {
+  if (!e || e.defaultPrevented || e.isComposing) return false;
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  const key = String(e.key || "");
+  if (!key) return false;
+  if (key.length === 1) return true;
+  return [
+    "Backspace",
+    "Delete",
+    "Enter",
+    "Tab",
+  ].includes(key);
+}
+
 function handleEditorKeyDown(e) {
   const editor = e.target;
   const mod = e.ctrlKey || e.metaKey;
@@ -8497,6 +8692,10 @@ function handleEditorKeyDown(e) {
       redoEditorHistory(editor);
       return;
     }
+  }
+
+  if (shouldCaptureEditorKeyMutation(e) && !pendingHistorySnapshot) {
+    beginEditorHistoryCapture(editor);
   }
 
   if (
@@ -13099,7 +13298,7 @@ const tutorialSteps = [
     icon: "fa-solid fa-rotate-left",
     title: "Undo",
     description:
-      "Undo your most recent editor change from the toolbar. This uses CodX's own history tracking instead of relying on fragile browser textarea history.",
+      "Undo your most recent editor change from the toolbar. This uses CodX Editor's own history tracking instead of relying on fragile browser textarea history.",
     position: "top-left",
   },
   {

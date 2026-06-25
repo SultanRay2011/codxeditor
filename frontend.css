@@ -652,6 +652,10 @@ body.light .error-token-highlight {
   color: var(--syntax-string);
 }
 
+#highlightLayer .token.hex {
+  color: var(--syntax-number);
+}
+
 #highlightLayer .token.number {
   color: var(--syntax-number);
 }
@@ -686,6 +690,11 @@ body.light .error-token-highlight {
 
 #highlightLayer .token.property {
   color: var(--syntax-property);
+}
+
+#highlightLayer .token.important {
+  color: var(--syntax-keyword);
+  font-weight: 700;
 }
 
 #highlightLayer .token.value {
