@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Complete help guide for CodX Editor. Learn what every major feature does, from editing, saved projects, autosave, templates, and publishing to collaboration, roles, shortcuts, and developer tools."
+      content="A clear guide to CodX Editor features, including editing, preview, saving, publishing, collaboration, shortcuts, settings, and troubleshooting."
     />
     <meta name="theme-color" content="#4CAF50" />
     <link rel="icon" type="image/png" href="cx.png" />
@@ -199,11 +199,6 @@
         overflow: hidden;
       }
 
-      .hero-copy {
-        flex: 1;
-        min-width: 0;
-      }
-
       .hero-logo {
         width: 300px;
         height: 300px;
@@ -237,7 +232,7 @@
         font-size: clamp(2rem, 4vw, 3.3rem);
         line-height: 1.05;
         margin-bottom: 14px;
-        max-width: 12ch;
+        max-width: 13ch;
       }
 
       .lead {
@@ -308,15 +303,10 @@
         transition: 0.2s ease;
       }
 
-      .toc a:hover {
-        background: rgba(76, 175, 80, 0.1);
-        color: var(--green-dark);
-      }
-
+      .toc a:hover,
       .toc a.active {
-        background: rgba(76, 175, 80, 0.14);
+        background: rgba(76, 175, 80, 0.12);
         color: var(--green-dark);
-        font-weight: 800;
       }
 
       .content {
@@ -378,6 +368,19 @@
         gap: 8px;
       }
 
+      .simple-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .simple-list li {
+        list-style: none;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(76, 175, 80, 0.08);
+        border: 1px solid rgba(76, 175, 80, 0.12);
+      }
+
       .shortcut-list {
         display: grid;
         gap: 10px;
@@ -400,22 +403,17 @@
         background: #ffffff;
         border: 1px solid rgba(24, 42, 29, 0.12);
         box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
-        font-family: var(--font-ui, "Segoe UI", sans-serif);
+        font-family: "Segoe UI", sans-serif;
         font-size: 0.82rem;
         font-weight: 700;
       }
 
-      .simple-list {
-        display: grid;
-        gap: 10px;
-      }
-
-      .simple-list li {
-        list-style: none;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(76, 175, 80, 0.08);
-        border: 1px solid rgba(76, 175, 80, 0.12);
+      code {
+        font-family: Consolas, "Courier New", monospace;
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--green-dark);
+        border-radius: 7px;
+        padding: 2px 6px;
       }
 
       @media (max-width: 980px) {
@@ -482,8 +480,11 @@
         }
       }
     </style>
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-     crossorigin="anonymous"></script>
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
+      crossorigin="anonymous"
+    ></script>
   </head>
   <body>
     <header>
@@ -520,18 +521,16 @@
     <main class="container">
       <section class="hero">
         <div class="hero-copy">
-          <div class="eyebrow"><i class="fa-solid fa-circle-question"></i> Complete Feature Guide</div>
-          <h1>Everything CodX Editor can do, explained clearly.</h1>
+          <div class="eyebrow"><i class="fa-solid fa-circle-question"></i> CodX Editor Guide</div>
+          <h1>Learn the editor without digging through menus.</h1>
           <p class="lead">
-            This page explains the major features across the website and editor, including file tools,
-            saved projects, autosave, starter templates, publishing, live preview, debugging, shortcuts,
-            collaboration roles, room controls, and hidden developer tools.
+            CodX Editor is a browser coding workspace for building web projects. This guide explains the main tools in plain language: writing code, managing project files, previewing your work, sharing projects, and working with friends.
           </p>
           <div class="hero-pills">
-            <span class="pill"><i class="fa-solid fa-code"></i> Editor features</span>
-            <span class="pill"><i class="fa-solid fa-floppy-disk"></i> Saved projects</span>
-            <span class="pill"><i class="fa-solid fa-users"></i> Collaboration roles</span>
-            <span class="pill"><i class="fa-solid fa-bug"></i> Debugging & errors</span>
+            <span class="pill"><i class="fa-solid fa-code"></i> Code editing</span>
+            <span class="pill"><i class="fa-solid fa-eye"></i> Live preview</span>
+            <span class="pill"><i class="fa-solid fa-share-nodes"></i> Publishing</span>
+            <span class="pill"><i class="fa-solid fa-users"></i> Collaboration</span>
             <span class="pill"><i class="fa-solid fa-keyboard"></i> Shortcuts</span>
           </div>
         </div>
@@ -543,15 +542,15 @@
           <h2>On This Page</h2>
           <ul>
             <li><a href="#getting-started">Getting Started</a></li>
-            <li><a href="#editing">Editing & Files</a></li>
+            <li><a href="#workspace">Workspace Layout</a></li>
+            <li><a href="#editing">Editing Tools</a></li>
+            <li><a href="#projects">Projects & Files</a></li>
             <li><a href="#preview">Preview & Console</a></li>
+            <li><a href="#publish">Publishing</a></li>
             <li><a href="#settings">Settings & Fonts</a></li>
-            <li><a href="#errors">Errors & Suggestions</a></li>
-            <li><a href="#collab">Collaboration Basics</a></li>
-            <li><a href="#roles">Host, Co-Host, Participant</a></li>
-            <li><a href="#group-tools">Room & Group Controls</a></li>
+            <li><a href="#collaboration">Collaboration</a></li>
             <li><a href="#shortcuts">Shortcuts</a></li>
-            <li><a href="#developer-tools">Developer Tools</a></li>
+            <li><a href="#tips">Helpful Tips</a></li>
           </ul>
         </aside>
 
@@ -559,89 +558,156 @@
           <section class="section-card" id="getting-started">
             <h2>Getting Started</h2>
             <p class="section-copy">
-              CodX Editor is a browser-based coding workspace for HTML, CSS, and JavaScript projects.
-              You can create files, preview pages live, debug issues, collaborate with others, and export your project as a ZIP.
+              The editor opens after you accept the site terms. From there, you can start typing, add more files, preview the result, save your work in the browser, or export a copy to your computer.
             </p>
             <ul class="simple-list">
-              <li><strong>Welcome page:</strong> asks you to accept the terms before using the editor.</li>
-              <li><strong>Launch flow:</strong> takes you into the editor after acceptance.</li>
-              <li><strong>Starter experience:</strong> new users see onboarding hints, a starter page, and tutorial support.</li>
-              <li><strong>Terms gate:</strong> direct access to the editor is blocked until terms are accepted.</li>
+              <li><strong>Auto-Run:</strong> keeps the preview in sync while you type.</li>
+              <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
+              <li><strong>Help:</strong> opens this guide whenever you need a quick reminder.</li>
+              <li><strong>More:</strong> opens project tools such as saving, templates, publishing, fonts, Zen Mode, and the homepage link.</li>
             </ul>
           </section>
 
-          <section class="section-card" id="editing">
-            <h2>Editing & Files</h2>
+          <section class="section-card" id="workspace">
+            <h2>Workspace Layout</h2>
             <div class="feature-grid">
               <article class="feature-item">
-                <h3><i class="fa-solid fa-ellipsis"></i> Header & More Menu</h3>
+                <h3><i class="fa-solid fa-bars"></i> Top Controls</h3>
                 <ul>
-                  <li>The main header keeps core actions visible: <strong>Collab With Friends</strong>, <strong>Fullscreen</strong>, <strong>Settings</strong>, <strong>Add Media</strong>, and <strong>Help</strong>.</li>
-                  <li><strong>Run</strong>, <strong>Export ZIP File</strong>, and <strong>Import ZIP File</strong> stay in the lower editor action bar.</li>
-                  <li>The <strong>MORE</strong> dropdown now holds <strong>New</strong>, <strong>Save Project</strong>, <strong>Open Saved</strong>, <strong>Templates</strong>, <strong>Publish / Share</strong>, <strong>Zen Mode</strong>, and <strong>Fonts</strong>.</li>
-                  <li>The dropdown opens from the header button and closes on outside click or <kbd>Esc</kbd>.</li>
+                  <li>Use Auto-Run and Console toggles from the top bar.</li>
+                  <li>Open collaboration, fullscreen preview, settings, media upload, and help from the main header.</li>
+                  <li>The More menu keeps extra project actions in one place so the editor stays cleaner.</li>
                 </ul>
               </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-table-columns"></i> Split Workspace</h3>
+                <ul>
+                  <li>The left side contains your files and code editor.</li>
+                  <li>The right side shows the live website preview and console output.</li>
+                  <li>The divider between the editor and preview can be dragged to resize the workspace.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-expand"></i> Fullscreen Preview</h3>
+                <ul>
+                  <li>Open the preview in fullscreen to check layouts with more space.</li>
+                  <li>Exit fullscreen from the browser fullscreen control or the same editor button.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-laptop-code"></i> Zen Mode</h3>
+                <ul>
+                  <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
+                  <li>Use the exit button or press <kbd>Esc</kbd> to leave Zen Mode.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="editing">
+            <h2>Editing Tools</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-code"></i> Code Editor</h3>
+                <ul>
+                  <li>Write HTML, CSS, JavaScript, and environment-style text files.</li>
+                  <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
+                  <li>CSS and JavaScript inside HTML blocks receive their own highlighting.</li>
+                  <li>Tabs insert four spaces for tidy indentation.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Suggestions</h3>
+                <ul>
+                  <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
+                  <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
+                  <li>Color suggestions show small swatches beside matching values.</li>
+                  <li>Typing <code>lorem</code> can insert placeholder text.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bolt"></i> Fast HTML Helpers</h3>
+                <ul>
+                  <li>Type <code>cxstart</code> in an empty HTML file and press <kbd>Enter</kbd> to insert a starter page structure.</li>
+                  <li>Use Emmet-style abbreviations such as <code>div&gt;ul&gt;li*3</code>, then press <kbd>Tab</kbd> to expand them.</li>
+                  <li>Brackets, quotes, braces, and common tag patterns are completed for you while typing.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-rotate-left"></i> Undo & Redo</h3>
+                <ul>
+                  <li>The toolbar has dedicated Undo and Redo buttons for editor changes.</li>
+                  <li>Keyboard undo and redo shortcuts also work inside the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-triangle-exclamation"></i> Error Guidance</h3>
+                <ul>
+                  <li>CodX checks common HTML, CSS, JavaScript, and inline script issues.</li>
+                  <li>Error badges can appear beside affected files.</li>
+                  <li>Click an error badge to jump toward the first detected problem.</li>
+                  <li>The console also catches logs, warnings, runtime errors, and promise failures from the preview.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-graduation-cap"></i> Guided Tour</h3>
+                <ul>
+                  <li>The built-in tour explains the main controls step by step.</li>
+                  <li>You can restart the tour from the settings area if you want a walkthrough again.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="projects">
+            <h2>Projects & Files</h2>
+            <div class="feature-grid">
               <article class="feature-item">
                 <h3><i class="fa-solid fa-folder-tree"></i> File Explorer</h3>
                 <ul>
-                  <li>Create new `.html`, `.css`, `.js`, and `.env` files.</li>
-                  <li>Rename files and keep the editor in sync.</li>
-                  <li>Delete files and update the preview immediately.</li>
-                  <li>Switch between files inside one project.</li>
+                  <li>Create project files for markup, styling, scripts, and environment-style notes.</li>
+                  <li>Switch between files from the explorer.</li>
+                  <li>Rename or delete files when your project structure changes.</li>
+                  <li>Duplicate file names are blocked where the editor needs unique names.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-file-import"></i> Import / Export</h3>
+                <h3><i class="fa-solid fa-floppy-disk"></i> Saving</h3>
                 <ul>
-                  <li>Export the full project as a ZIP file.</li>
-                  <li>Name the ZIP before exporting.</li>
-                  <li>Import ZIP projects back into the editor.</li>
-                  <li>Drag and drop supported source files into the editor to add them to the current project.</li>
-                  <li>Drag and drop a ZIP file into the editor to replace the current project with the ZIP contents.</li>
-                  <li>Drag and drop a folder into the editor to import its supported code files as a project.</li>
-                  <li>Folder and ZIP drag-and-drop currently focus on supported text source files such as HTML, CSS, JavaScript, and environment files.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-floppy-disk"></i> Saved Projects & Autosave</h3>
-                <ul>
-                  <li><strong>New</strong> starts a fresh HTML starter project from the <strong>MORE</strong> menu.</li>
-                  <li>If the current project has unsaved changes, CodX asks you to save it first before starting fresh.</li>
-                  <li>Save the current project into your browser with a custom project name.</li>
-                  <li>Open saved projects again from the project library modal.</li>
-                  <li>Delete saved projects with a full-screen confirmation popup so removal is harder to do by mistake.</li>
-                  <li>Autosave keeps a draft of your current project and restores it on reload.</li>
-                  <li>The file toolbar now shows a visible <strong>Saved</strong> or <strong>Unsaved</strong> status plus the latest autosave time.</li>
+                  <li>Save projects inside your browser with a custom project name.</li>
+                  <li>Open saved projects from the project library.</li>
+                  <li>Autosave keeps a draft while you work and can restore it after a reload.</li>
+                  <li>The project status badge tells you whether the current work is saved or unsaved.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-layer-group"></i> Starter Templates</h3>
                 <ul>
-                  <li>Open built-in starter templates from the project library.</li>
-                  <li>Templates are shown as richer cards with icons, file counts, file types, and quick highlights.</li>
-                  <li>Templates load multiple files at once.</li>
-                  <li>Current built-in options include landing page, portfolio, and contact form starters.</li>
+                  <li>Choose from built-in starters for landing pages, portfolios, and contact forms.</li>
+                  <li>Templates include matching markup, styling, and scripts so you can begin faster.</li>
+                  <li>If you have unsaved work, the editor asks before replacing your current project.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-pen-ruler"></i> Typing Experience</h3>
+                <h3><i class="fa-solid fa-file-zipper"></i> Import & Export</h3>
                 <ul>
-                  <li>Tab inserts 3 spaces.</li>
-                  <li>Type an HTML Emmet abbreviation like <code>div&gt;ul&gt;li*3</code> and press <kbd>Tab</kbd> to expand it inline.</li>
-                  <li>Undo/redo behavior is protected for editor mutations.</li>
-                  <li>Auto-close helps with tags, quotes, and brackets.</li>
-                  <li>Typing <code>{</code> in CSS, JS, <code>&lt;style&gt;</code>, and <code>&lt;script&gt;</code> immediately inserts the closing brace and places the caret between them.</li>
-                  <li>CSS property suggestions now insert declarations that end with a semicolon, with the cursor placed before it.</li>
-                  <li>New HTML files start clean instead of showing old welcome content.</li>
+                  <li>Export the full project as a ZIP archive and choose the archive name.</li>
+                  <li>Import a ZIP archive to load supported project text files.</li>
+                  <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> HTML Starter Shortcut</h3>
+                <h3><i class="fa-solid fa-photo-film"></i> Media Files</h3>
                 <ul>
-                  <li>Type <strong>cxstart</strong> and press Enter in an empty HTML file.</li>
-                  <li>CodX inserts a starter HTML structure for you.</li>
-                  <li>An editor watermark reminds you about this when the HTML editor is empty.</li>
+                  <li>Add images, videos, and audio to your project from the media button.</li>
+                  <li>The preview rewrites local media references so playback and image display work inside the browser preview.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-plus"></i> Fresh Project</h3>
+                <ul>
+                  <li>Start a clean starter project from the More menu.</li>
+                  <li>If your current work is unsaved, CodX gives you a chance to save before clearing the workspace.</li>
                 </ul>
               </article>
             </div>
@@ -653,44 +719,73 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-eye"></i> Live Preview</h3>
                 <ul>
-                  <li>Preview HTML, CSS, and JS together inside the iframe.</li>
-                  <li>Auto-Run refreshes preview while you work.</li>
-                  <li>Manual Run is available if Auto-Run is off.</li>
-                  <li>The preview header shows the current page title from the HTML <code>&lt;title&gt;</code> tag.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-link"></i> Linked Files</h3>
-                <ul>
-                  <li>HTML pages can link to other project files in preview.</li>
-                  <li>Buttons and forms that navigate to project pages are supported in preview.</li>
-                  <li><code>&lt;a href="#"&gt;</code> and missing HTML links stay inside the iframe flow and open <code>404-for-preview.html</code>.</li>
-                  <li>Missing preview pages go to <code>404-for-preview.html</code>.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-photo-film"></i> Media Support</h3>
-                <ul>
-                  <li>Add images, video, and audio files into the project.</li>
-                  <li>Media sources inside preview are rewritten so controls actually work.</li>
-                  <li>Linked <code>&lt;source&gt;</code> tags are supported.</li>
+                  <li>The preview combines your markup, styling, scripts, and media into a working page.</li>
+                  <li>The preview header shows the page title when your HTML provides one.</li>
+                  <li>Internal links can move between pages inside your project.</li>
+                  <li>Missing project pages show a friendly fallback instead of breaking the editor.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-terminal"></i> Console Output</h3>
                 <ul>
-                  <li>See logs, warnings, and runtime errors.</li>
-                  <li>Clear console output any time.</li>
-                  <li>Unhandled promise rejections and iframe runtime issues are captured.</li>
+                  <li>Toggle the console panel from the header.</li>
+                  <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li>Use Clear to remove old console messages.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-share-nodes"></i> Publish & Share</h3>
+                <h3><i class="fa-solid fa-link"></i> Linked Project Paths</h3>
                 <ul>
-                  <li>Publish the current project and generate a shareable public link.</li>
-                  <li>The published page renders your current HTML project with linked CSS and JS files.</li>
-                  <li>The link is shown after publishing and can be copied for sharing.</li>
-                  <li>Published projects are now stored server-side so shared links survive server restarts better.</li>
+                  <li>Project links, scripts, stylesheets, media sources, buttons, and forms are handled inside preview where possible.</li>
+                  <li>Path suggestions help you choose existing project files while typing source or link attributes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bug"></i> Debugging Flow</h3>
+                <ul>
+                  <li>Use the file badges to find likely syntax problems.</li>
+                  <li>Use the console for runtime behavior after the page runs.</li>
+                  <li>Use manual Run when you want to test changes at a specific moment.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="publish">
+            <h2>Publishing</h2>
+            <p class="section-copy">
+              Publishing turns the current project into a shareable page. You choose the custom text that comes after <code>/published/</code>, and CodX shows the finished link before you share it.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-pen"></i> Custom Link Name</h3>
+                <ul>
+                  <li>Press Publish / Share from the More menu.</li>
+                  <li>Type the ending you want for the published link.</li>
+                  <li>The dialog previews the full link as you type.</li>
+                  <li>Only letters, numbers, and hyphens are accepted for the custom ending.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-copy"></i> Sharing Options</h3>
+                <ul>
+                  <li>After publishing, CodX shows the finished custom link.</li>
+                  <li>Use Copy Link to copy it to your clipboard.</li>
+                  <li>Shortcut buttons help share through WhatsApp, Discord, or Snapchat where the browser and device allow it.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-shield-halved"></i> Unique Links</h3>
+                <ul>
+                  <li>Two published projects cannot use the same custom link ending.</li>
+                  <li>Case variations are treated as the same link, so names stay clear and predictable.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-globe"></i> Published Pages</h3>
+                <ul>
+                  <li>The published page renders your project with linked styles, scripts, and supported media.</li>
+                  <li>The server keeps published projects so links remain available after normal reloads.</li>
                 </ul>
               </article>
             </div>
@@ -702,225 +797,109 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-sliders"></i> Editor Settings</h3>
                 <ul>
-                  <li>Change editor background color.</li>
-                  <li>Change editor text size.</li>
+                  <li>Change the editor background color.</li>
+                  <li>Change the main theme color.</li>
+                  <li>Adjust editor text size.</li>
                   <li>Preview settings before applying them.</li>
-                  <li>Reset everything to defaults.</li>
+                  <li>Reset settings back to defaults when needed.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-font"></i> Font Picker</h3>
                 <ul>
-                  <li>Pick from many built-in fonts.</li>
-                  <li>Search font names inside the font modal.</li>
-                  <li>Distinct font choices were added to avoid too many lookalikes.</li>
+                  <li>Browse a large list of built-in font stacks.</li>
+                  <li>Search by font name or style keyword.</li>
+                  <li>Click a font card to copy its CSS font-family value.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-brands fa-google"></i> Google Fonts Embed</h3>
+                <h3><i class="fa-brands fa-google"></i> Google Fonts</h3>
                 <ul>
-                  <li>Paste a Google Fonts embed URL or snippet.</li>
-                  <li>CodX uses <code>@import</code> to load the font.</li>
-                  <li>When a Google Fonts embed is active, the normal font dropdown is disabled.</li>
-                  <li>Pasting a new Google Fonts link now replaces the previous one properly instead of sticking to the old font.</li>
-                  <li>Your applied Google Fonts choice now stays active after refresh.</li>
-                  <li>The settings preview updates while you paste so you can see the font change before applying.</li>
-                  <li>This feature needs internet access to fetch the font.</li>
+                  <li>Paste a Google Fonts link or embed snippet into settings.</li>
+                  <li>The editor can use that font for the code area after applying settings.</li>
+                  <li>This requires internet access because the font is loaded from Google.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-moon"></i> Zen Mode</h3>
+                <h3><i class="fa-solid fa-robot"></i> AI Assistant</h3>
                 <ul>
-                  <li>Hides most UI so you can focus only on typing.</li>
-                  <li>Has a visible exit button inside the editor.</li>
-                  <li>Escape also exits Zen Mode.</li>
+                  <li>The assistant panel can answer questions about your code and suggest practical improvements.</li>
+                  <li>Responses are designed to stay concise and focused on coding help.</li>
                 </ul>
               </article>
             </div>
           </section>
 
-          <section class="section-card" id="errors">
-            <h2>Errors, Highlighting & Suggestions</h2>
-            <div class="feature-grid">
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-circle-exclamation"></i> Error Detection</h3>
-                <ul>
-                  <li>Checks HTML, CSS, JS, and inline script issues.</li>
-                  <li>Shows file error badges in the explorer.</li>
-                  <li>If error count is above 99, the badge shows <strong>99+</strong>.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-arrow-up-right-dots"></i> Jump To Error</h3>
-                <ul>
-                  <li>Click the error badge to jump to the first error in that file.</li>
-                  <li>The editor moves the caret to the error location when possible.</li>
-                  <li>HTML tag errors are highlighted in red where the problem exists.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-highlighter"></i> Inline Highlighting</h3>
-                <ul>
-                  <li>Error lines receive a red background highlight.</li>
-                  <li>Specific error ranges are underlined when location data is available.</li>
-                  <li>Closing HTML tags now receive syntax colors too.</li>
-                  <li>CSS inside <code>&lt;style&gt;</code> and JavaScript inside <code>&lt;script&gt;</code> now use their own syntax highlighters inside HTML files.</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-lightbulb"></i> Smart Suggestions</h3>
-                <ul>
-                  <li>HTML tag suggestions appear while typing.</li>
-                  <li>Typing plain HTML words can suggest tags even before you type <code>&lt;</code>.</li>
-                  <li>Attribute suggestions work inside tags.</li>
-                  <li>The <code>lorem</code> snippet suggestion inserts lorem ipsum placeholder text.</li>
-                  <li>Inline <code>style=""</code> suggestions support CSS properties and values.</li>
-                  <li>CSS and JS suggestion flows are also supported.</li>
-                  <li>Property-based CSS values are suggested too, including richer <code>font-family</code> stacks and common values for typography, sizing, spacing, layout, and effects.</li>
-                  <li>Typing a number in CSS value positions can suggest the matching <code>px</code> version.</li>
-                  <li>Color-related properties such as <code>color</code> and <code>background-color</code> can show value suggestions with a real color swatch box beside the color text.</li>
-                </ul>
-              </article>
-            </div>
-          </section>
-
-          <section class="section-card" id="collab">
-            <h2>Collaboration Basics</h2>
+          <section class="section-card" id="collaboration">
+            <h2>Collaboration</h2>
+            <p class="section-copy">
+              Collaboration lets multiple people work together in one session. It includes shared files, chat, live cursors, typing presence, roles, and room controls.
+            </p>
             <div class="feature-grid">
               <article class="feature-item">
                 <h3><i class="fa-solid fa-users"></i> Sessions</h3>
                 <ul>
-                  <li>Create a collaboration session and share a link.</li>
-                  <li>Join by link with your name and chosen color.</li>
-                  <li>Refresh while collabing starts fresh instead of silently rejoining from URL.</li>
+                  <li>Create a session and share the invite link.</li>
+                  <li>Join with a display name and personal color.</li>
+                  <li>Invalid session links show a friendly not-found page.</li>
+                  <li>If approval is enabled, guests wait until the host accepts them.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-comments"></i> Chat</h3>
                 <ul>
-                  <li>Group chat and private chat are built into the collab modal.</li>
-                  <li>Messages show the sender color they picked.</li>
-                  <li>If someone sends you a private message, CodX shows a notification with the sender name in bold.</li>
-                  <li>Group chat can be cleared by moderators with permission.</li>
+                  <li>Use group chat for everyone in the room.</li>
+                  <li>Use private chat for direct messages.</li>
+                  <li>Messages use the sender’s chosen color.</li>
+                  <li>Moderators can clear group chat when permitted.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-arrow-pointer"></i> Live Presence</h3>
+                <h3><i class="fa-solid fa-arrow-pointer"></i> Presence</h3>
                 <ul>
-                  <li>See collaborator cursors in their chosen color.</li>
-                  <li>See typing highlights where others are typing.</li>
-                  <li>Typing and cursor state clear properly on disconnect or session reset.</li>
+                  <li>See where collaborators are typing.</li>
+                  <li>See live cursors in participant colors.</li>
+                  <li>Follow a participant to stay on their file and cursor location.</li>
+                  <li>Team focus and pinned file indicators help guide the group.</li>
                 </ul>
               </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-user-xmark"></i> Session Safety</h3>
-                <ul>
-                  <li>Invalid collab links go to the 404 page.</li>
-                  <li>Kicked users see a notice modal and are reset to a fresh state.</li>
-                  <li>Banned users cannot rejoin that same collaboration session from the same device until unbanned.</li>
-                  <li>If host leaves and a co-host exists, co-host is promoted first.</li>
-                </ul>
-              </article>
-            </div>
-          </section>
-
-          <section class="section-card" id="assets">
-            <h2>Built-In Assets</h2>
-            <div class="feature-grid">
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-image"></i> Built-In Logo Asset</h3>
-                <ul>
-                  <li><code>cx.png</code> is built into CodX Editor.</li>
-                  <li>You can use it directly in your code without importing or downloading it first.</li>
-                  <li>This works in the editor preview and in published project pages.</li>
-                </ul>
-              </article>
-            </div>
-          </section>
-
-          <section class="section-card" id="roles">
-            <h2>Host, Co-Host & Participant Roles</h2>
-            <div class="feature-grid">
               <article class="feature-item">
                 <h3><i class="fa-solid fa-crown"></i> Host</h3>
                 <ul>
-                  <li>Full room control.</li>
-                  <li>Can manage participants, change roles, and use all room-wide controls.</li>
-                  <li>Can transfer host to another user with confirmation.</li>
+                  <li>The host controls the room and can manage participants.</li>
+                  <li>The host can transfer ownership to another participant.</li>
+                  <li>If the host disconnects, a co-host can be promoted automatically when available.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-user-shield"></i> Co-Host</h3>
                 <ul>
-                  <li>Limited moderator/helper role.</li>
-                  <li>Can kick normal participants, mute chat, freeze editing, manage allowed files, mark priority, follow users, bring everyone to file, pin team file, and clear group chat.</li>
-                  <li><strong>FOLLOW USER</strong> now follows both the user's current file and their live cursor position inside the editor in real time.</li>
-                  <li>Cannot lock room, end session, transfer host, or change room ownership controls.</li>
+                  <li>Co-hosts help moderate without owning every room control.</li>
+                  <li>They can use team tools such as file focus, participant follow, selected file access, and chat cleanup where allowed.</li>
+                  <li>They cannot transfer host, lock ownership-level controls, or end ownership-only flows.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-user"></i> Participant</h3>
                 <ul>
-                  <li>Can edit, preview, chat, and collaborate normally.</li>
-                  <li>May be limited by file access, room settings, mute, or frozen editing.</li>
+                  <li>Participants can code, preview, chat, and collaborate normally unless room settings limit them.</li>
+                  <li>Hosts can freeze editing, mute chat, limit file access, kick, or ban devices from a session.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-user-gear"></i> Participant Tools</h3>
+                <h3><i class="fa-solid fa-people-group"></i> Room Controls</h3>
                 <ul>
-                  <li>Host and co-host can open <strong>MORE</strong> on participants.</li>
-                  <li>There you may see message, copy name, copy role, copy color, kick, follow user, file access, and detail tools depending on role.</li>
-                  <li>If you use <strong>FOLLOW USER</strong>, your editor view will stay with that person's file and scroll with their live cursor while they move around.</li>
-                </ul>
-              </article>
-            </div>
-          </section>
-
-          <section class="section-card" id="group-tools">
-            <h2>Room & Group Controls</h2>
-            <p class="section-copy">
-              These tools live in the collaboration modal and are mainly for the host. Some limited team tools are available to co-hosts.
-            </p>
-            <div class="feature-grid">
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-people-group"></i> Group Controls</h3>
-                <ul>
-                  <li>Lock room</li>
-                  <li>Read-only for all</li>
-                  <li>Disable chat for all</li>
-                  <li>Disable run for participants</li>
-                  <li>Disable console for participants</li>
-                  <li>Bring everyone to file</li>
-                  <li>Pin team file</li>
-                  <li>Clear group chat</li>
+                  <li>Lock the room, set read-only mode, pause collaboration, or disable chat.</li>
+                  <li>Limit saving, opening saved projects, templates, publishing, imports, exports, running, console access, or file creation for participants.</li>
+                  <li>Pin a team file, bring everyone to a file, set an announcement, run a session timer, save a snapshot, regenerate invites, and end the session.</li>
                 </ul>
               </article>
               <article class="feature-item">
-                <h3><i class="fa-solid fa-bullhorn"></i> Broadcast & Focus</h3>
+                <h3><i class="fa-solid fa-ban"></i> Safety Tools</h3>
                 <ul>
-                  <li>Announcement bar</li>
-                  <li>Announcement popup on screen</li>
-                  <li>Group highlight mode</li>
-                  <li>Team focus indicators in the file list</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-stopwatch"></i> Session Management</h3>
-                <ul>
-                  <li>Session timer</li>
-                  <li>Pause collaboration</li>
-                  <li>Quiet mode</li>
-                  <li>Save session snapshot</li>
-                  <li>Regenerate invite link</li>
-                  <li>End session for everyone</li>
-                </ul>
-              </article>
-              <article class="feature-item">
-                <h3><i class="fa-solid fa-user-check"></i> Join Approval</h3>
-                <ul>
-                  <li>Approve new joins can be turned on.</li>
-                  <li>Pending join requests show inside the group controls view.</li>
-                  <li>Host can approve or reject waiting users.</li>
+                  <li>Kicked users are removed from the room and shown a notice.</li>
+                  <li>Banned devices cannot rejoin the same session until unbanned.</li>
+                  <li>Quiet Mode reduces presence noise for calmer collaboration.</li>
                 </ul>
               </article>
             </div>
@@ -929,17 +908,54 @@
           <section class="section-card" id="shortcuts">
             <h2>Shortcuts</h2>
             <div class="shortcut-list">
-              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd></span><span>Export project as ZIP</span></div>
-              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run preview manually</span></div>
-              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a new file</span></div>
-              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></span><span>Toggle console panel</span></div>
-              <div class="shortcut-row"><span><kbd>Esc</kbd></span><span>Exit Zen Mode and close supported overlays</span></div>
-              <div class="shortcut-row"><span><strong>cxstart</strong> + <kbd>Enter</kbd></span><span>Insert the HTML starter setup in an empty HTML file</span></div>
-              <div class="shortcut-row"><span><code>div&gt;ul&gt;li*3</code> + <kbd>Tab</kbd></span><span>Expand an HTML Emmet abbreviation</span></div>
-              <li><strong>Shortcut:</strong> press <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd>.</li>
-              <li><strong>Purpose:</strong> internal testing and quick inspection of files, participants, permissions, errors, and preview state.</li>
-              <li><strong>Commands:</strong> <code>help</code>, <code>state</code>, <code>files</code>, <code>participants</code>, <code>permissions</code>, <code>errors</code>, <code>preview</code>, <code>clear</code>, <code>close</code>.</li>
-            </ul>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd></span><span>Export the project as a ZIP archive</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run the preview manually</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a file in the project</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></span><span>Show or hide the console panel</span></div>
+              <div class="shortcut-row"><span><kbd>Esc</kbd></span><span>Close supported overlays or exit Zen Mode</span></div>
+              <div class="shortcut-row"><span><code>cxstart</code> + <kbd>Enter</kbd></span><span>Insert starter HTML in an empty HTML file</span></div>
+              <div class="shortcut-row"><span>Emmet abbreviation + <kbd>Tab</kbd></span><span>Expand HTML shorthand</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd></span><span>Open the developer inspection panel</span></div>
+            </div>
+          </section>
+
+          <section class="section-card" id="tips">
+            <h2>Helpful Tips</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-lightbulb"></i> If Preview Looks Wrong</h3>
+                <ul>
+                  <li>Run the preview manually if Auto-Run is off.</li>
+                  <li>Open the console and check for script errors.</li>
+                  <li>Check file badges for syntax issues.</li>
+                  <li>Make sure linked project paths match files in the explorer.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-box-archive"></i> If You Need a Backup</h3>
+                <ul>
+                  <li>Save the project in the browser for quick local access.</li>
+                  <li>Export a ZIP archive when you want a portable copy.</li>
+                  <li>Publish only when you are ready to share a browser link.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-user-group"></i> If You Are Collabing</h3>
+                <ul>
+                  <li>Use pinned files and announcements to keep everyone aligned.</li>
+                  <li>Use selected file access when different people should work on different parts.</li>
+                  <li>Use follow mode when teaching, reviewing, or pair-programming.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-compass"></i> If You Feel Lost</h3>
+                <ul>
+                  <li>Restart the guided tour from settings.</li>
+                  <li>Use the More menu as the main place for project-level actions.</li>
+                  <li>Keep the console open while learning JavaScript; it is your best little truth-teller.</li>
+                </ul>
+              </article>
+            </div>
           </section>
         </div>
       </div>
@@ -1000,6 +1016,5 @@
         setActiveTocLink(observedSections[0].id);
       }
     </script>
-
-</body>
+  </body>
 </html>
