@@ -13177,18 +13177,71 @@ const fonts = [
   { name: "MS Gothic", family: "'MS Gothic', monospace", keywords: "pixel japanese mono" },
 ];
 
+function normalizeFontName(name) {
+  return String(name || "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function quoteFontFamilyName(name) {
+  return `'${String(name || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+function getGoogleFontImportUrl(fontName) {
+  const familyParam = encodeURIComponent(fontName).replace(/%20/g, "+");
+  return `https://fonts.googleapis.com/css2?family=${familyParam}:wght@400;500;600;700&display=swap`;
+}
+
+function getGoogleFontFamily(fontName) {
+  return `${quoteFontFamilyName(fontName)}, sans-serif`;
+}
+
+function buildGoogleFontCss(fontName) {
+  const importUrl = getGoogleFontImportUrl(fontName);
+  return `@import url('${importUrl}');\nfont-family: ${getGoogleFontFamily(fontName)};`;
+}
+
+function ensureFontPreviewImport(fontName) {
+  const safeName = normalizeFontName(fontName);
+  if (!safeName) return;
+  const linkId = `fontPreview_${safeName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+  if (document.getElementById(linkId)) return;
+  const link = document.createElement("link");
+  link.id = linkId;
+  link.rel = "stylesheet";
+  link.href = getGoogleFontImportUrl(safeName);
+  document.head.appendChild(link);
+}
+
 function renderFonts(query = "") {
-  const term = query.trim().toLowerCase();
+  const customFontName = normalizeFontName(query);
+  const term = customFontName.toLowerCase();
   const filteredFonts = fonts.filter((font) => {
     const haystack = `${font.name} ${font.family} ${font.keywords || ""}`.toLowerCase();
     return !term || haystack.includes(term);
   });
+  const exactBuiltInMatch = filteredFonts.some(
+    (font) => font.name.toLowerCase() === term,
+  );
 
   fontGrid.innerHTML = "";
-  if (filteredFonts.length === 0) {
-    fontGrid.innerHTML =
-      '<div class="font-card" style="grid-column: 1 / -1; cursor: default;"><div class="font-name">No Results</div><div class="font-preview" style="font-size:16px;">Try a different keyword.</div></div>';
-    return;
+
+  if (customFontName && !exactBuiltInMatch) {
+    ensureFontPreviewImport(customFontName);
+    const customCard = document.createElement("div");
+    customCard.className = "font-card font-card-custom";
+    const customFamily = getGoogleFontFamily(customFontName);
+    customCard.innerHTML = `
+      <div class="font-name">Google Font</div>
+      <div class="font-preview" style="font-family: ${customFamily};">${escapeHtml(customFontName)}</div>
+      <div class="font-code">@import + font-family for ${escapeHtml(customFontName)}</div>
+      <div class="font-hint">Click to copy. Works if this family exists on Google Fonts.</div>
+    `;
+    customCard.addEventListener("click", () =>
+      copyFontCode(buildGoogleFontCss(customFontName), customFontName),
+    );
+    fontGrid.appendChild(customCard);
   }
 
   filteredFonts.forEach((font) => {
@@ -13202,10 +13255,17 @@ function renderFonts(query = "") {
     card.addEventListener("click", () => copyFontCode(font.family, font.name));
     fontGrid.appendChild(card);
   });
+
+  if (filteredFonts.length === 0 && !customFontName) {
+    fontGrid.innerHTML =
+      '<div class="font-card" style="grid-column: 1 / -1; cursor: default;"><div class="font-name">Start Typing</div><div class="font-preview" style="font-size:16px;">Search built-in fonts or type any Google Font name.</div></div>';
+  }
 }
 
-function copyFontCode(fontFamily, fontName) {
-  const code = `font-family: ${fontFamily};`;
+function copyFontCode(fontFamilyOrCss, fontName) {
+  const code = String(fontFamilyOrCss || "").includes("font-family:")
+    ? fontFamilyOrCss
+    : `font-family: ${fontFamilyOrCss};`;
 
   // Try modern clipboard API first
   if (navigator.clipboard && navigator.clipboard.writeText) {
