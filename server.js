@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 
 loadEnvFile();
@@ -318,8 +319,14 @@ app.post("/api/publish", (req, res) => {
   const activeFileName = String(req.body?.activeFileName || "");
   const projectName = String(req.body?.projectName || "CodX Project").trim().slice(0, 80);
   const id = String(req.body?.publishId || "").trim();
+  const mode = String(req.body?.mode || "create").trim().toLowerCase();
+  const verificationKey = String(req.body?.verificationKey || "").trim();
   if (!Array.isArray(files) || !files.length) {
     res.status(400).json({ ok: false, error: "No project files to publish." });
+    return;
+  }
+  if (mode !== "create" && mode !== "update") {
+    res.status(400).json({ ok: false, error: "Choose create or update for this published link." });
     return;
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(id)) {
@@ -329,31 +336,64 @@ app.post("/api/publish", (req, res) => {
     });
     return;
   }
-  const duplicateLink = Array.from(publishedProjects.keys()).some(
-    (publishedId) => String(publishedId).toLowerCase() === id.toLowerCase(),
-  );
-  if (duplicateLink) {
+  const existingEntry = findPublishedProjectEntry(id);
+  if (mode === "create" && existingEntry) {
     res.status(409).json({ ok: false, error: "That published link name is already in use." });
     return;
   }
-  publishedProjects.set(id, {
-    id,
-    projectName,
-    files,
-    activeFileName,
-    createdAt: Date.now(),
-  });
+  if (mode === "update") {
+    if (!existingEntry) {
+      res.status(404).json({ ok: false, error: "That published link does not exist yet." });
+      return;
+    }
+    if (!verificationKey) {
+      res.status(400).json({ ok: false, error: "Enter the verification key for this link." });
+      return;
+    }
+    const existingKey = String(existingEntry.project?.verificationKey || "").trim();
+    if (!existingKey) {
+      res.status(403).json({
+        ok: false,
+        error: "This link was created before verification keys were added, so it cannot be updated.",
+      });
+      return;
+    }
+    if (verificationKey.toUpperCase() !== existingKey.toUpperCase()) {
+      res.status(403).json({ ok: false, error: "Verification key does not match this link." });
+      return;
+    }
+    publishedProjects.set(existingEntry.key, {
+      ...existingEntry.project,
+      projectName,
+      files,
+      activeFileName,
+      updatedAt: Date.now(),
+    });
+  } else {
+    publishedProjects.set(id, {
+      id,
+      projectName,
+      files,
+      activeFileName,
+      verificationKey: generatePublishVerificationKey(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
   savePublishedProjects();
+  const published = findPublishedProjectEntry(id)?.project || publishedProjects.get(id);
   res.json({
     ok: true,
-    id,
-    shareLink: `${req.protocol}://${req.get("host")}/published/${id}`,
+    id: published?.id || id,
+    mode,
+    shareLink: `${req.protocol}://${req.get("host")}/published/${published?.id || id}`,
+    verificationKey: mode === "create" ? published?.verificationKey || "" : "",
   });
 });
 
 app.get("/published/:id", (req, res) => {
   const id = String(req.params.id || "").trim();
-  const project = publishedProjects.get(id);
+  const project = findPublishedProjectEntry(id)?.project;
   if (!project) {
     res.status(404).sendFile(path.join(__dirname, "404.html"));
     return;
@@ -378,6 +418,19 @@ function cloneFiles(files) {
   return JSON.parse(JSON.stringify(files || []));
 }
 
+function findPublishedProjectEntry(id) {
+  const normalizedId = String(id || "").trim().toLowerCase();
+  if (!normalizedId) return null;
+  for (const [key, project] of publishedProjects.entries()) {
+    if (String(key || "").toLowerCase() === normalizedId) return { key, project };
+  }
+  return null;
+}
+
+function generatePublishVerificationKey() {
+  return `${crypto.randomBytes(3).toString("hex")}-${crypto.randomBytes(3).toString("hex")}`.toUpperCase();
+}
+
 function loadPublishedProjects() {
   try {
     if (!fs.existsSync(PUBLISHED_PROJECTS_FILE)) return;
@@ -391,7 +444,9 @@ function loadPublishedProjects() {
         projectName: String(entry.projectName || "CodX Project"),
         files: cloneFiles(entry.files),
         activeFileName: String(entry.activeFileName || ""),
+        verificationKey: String(entry.verificationKey || ""),
         createdAt: Number(entry.createdAt || Date.now()),
+        updatedAt: Number(entry.updatedAt || entry.createdAt || Date.now()),
       });
     });
   } catch (error) {
@@ -1595,8 +1650,32 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("collab:set-participant-feature-access", (_payload, ack) => {
-    ack?.({ ok: false, error: "Feature access is controlled from room-wide group settings only." });
+  socket.on("collab:set-participant-feature-access", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        ack?.({ ok: false, error: "Session not found." });
+        return;
+      }
+      const targetName = normalizeName(payload?.targetName);
+      const target = session.participants.find((p) => normalizeName(p.name) === targetName);
+      if (!target) {
+        ack?.({ ok: false, error: "Participant not found." });
+        return;
+      }
+      const actor = canModerateTarget(session, socket.id, target);
+      if (!actor) {
+        ack?.({ ok: false, error: "You do not have permission to change this participant." });
+        return;
+      }
+      target.disabledFeatures = normalizeDisabledFeatures(payload?.disabledFeatures);
+      logAdminEvent("Participant feature access updated", `${target.name}'s feature access changed in session ${sessionId}.`, sessionId);
+      emitParticipants(sessionId);
+      ack?.({ ok: true });
+    } catch {
+      ack?.({ ok: false, error: "Failed to update participant feature access." });
+    }
   });
 
   socket.on("collab:set-group-feature-access", (_payload, ack) => {

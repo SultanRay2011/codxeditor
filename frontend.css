@@ -1986,6 +1986,116 @@ header {
   justify-content: center;
 }
 
+.collab-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collab-control-btn {
+  width: 100%;
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  justify-content: stretch;
+}
+
+.collab-control-btn i {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ffffff 18%, transparent);
+  font-size: 14px;
+}
+
+.collab-control-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.collab-control-title {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.collab-control-desc {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.collab-control-btn.is-active {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 55%, #ffffff);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.collab-control-btn[data-tone="danger"] {
+  background: #d32f2f;
+}
+
+.collab-control-btn[data-tone="warning"] {
+  background: #d97706;
+}
+
+.collab-control-btn[data-tone="purple"] {
+  background: #7c3aed;
+}
+
+.collab-control-btn[data-tone="blue"] {
+  background: #2563eb;
+}
+
+.collab-bulk-participant-list {
+  display: grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+}
+
+.collab-bulk-participant-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.collab-bulk-participant-option input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent-color);
+}
+
+.collab-bulk-status {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .collab-participant-list {
   display: grid;
   gap: 10px;
@@ -2293,7 +2403,8 @@ header {
 @media (max-width: 680px) {
   .collab-choice-grid,
   .collab-meta-grid,
-  .collab-action-grid {
+  .collab-action-grid,
+  .collab-control-grid {
     grid-template-columns: 1fr;
   }
 

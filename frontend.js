@@ -2692,16 +2692,41 @@ function showAppPrompt(title, message, inputValue = "", inputPlaceholder = "") {
   });
 }
 
-function showPublishUrlPrompt() {
+function showPublishActionPrompt() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialogTitle) appDialogTitle.textContent = "PUBLISH PROJECT";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML =
+        'What do you want to do with your published link?<br><span style="display:block;margin-top:10px;color:var(--text-muted);font-size:12px">Create a new custom link, or update an existing link using its verification key.</span>';
+    }
+    if (appDialogInput) appDialogInput.style.display = "none";
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="publishCreateLinkBtn" class="run-button"><i class="fa-solid fa-plus"></i> <strong>CREATE A LINK</strong></button>
+        <button type="button" id="publishUpdateLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-solid fa-pen-to-square"></i> <strong>UPDATE A LINK</strong></button>
+        <button type="button" id="publishCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("publishCreateLinkBtn").onclick = () => closeAppDialog({ ok: true, action: "create" });
+    document.getElementById("publishUpdateLinkBtn").onclick = () => closeAppDialog({ ok: true, action: "update" });
+    document.getElementById("publishCancelBtn").onclick = () => closeAppDialog({ ok: false });
+    setTimeout(() => document.getElementById("publishCreateLinkBtn")?.focus(), 0);
+  });
+}
+
+function showPublishUrlPrompt(action = "create") {
   const publishBase = `${window.location.origin}/published/`;
   const defaultSlug = "my-project";
+  const isUpdate = action === "update";
   const dialog = showAppDialog({
-    title: "PUBLISH PROJECT",
-    messageHtml: `Choose the end of your published link.<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + defaultSlug)}</code>`,
+    title: isUpdate ? "UPDATE A LINK" : "CREATE A LINK",
+    messageHtml: `${isUpdate ? "Type the custom link you want to update." : "Choose the end of your published link."}<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + defaultSlug)}</code>`,
     input: true,
     inputValue: defaultSlug,
     inputPlaceholder: "my-project",
-    okText: "DONE",
+    okText: isUpdate ? "NEXT" : "CREATE LINK",
     cancelText: "CANCEL",
   });
   const updatePreview = () => {
@@ -2715,18 +2740,22 @@ function showPublishUrlPrompt() {
   });
 }
 
-function showPublishedProjectDialog(shareLink) {
+function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "create") {
   return new Promise((resolve) => {
     activeDialogResolver = resolve;
-    if (appDialogTitle) appDialogTitle.textContent = "PROJECT PUBLISHED";
+    const isUpdate = mode === "update";
+    if (appDialogTitle) appDialogTitle.textContent = isUpdate ? "LINK UPDATED" : "LINK PUBLISHED";
     if (appDialogMessage) {
-      appDialogMessage.innerHTML = `<span style="display:block;margin-bottom:6px">Your custom link is ready:</span><a id="publishedProjectLink" target="_blank" rel="noopener noreferrer" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(shareLink)}</a><span style="display:block;margin:16px 0 8px;font-size:12px;color:var(--text-muted)">Share it</span><div id="publishedShareShortcuts" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="run-button" data-share="whatsapp" style="background:#25d366"><i class="fa-brands fa-whatsapp"></i> <strong>WHATSAPP</strong></button><button type="button" class="run-button" data-share="discord" style="background:#5865f2"><i class="fa-brands fa-discord"></i> <strong>DISCORD</strong></button><button type="button" class="run-button" data-share="snapchat" style="background:#fffc00;color:#161616"><i class="fa-brands fa-snapchat"></i> <strong>SNAPCHAT</strong></button></div>`;
+      const keyHtml = verificationKey
+        ? `<span style="display:block;margin:16px 0 6px;font-size:12px;color:var(--text-muted)">Verification key</span><code id="publishedVerificationKey" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(verificationKey)}</code><span style="display:block;margin-top:6px;font-size:12px;color:var(--text-muted)">Save this key. You will need it to update this link later.</span>`
+        : "";
+      appDialogMessage.innerHTML = `<span style="display:block;margin-bottom:6px">${isUpdate ? "Your link has been updated:" : "Your link has been published:"}</span><a id="publishedProjectLink" target="_blank" rel="noopener noreferrer" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(shareLink)}</a>${keyHtml}<span style="display:block;margin:16px 0 8px;font-size:12px;color:var(--text-muted)">Share it</span><div id="publishedShareShortcuts" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="run-button" data-share="whatsapp" style="background:#25d366"><i class="fa-brands fa-whatsapp"></i> <strong>WHATSAPP</strong></button><button type="button" class="run-button" data-share="discord" style="background:#5865f2"><i class="fa-brands fa-discord"></i> <strong>DISCORD</strong></button><button type="button" class="run-button" data-share="snapchat" style="background:#fffc00;color:#161616"><i class="fa-brands fa-snapchat"></i> <strong>SNAPCHAT</strong></button></div>`;
     }
     const publishedProjectLink = document.getElementById("publishedProjectLink");
     if (publishedProjectLink) publishedProjectLink.href = shareLink;
     if (appDialogInput) appDialogInput.style.display = "none";
     if (appDialogActions) {
-      appDialogActions.innerHTML = `<button type="button" id="appDialogCopyLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-regular fa-copy"></i> <strong>COPY LINK</strong></button><button type="button" id="appDialogDoneBtn" class="run-button"><strong>DONE</strong></button>`;
+      appDialogActions.innerHTML = `<button type="button" id="appDialogCopyLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-regular fa-copy"></i> <strong>COPY LINK</strong></button>${verificationKey ? `<button type="button" id="appDialogCopyKeyBtn" class="run-button" style="background:#7c3aed"><i class="fa-solid fa-key"></i> <strong>COPY KEY</strong></button>` : ""}<button type="button" id="appDialogDoneBtn" class="run-button"><strong>DONE</strong></button>`;
     }
     if (appDialog) appDialog.style.display = "flex";
 
@@ -2739,6 +2768,17 @@ function showPublishedProjectDialog(shareLink) {
       }
     };
     document.getElementById("appDialogCopyLinkBtn").onclick = copyLink;
+    const copyKeyBtn = document.getElementById("appDialogCopyKeyBtn");
+    if (copyKeyBtn) {
+      copyKeyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(verificationKey);
+          showNotification("Verification key copied.", "success");
+        } catch (_err) {
+          showNotification("Copy the verification key from this dialog.", "error");
+        }
+      };
+    }
     document.getElementById("appDialogDoneBtn").onclick = () => closeAppDialog({ ok: true });
     document.querySelectorAll("#publishedShareShortcuts [data-share]").forEach((button) => {
       button.onclick = async () => {
@@ -3774,19 +3814,47 @@ async function publishCurrentProject() {
     showNotification("The host disabled publish/share for participants.", "error");
     return;
   }
-  const dialog = await showPublishUrlPrompt();
+  const actionDialog = await showPublishActionPrompt();
+  if (!actionDialog?.ok) return;
+  const mode = actionDialog.action === "update" ? "update" : "create";
+  const dialog = await showPublishUrlPrompt(mode);
   if (!dialog?.ok) return;
   const publishId = String(dialog.value || "").trim();
   if (!publishId) {
     showNotification("Enter a link name to publish your project.", "error");
     return;
   }
+  let verificationKey = "";
+  if (mode === "update") {
+    const keyDialog = await showAppPrompt(
+      "VERIFICATION KEY",
+      "Enter the verification key that was shown when this link was first published:",
+      "",
+      "ABC123-DEF456",
+    );
+    if (!keyDialog?.ok) return;
+    verificationKey = String(keyDialog.value || "").trim();
+    if (!verificationKey) {
+      showNotification("Enter the verification key to update this link.", "error");
+      return;
+    }
+    const confirmUpdate = await showAppConfirmHtml(
+      "UPDATE PUBLISHED LINK",
+      `Are you sure you want to replace the project currently published at:<br><code style="display:block;margin-top:8px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(`${window.location.origin}/published/${publishId}`)}</code>`,
+      "YES, UPDATE IT",
+      "CANCEL",
+      "background:#d97706",
+    );
+    if (!confirmUpdate?.ok) return;
+  }
   try {
     const response = await fetch("/api/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        mode,
         publishId,
+        verificationKey,
         files: projectFiles,
         activeFileName: activeFile ? activeFile.name : "",
       }),
@@ -3800,10 +3868,10 @@ async function publishCurrentProject() {
         await navigator.clipboard.writeText(payload.shareLink);
       } catch (_err) {}
     }
-    await showPublishedProjectDialog(payload.shareLink || "");
-    showNotification("Project published successfully.", "success");
+    await showPublishedProjectDialog(payload.shareLink || "", payload.verificationKey || "", mode);
+    showNotification(mode === "update" ? "Published link updated successfully." : "Link published successfully.", "success");
   } catch (error) {
-    showNotification(error.message || "Failed to publish project.", "error");
+    showNotification(error.message || (mode === "update" ? "Failed to update link." : "Failed to publish project."), "error");
   }
 }
 
@@ -9317,19 +9385,20 @@ function enforceCollabPermissionsUI() {
   }
 
   const participantRestricted = isGroupFeatureRestrictedUser();
-  const lockPersonalChat = participantRestricted && collabPermissions.disableAllChat;
+  const me = getMyParticipant();
+  const personalDisabledFeatures = new Set(Array.isArray(me?.disabledFeatures) ? me.disabledFeatures : []);
+  const lockPersonalChat = participantRestricted && (collabPermissions.disableAllChat || personalDisabledFeatures.has("chat"));
   const lockNewFile = participantRestricted && collabPermissions.disableNewFile;
   const lockExport = participantRestricted && collabPermissions.disableExportZip;
   const lockImport = participantRestricted && collabPermissions.disableImportZip;
-  const lockSaveProject = participantRestricted && collabPermissions.disableSaveProject;
-  const lockOpenSaved = participantRestricted && collabPermissions.disableOpenSavedProjects;
-  const lockTemplates = participantRestricted && collabPermissions.disableTemplates;
-  const lockPublishShare = participantRestricted && collabPermissions.disablePublishShare;
-  const lockRun = participantRestricted && collabPermissions.disableRunCode;
-  const lockConsole = participantRestricted && collabPermissions.disableConsoleAccess;
+  const lockSaveProject = participantRestricted && (collabPermissions.disableSaveProject || personalDisabledFeatures.has("saveProject"));
+  const lockOpenSaved = participantRestricted && (collabPermissions.disableOpenSavedProjects || personalDisabledFeatures.has("openSaved"));
+  const lockTemplates = participantRestricted && (collabPermissions.disableTemplates || personalDisabledFeatures.has("templates"));
+  const lockPublishShare = participantRestricted && (collabPermissions.disablePublishShare || personalDisabledFeatures.has("publishShare"));
+  const lockRun = participantRestricted && (collabPermissions.disableRunCode || personalDisabledFeatures.has("runCode"));
+  const lockConsole = participantRestricted && (collabPermissions.disableConsoleAccess || personalDisabledFeatures.has("consoleAccess"));
   const globalReadOnly = activeSessionId && (collabPermissions.readOnlyAll || collabPermissions.pauseCollab);
   const lockEditor = globalReadOnly || !canCurrentUserEditFile(activeFile ? activeFile.name : "");
-  const me = getMyParticipant();
   const frozenEditing = participantRestricted && Boolean(me?.frozenEditing);
 
   if (newFileBtn) {
@@ -9679,6 +9748,294 @@ function showJoinPendingState(sessionId, name) {
   collabModal.style.display = "flex";
 }
 
+function renderCollabControlButton({
+  id,
+  icon = "fa-solid fa-sliders",
+  title = "Control",
+  desc = "",
+  active = false,
+  tone = "",
+}) {
+  return `<button id="${escapeHtml(id)}" class="run-button collab-control-btn${active ? " is-active" : ""}"${tone ? ` data-tone="${escapeHtml(tone)}"` : ""} type="button">
+    <i class="${escapeHtml(icon)}" aria-hidden="true"></i>
+    <span class="collab-control-text">
+      <span class="collab-control-title">${escapeHtml(title)}</span>
+      <span class="collab-control-desc">${escapeHtml(desc)}</span>
+    </span>
+  </button>`;
+}
+
+function getManageableParticipants() {
+  return collabParticipants.filter((participant) => canModerateParticipant(participant));
+}
+
+function countParticipantsWithFlag(flagName) {
+  return getManageableParticipants().filter((participant) => Boolean(participant?.[flagName])).length;
+}
+
+function participantHasDisabledFeature(participant, featureKey) {
+  return Array.isArray(participant?.disabledFeatures) && participant.disabledFeatures.includes(featureKey);
+}
+
+function countParticipantsWithDisabledFeature(featureKey) {
+  return getManageableParticipants().filter((participant) =>
+    participantHasDisabledFeature(participant, featureKey),
+  ).length;
+}
+
+function getBulkFlagConfig(flagName) {
+  const configs = {
+    mutedChat: {
+      title: "Mute Chat",
+      modalTitle: "MUTE CHAT",
+      desc: "Checked participants cannot send group or private messages.",
+      statusOn: "Muted",
+      statusOff: "Can chat",
+      success: "Chat mute settings updated.",
+      icon: "fa-solid fa-comment-slash",
+    },
+    frozenEditing: {
+      title: "Freeze Editing",
+      modalTitle: "FREEZE EDITING",
+      desc: "Checked participants cannot push code edits until unfrozen.",
+      statusOn: "Frozen",
+      statusOff: "Can edit",
+      success: "Editing freeze settings updated.",
+      icon: "fa-solid fa-snowflake",
+    },
+    priority: {
+      title: "Priority",
+      modalTitle: "MARK PRIORITY",
+      desc: "Checked participants are marked as priority in the participant list.",
+      statusOn: "Priority",
+      statusOff: "Normal",
+      success: "Priority settings updated.",
+      icon: "fa-solid fa-star",
+    },
+  };
+  return configs[flagName] || null;
+}
+
+function setParticipantFeatureAccessPromise(targetName, disabledFeatures) {
+  return new Promise((resolve) => {
+    if (!collabSocket || !activeSessionId) {
+      resolve({ ok: false, error: "Collaboration is not connected." });
+      return;
+    }
+    collabSocket.emit(
+      "collab:set-participant-feature-access",
+      {
+        sessionId: activeSessionId,
+        targetName,
+        disabledFeatures,
+      },
+      (res) => resolve(res || { ok: false, error: "No response from server." }),
+    );
+  });
+}
+
+function setParticipantFlagPromise(targetName, partial) {
+  return new Promise((resolve) => {
+    if (!collabSocket || !activeSessionId) {
+      resolve({ ok: false, error: "Collaboration is not connected." });
+      return;
+    }
+    collabSocket.emit(
+      "collab:set-participant-flags",
+      {
+        sessionId: activeSessionId,
+        targetName,
+        ...(partial || {}),
+      },
+      (res) => resolve(res || { ok: false, error: "No response from server." }),
+    );
+  });
+}
+
+async function applyBulkFeatureAccess(featureKey, selectedNames) {
+  const config = groupFeatureControlConfig.find((entry) => entry.key === featureKey);
+  if (!config) return;
+  const selected = new Set((selectedNames || []).map((name) => String(name || "").trim().toLowerCase()));
+  const participants = getManageableParticipants();
+  let changed = 0;
+
+  for (const participant of participants) {
+    const disabled = new Set(Array.isArray(participant.disabledFeatures) ? participant.disabledFeatures : []);
+    const shouldBeDisabled = selected.has(String(participant.name || "").trim().toLowerCase());
+    const isDisabled = disabled.has(featureKey);
+    if (isDisabled === shouldBeDisabled) continue;
+    if (shouldBeDisabled) {
+      disabled.add(featureKey);
+    } else {
+      disabled.delete(featureKey);
+    }
+    const nextDisabledFeatures = Array.from(disabled);
+    const result = await setParticipantFeatureAccessPromise(participant.name, nextDisabledFeatures);
+    if (!result?.ok) {
+      showNotification(result?.error || `Failed to update ${participant.name}.`, "error");
+      return;
+    }
+    participant.disabledFeatures = nextDisabledFeatures;
+    changed += 1;
+  }
+
+  showNotification(changed ? `${config.label} access updated.` : "No participant changes needed.", changed ? "success" : "info");
+  showGroupControls(activeSessionId);
+}
+
+function showGroupFeatureAccessPicker(featureKey) {
+  if (!canUseCoHostTools()) return;
+  const config = groupFeatureControlConfig.find((entry) => entry.key === featureKey);
+  if (!config) return;
+  const participants = getManageableParticipants();
+  collabModalView = "group-controls";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = `<strong>${escapeHtml(config.label)}</strong>`;
+  modalBody.innerHTML = `
+    <div class="collab-section-card">
+      <h4 class="collab-section-title">${escapeHtml(config.label)}</h4>
+      <p class="collab-section-note" style="margin-bottom:12px;">Checked participants will be affected by this feature restriction. Unchecked participants keep access unless a room-wide setting also blocks it.</p>
+      <div class="collab-bulk-participant-list" id="bulkFeatureParticipantList">
+        ${
+          participants.length
+            ? participants
+                .map((participant) => {
+                  const affected = participantHasDisabledFeature(participant, featureKey);
+                  return `
+                    <label class="collab-bulk-participant-option">
+                      <input type="checkbox" value="${escapeHtml(participant.name)}" ${affected ? "checked" : ""}>
+                      <span class="collab-participant-main">
+                        <span class="collab-participant-color" style="background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
+                        <span class="collab-participant-text">
+                          <span class="collab-participant-name">${escapeHtml(participant.name)}${participant.role ? ` (${escapeHtml(participant.role)})` : ""}</span>
+                          <span class="collab-participant-meta">${escapeHtml(participant.currentFile || "No active file")}</span>
+                        </span>
+                      </span>
+                      <span class="collab-bulk-status">${affected ? "Affected" : "Allowed"}</span>
+                    </label>`;
+                })
+                .join("")
+            : `<div class="collab-section-note">No participants can be changed from here.</div>`
+        }
+      </div>
+    </div>
+  `;
+  setModalActions(`
+    <button id="bulkFeatureApplyBtn" class="run-button"><strong>APPLY</strong></button>
+    <button id="bulkFeatureBackBtn" class="run-button"><strong>BACK</strong></button>
+  `);
+  collabModal.style.display = "flex";
+  const list = document.getElementById("bulkFeatureParticipantList");
+  if (list) {
+    list.querySelectorAll("input[type='checkbox']").forEach((input) => {
+      input.addEventListener("change", () => {
+        const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
+        if (status) status.textContent = input.checked ? "Affected" : "Allowed";
+      });
+    });
+  }
+  const applyBtn = document.getElementById("bulkFeatureApplyBtn");
+  const backBtn = document.getElementById("bulkFeatureBackBtn");
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      const selectedNames = Array.from(
+        document.querySelectorAll("#bulkFeatureParticipantList input[type='checkbox']:checked"),
+      ).map((input) => input.value);
+      applyBulkFeatureAccess(featureKey, selectedNames);
+    };
+  }
+  if (backBtn) backBtn.onclick = () => showGroupControls(activeSessionId);
+}
+
+async function applyBulkParticipantFlag(flagName, selectedNames) {
+  const config = getBulkFlagConfig(flagName);
+  if (!config) return;
+  const selected = new Set((selectedNames || []).map((name) => String(name || "").trim().toLowerCase()));
+  const participants = getManageableParticipants();
+  if (!participants.length) {
+    showNotification("No participants can be changed from here.", "error");
+    return;
+  }
+
+  let changed = 0;
+  for (const participant of participants) {
+    const shouldBeAffected = selected.has(String(participant.name || "").trim().toLowerCase());
+    if (Boolean(participant[flagName]) === shouldBeAffected) continue;
+    const result = await setParticipantFlagPromise(participant.name, { [flagName]: shouldBeAffected });
+    if (!result?.ok) {
+      showNotification(result?.error || `Failed to update ${participant.name}.`, "error");
+      return;
+    }
+    participant[flagName] = shouldBeAffected;
+    changed += 1;
+  }
+
+  showNotification(changed ? config.success : "No participant changes needed.", changed ? "success" : "info");
+  showGroupControls(activeSessionId);
+}
+
+function showGroupParticipantFlagPicker(flagName) {
+  if (!canUseCoHostTools()) return;
+  const config = getBulkFlagConfig(flagName);
+  if (!config) return;
+  const participants = getManageableParticipants();
+  collabModalView = "group-controls";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = `<strong>${escapeHtml(config.modalTitle)}</strong>`;
+  modalBody.innerHTML = `
+    <div class="collab-section-card">
+      <h4 class="collab-section-title">${escapeHtml(config.title)}</h4>
+      <p class="collab-section-note" style="margin-bottom:12px;">${escapeHtml(config.desc)} Check the participants who should be affected.</p>
+      <div class="collab-bulk-participant-list" id="bulkParticipantList">
+        ${
+          participants.length
+            ? participants
+                .map((participant) => `
+                  <label class="collab-bulk-participant-option">
+                    <input type="checkbox" value="${escapeHtml(participant.name)}" ${participant[flagName] ? "checked" : ""}>
+                    <span class="collab-participant-main">
+                      <span class="collab-participant-color" style="background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
+                      <span class="collab-participant-text">
+                        <span class="collab-participant-name">${escapeHtml(participant.name)}${participant.role ? ` (${escapeHtml(participant.role)})` : ""}</span>
+                        <span class="collab-participant-meta">${escapeHtml(participant.currentFile || "No active file")}</span>
+                      </span>
+                    </span>
+                    <span class="collab-bulk-status">${escapeHtml(participant[flagName] ? config.statusOn : config.statusOff)}</span>
+                  </label>
+                `)
+                .join("")
+            : `<div class="collab-section-note">No participants can be changed from here.</div>`
+        }
+      </div>
+    </div>
+  `;
+  setModalActions(`
+    <button id="bulkParticipantApplyBtn" class="run-button"><strong>APPLY</strong></button>
+    <button id="bulkParticipantBackBtn" class="run-button"><strong>BACK</strong></button>
+  `);
+  collabModal.style.display = "flex";
+  const list = document.getElementById("bulkParticipantList");
+  if (list) {
+    list.querySelectorAll("input[type='checkbox']").forEach((input) => {
+      input.addEventListener("change", () => {
+        const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
+        if (status) status.textContent = input.checked ? config.statusOn : config.statusOff;
+      });
+    });
+  }
+  const applyBtn = document.getElementById("bulkParticipantApplyBtn");
+  const backBtn = document.getElementById("bulkParticipantBackBtn");
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      const selectedNames = Array.from(
+        document.querySelectorAll("#bulkParticipantList input[type='checkbox']:checked"),
+      ).map((input) => input.value);
+      applyBulkParticipantFlag(flagName, selectedNames);
+    };
+  }
+  if (backBtn) backBtn.onclick = () => showGroupControls(activeSessionId);
+}
+
 function showGroupControls(sessionId) {
   if (!canUseCoHostTools()) return;
   const hostView = isHost();
@@ -9736,33 +10093,50 @@ function showGroupControls(sessionId) {
         </div>
       </div>
     </div>
+    ${hostView ? `<div class="collab-section-card">
+      <h4 class="collab-section-title">Room Permissions</h4>
+      <div class="collab-control-grid">
+        ${renderCollabControlButton({ id: "groupLockRoomBtn", icon: "fa-solid fa-lock", title: collabPermissions.roomLocked ? "Unlock Room" : "Lock Room", desc: collabPermissions.roomLocked ? "New guests can join again." : "Stop new guests from joining.", active: collabPermissions.roomLocked })}
+        ${renderCollabControlButton({ id: "groupReadOnlyBtn", icon: "fa-solid fa-eye", title: collabPermissions.readOnlyAll ? "Disable Read-Only" : "Read-Only For All", desc: collabPermissions.readOnlyAll ? "Let everyone edit again." : "Stop editing for the room.", active: collabPermissions.readOnlyAll })}
+        ${renderCollabControlButton({ id: "groupDisableChatBtn", icon: "fa-solid fa-comments", title: `Chat (${countParticipantsWithDisabledFeature("chat")} affected)`, desc: "Pick who cannot chat.", active: collabPermissions.disableAllChat || countParticipantsWithDisabledFeature("chat") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisableSaveBtn", icon: "fa-solid fa-floppy-disk", title: `Save (${countParticipantsWithDisabledFeature("saveProject")} affected)`, desc: "Pick who cannot save.", active: collabPermissions.disableSaveProject || countParticipantsWithDisabledFeature("saveProject") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisableOpenSavedBtn", icon: "fa-solid fa-folder-open", title: `Open Saved (${countParticipantsWithDisabledFeature("openSaved")} affected)`, desc: "Pick who cannot open saved projects.", active: collabPermissions.disableOpenSavedProjects || countParticipantsWithDisabledFeature("openSaved") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisableTemplatesBtn", icon: "fa-solid fa-layer-group", title: `Templates (${countParticipantsWithDisabledFeature("templates")} affected)`, desc: "Pick who cannot use templates.", active: collabPermissions.disableTemplates || countParticipantsWithDisabledFeature("templates") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisablePublishBtn", icon: "fa-solid fa-share-nodes", title: `Publish (${countParticipantsWithDisabledFeature("publishShare")} affected)`, desc: "Pick who cannot publish.", active: collabPermissions.disablePublishShare || countParticipantsWithDisabledFeature("publishShare") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisableRunBtn", icon: "fa-solid fa-play", title: `Run (${countParticipantsWithDisabledFeature("runCode")} affected)`, desc: "Pick who cannot run preview.", active: collabPermissions.disableRunCode || countParticipantsWithDisabledFeature("runCode") > 0 })}
+        ${renderCollabControlButton({ id: "groupDisableConsoleBtn", icon: "fa-solid fa-terminal", title: `Console (${countParticipantsWithDisabledFeature("consoleAccess")} affected)`, desc: "Pick who cannot use console.", active: collabPermissions.disableConsoleAccess || countParticipantsWithDisabledFeature("consoleAccess") > 0 })}
+      </div>
+    </div>` : ""}
     <div class="collab-section-card">
-      <h4 class="collab-section-title">${hostView ? "Room Controls" : "Co-Host Tools"}</h4>
-      <div class="collab-action-grid">
-      ${hostView ? `<button id="groupLockRoomBtn" class="run-button"><strong>${collabPermissions.roomLocked ? "UNLOCK ROOM" : "LOCK ROOM"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupReadOnlyBtn" class="run-button"><strong>${collabPermissions.readOnlyAll ? "DISABLE READ-ONLY" : "READ-ONLY FOR ALL"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableChatBtn" class="run-button"><strong>${collabPermissions.disableAllChat ? "ENABLE CHAT" : "DISABLE CHAT"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableSaveBtn" class="run-button"><strong>${collabPermissions.disableSaveProject ? "ENABLE SAVE PROJECT" : "DISABLE SAVE PROJECT"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableOpenSavedBtn" class="run-button"><strong>${collabPermissions.disableOpenSavedProjects ? "ENABLE OPEN SAVED" : "DISABLE OPEN SAVED"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableTemplatesBtn" class="run-button"><strong>${collabPermissions.disableTemplates ? "ENABLE TEMPLATES" : "DISABLE TEMPLATES"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisablePublishBtn" class="run-button"><strong>${collabPermissions.disablePublishShare ? "ENABLE PUBLISH / SHARE" : "DISABLE PUBLISH / SHARE"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableRunBtn" class="run-button"><strong>${collabPermissions.disableRunCode ? "ENABLE RUN" : "DISABLE RUN"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupDisableConsoleBtn" class="run-button"><strong>${collabPermissions.disableConsoleAccess ? "ENABLE CONSOLE" : "DISABLE CONSOLE"}</strong></button>` : ""}
-      <button id="groupBringToFileBtn" class="run-button"><strong>BRING EVERYONE TO FILE</strong></button>
-      <button id="groupPinFileBtn" class="run-button"><strong>${collabPermissions.pinnedFile ? "CHANGE PINNED FILE" : "PIN TEAM FILE"}</strong></button>
-      <button id="groupClearChatBtn" class="run-button"><strong>CLEAR GROUP CHAT</strong></button>
-      ${hostView ? `<button id="groupAnnouncementBtn" class="run-button"><strong>ANNOUNCEMENT BAR</strong></button>` : ""}
-      ${hostView ? `<button id="groupPauseBtn" class="run-button"><strong>${collabPermissions.pauseCollab ? "RESUME COLLAB" : "PAUSE COLLAB"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupTimerBtn" class="run-button"><strong>SESSION TIMER</strong></button>` : ""}
-      ${hostView ? `<button id="groupEndSessionBtn" class="run-button" style="background:#d32f2f;"><strong>END SESSION</strong></button>` : ""}
-      ${hostView ? `<button id="groupSnapshotBtn" class="run-button"><strong>SAVE SESSION SNAPSHOT</strong></button>` : ""}
-      ${hostView ? `<button id="groupRegenLinkBtn" class="run-button"><strong>REGENERATE INVITE LINK</strong></button>` : ""}
-      ${hostView ? `<button id="groupApprovalBtn" class="run-button"><strong>${collabPermissions.requireJoinApproval ? "DISABLE APPROVAL" : "APPROVE NEW JOINS"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupHighlightBtn" class="run-button"><strong>${collabPermissions.groupHighlightFile ? "CHANGE TEAM FOCUS" : "GROUP HIGHLIGHT MODE"}</strong></button>` : ""}
-      ${hostView ? `<button id="groupQuietBtn" class="run-button"><strong>${collabPermissions.quietMode ? "DISABLE QUIET MODE" : "QUIET MODE"}</strong></button>` : ""}
-      <button id="groupDoneBtn" class="run-button"><strong>DONE</strong></button>
+      <h4 class="collab-section-title">Participant Controls</h4>
+      <div class="collab-control-grid">
+        ${renderCollabControlButton({ id: "groupManageMuteBtn", icon: "fa-solid fa-comment-slash", title: `Mute Chat (${countParticipantsWithFlag("mutedChat")} affected)`, desc: "Pick who cannot chat.", active: countParticipantsWithFlag("mutedChat") > 0, tone: "warning" })}
+        ${renderCollabControlButton({ id: "groupManageFreezeBtn", icon: "fa-solid fa-snowflake", title: `Freeze Editing (${countParticipantsWithFlag("frozenEditing")} affected)`, desc: "Pick who cannot edit.", active: countParticipantsWithFlag("frozenEditing") > 0, tone: "blue" })}
+        ${renderCollabControlButton({ id: "groupManagePriorityBtn", icon: "fa-solid fa-star", title: `Priority (${countParticipantsWithFlag("priority")} marked)`, desc: "Pick priority people.", active: countParticipantsWithFlag("priority") > 0, tone: "purple" })}
+      </div>
     </div>
+    <div class="collab-section-card">
+      <h4 class="collab-section-title">Team Focus</h4>
+      <div class="collab-control-grid">
+        ${renderCollabControlButton({ id: "groupBringToFileBtn", icon: "fa-solid fa-arrows-to-eye", title: "Bring To File", desc: "Move everyone to one file." })}
+        ${renderCollabControlButton({ id: "groupPinFileBtn", icon: "fa-solid fa-thumbtack", title: collabPermissions.pinnedFile ? "Change Pinned File" : "Pin Team File", desc: collabPermissions.pinnedFile || "Keep a file visible to the team.", active: Boolean(collabPermissions.pinnedFile) })}
+        ${hostView ? renderCollabControlButton({ id: "groupHighlightBtn", icon: "fa-solid fa-crosshairs", title: collabPermissions.groupHighlightFile ? "Change Team Focus" : "Group Highlight", desc: collabPermissions.groupHighlightFile || "Highlight a file for everyone.", active: Boolean(collabPermissions.groupHighlightFile) }) : ""}
+        ${hostView ? renderCollabControlButton({ id: "groupAnnouncementBtn", icon: "fa-solid fa-bullhorn", title: "Announcement", desc: collabPermissions.announcementBar || "Show a message to the room.", active: Boolean(collabPermissions.announcementBar) }) : ""}
+        ${renderCollabControlButton({ id: "groupClearChatBtn", icon: "fa-solid fa-trash", title: "Clear Group Chat", desc: "Remove public chat messages.", tone: "danger" })}
+      </div>
     </div>
+    ${hostView ? `<div class="collab-section-card">
+      <h4 class="collab-section-title">Session Tools</h4>
+      <div class="collab-control-grid">
+        ${renderCollabControlButton({ id: "groupPauseBtn", icon: "fa-solid fa-pause", title: collabPermissions.pauseCollab ? "Resume Collab" : "Pause Collab", desc: collabPermissions.pauseCollab ? "Let syncing continue." : "Temporarily pause edits.", active: collabPermissions.pauseCollab })}
+        ${renderCollabControlButton({ id: "groupTimerBtn", icon: "fa-solid fa-stopwatch", title: "Session Timer", desc: collabPermissions.sessionEndsAt ? formatSessionTimeRemaining(collabPermissions.sessionEndsAt) : "Set or clear a timer.", active: Boolean(collabPermissions.sessionEndsAt) })}
+        ${renderCollabControlButton({ id: "groupSnapshotBtn", icon: "fa-solid fa-download", title: "Save Snapshot", desc: "Download session state." })}
+        ${renderCollabControlButton({ id: "groupRegenLinkBtn", icon: "fa-solid fa-rotate", title: "Regenerate Invite", desc: "Create a fresh invite link." })}
+        ${renderCollabControlButton({ id: "groupApprovalBtn", icon: "fa-solid fa-user-check", title: collabPermissions.requireJoinApproval ? "Disable Approval" : "Approve New Joins", desc: "Review guests before joining.", active: collabPermissions.requireJoinApproval })}
+        ${renderCollabControlButton({ id: "groupQuietBtn", icon: "fa-solid fa-volume-xmark", title: collabPermissions.quietMode ? "Disable Quiet Mode" : "Quiet Mode", desc: "Reduce live presence noise.", active: collabPermissions.quietMode })}
+        ${renderCollabControlButton({ id: "groupEndSessionBtn", icon: "fa-solid fa-power-off", title: "End Session", desc: "Close the room for everyone.", tone: "danger" })}
+      </div>
+    </div>` : ""}
     ${hostView ? `<div class="collab-section-card">
     <h4 class="collab-section-title">Pending Join Requests</h4>
     <div class="collab-participant-list">${pendingHtml}</div>
@@ -9772,7 +10146,7 @@ function showGroupControls(sessionId) {
     <div class="collab-participant-list">${banLogHtml}</div>
     </div>` : ""}
   `;
-  setModalActions("");
+  setModalActions(`<button id="groupDoneBtn" class="run-button"><strong>BACK TO SESSION</strong></button>`);
   collabModal.style.display = "flex";
 
   const bind = (id, handler) => {
@@ -9785,27 +10159,16 @@ function showGroupControls(sessionId) {
   bind("groupReadOnlyBtn", () =>
     updateGroupPermission({ readOnlyAll: !collabPermissions.readOnlyAll }, collabPermissions.readOnlyAll ? "Read-only disabled." : "Room set to read-only."),
   );
-  bind("groupDisableChatBtn", () =>
-    updateGroupPermission({ disableAllChat: !collabPermissions.disableAllChat }, collabPermissions.disableAllChat ? "Chat enabled for the group." : "Chat disabled for the group."),
-  );
-  bind("groupDisableSaveBtn", () =>
-    updateGroupPermission({ disableSaveProject: !collabPermissions.disableSaveProject }, collabPermissions.disableSaveProject ? "Save Project enabled for the group." : "Save Project disabled for the group."),
-  );
-  bind("groupDisableOpenSavedBtn", () =>
-    updateGroupPermission({ disableOpenSavedProjects: !collabPermissions.disableOpenSavedProjects }, collabPermissions.disableOpenSavedProjects ? "Open Saved enabled for the group." : "Open Saved disabled for the group."),
-  );
-  bind("groupDisableTemplatesBtn", () =>
-    updateGroupPermission({ disableTemplates: !collabPermissions.disableTemplates }, collabPermissions.disableTemplates ? "Templates enabled for the group." : "Templates disabled for the group."),
-  );
-  bind("groupDisablePublishBtn", () =>
-    updateGroupPermission({ disablePublishShare: !collabPermissions.disablePublishShare }, collabPermissions.disablePublishShare ? "Publish / Share enabled for the group." : "Publish / Share disabled for the group."),
-  );
-  bind("groupDisableRunBtn", () =>
-    updateGroupPermission({ disableRunCode: !collabPermissions.disableRunCode }, collabPermissions.disableRunCode ? "Run enabled for the group." : "Run disabled for the group."),
-  );
-  bind("groupDisableConsoleBtn", () =>
-    updateGroupPermission({ disableConsoleAccess: !collabPermissions.disableConsoleAccess }, collabPermissions.disableConsoleAccess ? "Console enabled for the group." : "Console disabled for the group."),
-  );
+  bind("groupDisableChatBtn", () => showGroupFeatureAccessPicker("chat"));
+  bind("groupDisableSaveBtn", () => showGroupFeatureAccessPicker("saveProject"));
+  bind("groupDisableOpenSavedBtn", () => showGroupFeatureAccessPicker("openSaved"));
+  bind("groupDisableTemplatesBtn", () => showGroupFeatureAccessPicker("templates"));
+  bind("groupDisablePublishBtn", () => showGroupFeatureAccessPicker("publishShare"));
+  bind("groupDisableRunBtn", () => showGroupFeatureAccessPicker("runCode"));
+  bind("groupDisableConsoleBtn", () => showGroupFeatureAccessPicker("consoleAccess"));
+  bind("groupManageMuteBtn", () => showGroupParticipantFlagPicker("mutedChat"));
+  bind("groupManageFreezeBtn", () => showGroupParticipantFlagPicker("frozenEditing"));
+  bind("groupManagePriorityBtn", () => showGroupParticipantFlagPicker("priority"));
   bind("groupBringToFileBtn", bringEveryoneToFile);
   bind("groupPinFileBtn", async () => {
     const result = await promptForExistingFile("Pin which file for the team? Leave blank to clear.", collabPermissions.pinnedFile || (activeFile ? activeFile.name : ""));
@@ -10529,6 +10892,7 @@ function showParticipantActions(targetName) {
   activeParticipantActionName = safeName;
   const disabledFeatures = groupFeatureControlConfig
     .filter((entry) => {
+      if (participantHasDisabledFeature(participant, entry.key)) return true;
       switch (entry.key) {
         case "chat":
           return collabPermissions.disableAllChat;
@@ -10551,7 +10915,10 @@ function showParticipantActions(targetName) {
     .map((entry) => entry.key);
   const disabledFeatureChips = disabledFeatures.length
     ? disabledFeatures
-        .map((featureKey) => `<span class="collab-pill">${escapeHtml(getFeatureControlLabel(featureKey))}</span>`)
+        .map((featureKey) => {
+          const source = participantHasDisabledFeature(participant, featureKey) ? "personal" : "room";
+          return `<span class="collab-pill">${escapeHtml(getFeatureControlLabel(featureKey))} · ${escapeHtml(source)}</span>`;
+        })
         .join("")
     : `<span class="collab-section-note">No group-disabled features right now.</span>`;
 
@@ -10588,55 +10955,23 @@ function showParticipantActions(targetName) {
     </div>
     <div class="collab-section-card">
       <h4 class="collab-section-title">${hostView ? "Participant Controls" : "Moderator Controls"}</h4>
-      <div class="collab-action-grid">
-      ${hostView ? `<button id="participantRoleBtn" class="run-button">
-        <strong>${participant.role === "co-host" ? "REMOVE CO-HOST" : "MAKE CO-HOST"}</strong>
-      </button>` : ""}
-      ${hostView ? `<button id="participantTransferHostBtn" class="run-button">
-        <strong>TRANSFER HOST</strong>
-      </button>` : ""}
-      <button id="participantMessageBtn" class="run-button">
-        <strong>MESSAGE</strong>
-      </button>
-      <button id="participantMuteChatBtn" class="run-button">
-        <strong>${participant.mutedChat ? "UNMUTE CHAT" : "MUTE CHAT"}</strong>
-      </button>
-      <button id="participantFreezeBtn" class="run-button">
-        <strong>${participant.frozenEditing ? "UNFREEZE EDITING" : "FREEZE EDITING"}</strong>
-      </button>
-      <button id="participantFileAccessBtn" class="run-button">
-        <strong>ALLOW FILE ACCESS</strong>
-      </button>
-      <button id="participantResetAccessBtn" class="run-button">
-        <strong>REMOVE PRIVATE ACCESS</strong>
-      </button>
-      <button id="participantFollowBtn" class="run-button">
-        <strong>${participant.name === followedParticipantName ? "STOP FOLLOWING" : "FOLLOW USER"}</strong>
-      </button>
-      <button id="participantViewDetailsBtn" class="run-button">
-        <strong>VIEW DETAILS</strong>
-      </button>
-      <button id="participantPriorityBtn" class="run-button">
-        <strong>${participant.priority ? "REMOVE PRIORITY" : "MARK AS PRIORITY"}</strong>
-      </button>
-      <button id="participantCopyNameBtn" class="run-button">
-        <strong>COPY NAME</strong>
-      </button>
-      <button id="participantCopyColorBtn" class="run-button">
-        <strong>COPY COLOR</strong>
-      </button>
-      <button id="participantCopyRoleBtn" class="run-button">
-        <strong>COPY ROLE</strong>
-      </button>
-      <button id="participantKickBtn" class="run-button" style="background:#d32f2f;">
-        <strong>KICK</strong>
-      </button>
-      <button id="participantBanBtn" class="run-button" style="background:#a22121;">
-        <strong>BAN</strong>
-      </button>
-      <button id="participantDoneBtn" class="run-button">
-        <strong>DONE</strong>
-      </button>
+      <div class="collab-control-grid">
+        ${hostView ? renderCollabControlButton({ id: "participantRoleBtn", icon: "fa-solid fa-user-shield", title: participant.role === "co-host" ? "Remove Co-Host" : "Make Co-Host", desc: "Change helper permissions.", active: participant.role === "co-host", tone: "purple" }) : ""}
+        ${hostView ? renderCollabControlButton({ id: "participantTransferHostBtn", icon: "fa-solid fa-crown", title: "Transfer Host", desc: "Give this user room ownership.", tone: "warning" }) : ""}
+        ${renderCollabControlButton({ id: "participantMessageBtn", icon: "fa-solid fa-message", title: "Message", desc: "Open private chat." })}
+        ${renderCollabControlButton({ id: "participantMuteChatBtn", icon: "fa-solid fa-comment-slash", title: participant.mutedChat ? "Unmute Chat" : "Mute Chat", desc: participant.mutedChat ? "Chat is currently muted." : "Stop this user from chatting.", active: participant.mutedChat, tone: "warning" })}
+        ${renderCollabControlButton({ id: "participantFreezeBtn", icon: "fa-solid fa-snowflake", title: participant.frozenEditing ? "Unfreeze Editing" : "Freeze Editing", desc: participant.frozenEditing ? "Editing is currently frozen." : "Stop this user from editing.", active: participant.frozenEditing, tone: "blue" })}
+        ${renderCollabControlButton({ id: "participantFileAccessBtn", icon: "fa-solid fa-folder-tree", title: "File Access", desc: Array.isArray(participant.allowedFiles) ? `${participant.allowedFiles.length} allowed file(s).` : "Using room file access.", active: Array.isArray(participant.allowedFiles) })}
+        ${renderCollabControlButton({ id: "participantResetAccessBtn", icon: "fa-solid fa-unlock", title: "Reset Access", desc: "Remove private file limits." })}
+        ${renderCollabControlButton({ id: "participantFollowBtn", icon: "fa-solid fa-location-arrow", title: participant.name === followedParticipantName ? "Stop Following" : "Follow User", desc: participant.currentFile || "No active file yet.", active: participant.name === followedParticipantName })}
+        ${renderCollabControlButton({ id: "participantViewDetailsBtn", icon: "fa-solid fa-circle-info", title: "View Details", desc: "See role, access, and status." })}
+        ${renderCollabControlButton({ id: "participantPriorityBtn", icon: "fa-solid fa-star", title: participant.priority ? "Remove Priority" : "Mark Priority", desc: participant.priority ? "Currently marked priority." : "Highlight this participant.", active: participant.priority, tone: "purple" })}
+        ${renderCollabControlButton({ id: "participantCopyNameBtn", icon: "fa-regular fa-copy", title: "Copy Name", desc: "Copy participant name." })}
+        ${renderCollabControlButton({ id: "participantCopyColorBtn", icon: "fa-solid fa-palette", title: "Copy Color", desc: "Copy chosen color." })}
+        ${renderCollabControlButton({ id: "participantCopyRoleBtn", icon: "fa-solid fa-id-badge", title: "Copy Role", desc: "Copy current role." })}
+        ${renderCollabControlButton({ id: "participantKickBtn", icon: "fa-solid fa-right-from-bracket", title: "Kick", desc: "Remove from this session.", tone: "danger" })}
+        ${renderCollabControlButton({ id: "participantBanBtn", icon: "fa-solid fa-ban", title: "Ban", desc: "Block this device from rejoining.", tone: "danger" })}
+        ${renderCollabControlButton({ id: "participantDoneBtn", icon: "fa-solid fa-check", title: "Done", desc: "Back to session." })}
     </div>
     </div>
   `;
@@ -11930,12 +12265,18 @@ function showSessionDetails(sid) {
       const moreButton = canManage
         ? `<button class="run-button participant-more-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><strong>MORE</strong></button>`
         : "";
+      const statusParts = [
+        p.currentFile || "No active file",
+        p.mutedChat ? "muted" : "",
+        p.frozenEditing ? "frozen" : "",
+        p.priority ? "priority" : "",
+      ].filter(Boolean);
       return `<div class="collab-participant-row">
         <div class="collab-participant-main">
           <span class="collab-participant-color" style="background:${escapeHtml(p.theme)};"></span>
           <div class="collab-participant-text">
             <div class="collab-participant-name">${escapeHtml(p.name)}${roleLabel}</div>
-            <div class="collab-participant-meta">${escapeHtml(p.currentFile || "No active file")}${p.priority ? " · priority" : ""}</div>
+            <div class="collab-participant-meta">${escapeHtml(statusParts.join(" · "))}</div>
           </div>
         </div>
         ${moreButton}
