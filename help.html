@@ -550,6 +550,7 @@
             <li><a href="#publish">Publishing</a></li>
             <li><a href="#settings">Settings & Fonts</a></li>
             <li><a href="#collaboration">Collaboration</a></li>
+            <li><a href="#assistant-tools">Assistant & Tools</a></li>
             <li><a href="#shortcuts">Shortcuts</a></li>
             <li><a href="#tips">Helpful Tips</a></li>
           </ul>
@@ -566,6 +567,7 @@
               <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
               <li><strong>Help:</strong> opens this guide whenever you need a quick reminder.</li>
               <li><strong>More:</strong> opens project tools such as saving, templates, publishing, fonts, Zen Mode, and the homepage link.</li>
+              <li><strong>Guided tour:</strong> explains the main editor controls step by step and can be restarted later.</li>
             </ul>
           </section>
 
@@ -578,6 +580,7 @@
                   <li>Use Auto-Run and Console toggles from the top bar.</li>
                   <li>Open collaboration, fullscreen preview, settings, media upload, and help from the main header.</li>
                   <li>The More menu keeps extra project actions in one place so the editor stays cleaner.</li>
+                  <li>The Homepage option returns you to the main site from inside the editor.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -586,6 +589,7 @@
                   <li>The left side contains your files and code editor.</li>
                   <li>The right side shows the live website preview and console output.</li>
                   <li>The divider between the editor and preview can be dragged to resize the workspace.</li>
+                  <li>On smaller screens, the editor and preview stack so both stay usable.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -615,6 +619,7 @@
                   <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
                   <li>CSS and JavaScript inside HTML blocks receive their own highlighting.</li>
                   <li>Tabs insert four spaces for tidy indentation.</li>
+                  <li>Remote cursors and typing indicators appear in the editor during collaboration.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -624,6 +629,7 @@
                   <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
                   <li>Color suggestions show small swatches beside matching values.</li>
                   <li>Typing <code>lorem</code> can insert placeholder text.</li>
+                  <li>Path suggestions help when typing links, scripts, stylesheets, and media sources.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -648,6 +654,7 @@
                   <li>Error badges can appear beside affected files.</li>
                   <li>Click an error badge to jump toward the first detected problem.</li>
                   <li>The console also catches logs, warnings, runtime errors, and promise failures from the preview.</li>
+                  <li>Large error counts are shortened so file badges stay readable.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -670,6 +677,7 @@
                   <li>Switch between files from the explorer.</li>
                   <li>Rename or delete files when your project structure changes.</li>
                   <li>Duplicate file names are blocked where the editor needs unique names.</li>
+                  <li>The file list can show file-level error status and team focus indicators.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -695,6 +703,7 @@
                   <li>Export the full project as a ZIP archive and choose the archive name.</li>
                   <li>Import a ZIP archive to load supported project text files.</li>
                   <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
+                  <li>Imports focus on editable project files, while Add Media handles images, audio, and video.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -722,6 +731,7 @@
                 <ul>
                   <li>The preview combines your markup, styling, scripts, and media into a working page.</li>
                   <li>The preview header shows the page title when your HTML provides one.</li>
+                  <li>The preview can also show a favicon when your project provides one.</li>
                   <li>Internal links can move between pages inside your project.</li>
                   <li>Missing project pages show a friendly fallback instead of breaking the editor.</li>
                 </ul>
@@ -774,6 +784,7 @@
                   <li>After a link is published, CodX shows a verification key.</li>
                   <li>Save that key somewhere safe.</li>
                   <li>The key proves you own the published link when you want to update it later.</li>
+                  <li>The success dialog includes a Copy Key button when a key is available.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -803,6 +814,7 @@
                 <h3><i class="fa-solid fa-globe"></i> Published Pages</h3>
                 <ul>
                   <li>The published page renders your project with linked styles, scripts, and supported media.</li>
+                  <li>The browser tab uses the title from your project’s HTML title tag.</li>
                   <li>The server keeps published projects so links remain available after normal reloads.</li>
                 </ul>
               </article>
@@ -835,6 +847,7 @@
                 <ul>
                   <li>Paste a Google Fonts link or embed snippet into settings.</li>
                   <li>The editor can use that font for the code area after applying settings.</li>
+                  <li>The settings preview updates so you can inspect the style before applying.</li>
                   <li>This requires internet access because the font is loaded from Google.</li>
                 </ul>
               </article>
@@ -843,6 +856,7 @@
                 <ul>
                   <li>The assistant panel can answer questions about your code and suggest practical improvements.</li>
                   <li>Responses are designed to stay concise and focused on coding help.</li>
+                  <li>Use the chat input to ask about the current code or a specific problem you are working on.</li>
                 </ul>
               </article>
             </div>
@@ -902,13 +916,17 @@
                 <ul>
                   <li>Participants can code, preview, chat, and collaborate normally unless room settings limit them.</li>
                   <li>Hosts can freeze editing, mute chat, limit file access, kick, or ban devices from a session.</li>
+                  <li>The participant list shows useful status such as muted, frozen, and priority.</li>
+                  <li>Participant More options are shown as neat action cards for role, message, mute, freeze, file access, follow, details, copy, kick, and ban actions.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-people-group"></i> Room Controls</h3>
                 <ul>
                   <li>Lock the room, set read-only mode, pause collaboration, or disable chat.</li>
-                  <li>Limit saving, opening saved projects, templates, publishing, imports, exports, running, console access, or file creation for participants.</li>
+                  <li>Use checkbox pickers to apply feature restrictions to selected participants.</li>
+                  <li>Limit chat, saving, opening saved projects, templates, publishing, running, or console access for specific participants.</li>
+                  <li>Group Controls show affected counts so you can quickly see how many people are limited.</li>
                   <li>Pin a team file, bring everyone to a file, set an announcement, run a session timer, save a snapshot, regenerate invites, and end the session.</li>
                 </ul>
               </article>
@@ -918,6 +936,52 @@
                   <li>Kicked users are removed from the room and shown a notice.</li>
                   <li>Banned devices cannot rejoin the same session until unbanned.</li>
                   <li>Quiet Mode reduces presence noise for calmer collaboration.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-list-check"></i> Participant Checkboxes</h3>
+                <ul>
+                  <li>Some group-control buttons open a participant checklist instead of changing everyone at once.</li>
+                  <li>Checked participants become affected by that setting; unchecked participants keep access unless a room-wide setting blocks it.</li>
+                  <li>Participant More shows whether a restriction is personal or room-wide.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="assistant-tools">
+            <h2>Assistant & Developer Tools</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-robot"></i> Code Assistant</h3>
+                <ul>
+                  <li>Open the assistant chat panel when you want help explaining or improving code.</li>
+                  <li>Ask focused questions such as why an error happens, how to improve a layout, or what a script does.</li>
+                  <li>The chat panel can be opened and closed without leaving the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
+                <ul>
+                  <li>Use the hidden inspection panel for quick internal checks while testing the editor.</li>
+                  <li>It can inspect state, files, participants, permissions, errors, preview information, and clear its output.</li>
+                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd>.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-graduation-cap"></i> Guided Tutorial</h3>
+                <ul>
+                  <li>The tutorial highlights core controls such as Auto-Run, Console, Collaboration, More, Files, Run, ZIP tools, and Preview.</li>
+                  <li>Use Back, Next, Finish, or Close to move through it at your pace.</li>
+                  <li>Restart the tutorial from editor settings whenever you want a refresher.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bell"></i> Notifications & Dialogs</h3>
+                <ul>
+                  <li>CodX uses confirmation dialogs for sensitive actions like deleting, replacing, updating published links, and ending sessions.</li>
+                  <li>Notifications confirm successful actions or explain why something is blocked.</li>
+                  <li>Publish and collaboration dialogs can scroll when their content is taller than the screen.</li>
                 </ul>
               </article>
             </div>
