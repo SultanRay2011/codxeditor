@@ -6117,6 +6117,25 @@ function highlightHtml(code) {
   return result;
 }
 
+const cssNamedColorValues = new Set(
+  "aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow yellowgreen currentcolor".split(
+    " ",
+  ),
+);
+
+function getCssLiteralColorSwatch(value) {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "";
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(raw)) return raw;
+  if (lower === "transparent") {
+    return "linear-gradient(45deg, #d1d5db 25%, transparent 25%, transparent 50%, #d1d5db 50%, #d1d5db 75%, transparent 75%, transparent), #ffffff";
+  }
+  if (cssNamedColorValues.has(lower) && lower !== "currentcolor") return lower;
+  if (/^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\(/i.test(raw)) return raw;
+  return "";
+}
+
 function highlightCss(code) {
   let result = "";
   let index = 0;
@@ -6124,11 +6143,18 @@ function highlightCss(code) {
   let expectingProperty = false;
   let afterPropertyColon = false;
 
-  const append = (text, className = "") => {
+  const append = (text, className = "", options = {}) => {
     if (!text) return;
-    result += className
-      ? `<span class="token ${className}">${escapeHtml(text)}</span>`
-      : escapeHtml(text);
+    if (!className) {
+      result += escapeHtml(text);
+      return;
+    }
+    const swatch = options.swatch || "";
+    const swatchClass = swatch ? " css-color-value" : "";
+    const swatchStyle = swatch
+      ? ` style="--css-color-swatch:${escapeHtmlAttributeValue(swatch)}"`
+      : "";
+    result += `<span class="token ${className}${swatchClass}"${swatchStyle}>${escapeHtml(text)}</span>`;
   };
   const isIdentifierStart = (char) => /[a-zA-Z_-]/.test(char || "");
   const isIdentifierPart = (char) => /[a-zA-Z0-9_-]/.test(char || "");
@@ -6149,6 +6175,26 @@ function highlightCss(code) {
       if (code[index] === quote) {
         index += 1;
         break;
+      }
+      index += 1;
+    }
+    return code.slice(start, index);
+  };
+  const consumeBalancedFunction = () => {
+    const start = index;
+    let depth = 0;
+    while (index < code.length) {
+      const char = code[index];
+      if (char === "\"" || char === "'") {
+        consumeString(char);
+        continue;
+      }
+      if (char === "(") depth += 1;
+      if (char === ")") {
+        depth -= 1;
+        index += 1;
+        if (depth <= 0) break;
+        continue;
       }
       index += 1;
     }
@@ -6241,7 +6287,8 @@ function highlightCss(code) {
       const start = index;
       index += 1;
       consumeWhile((value) => /[0-9a-fA-F]/.test(value));
-      append(code.slice(start, index), "hex");
+      const hexValue = code.slice(start, index);
+      append(hexValue, "hex", { swatch: afterPropertyColon ? getCssLiteralColorSwatch(hexValue) : "" });
       continue;
     }
 
@@ -6276,9 +6323,15 @@ function highlightCss(code) {
       } else if (expectingProperty && code.slice(index).match(/^\s*:/)) {
         append(word, "property");
       } else if (upcoming) {
-        append(word, "function");
+        if (afterPropertyColon && getCssLiteralColorSwatch(word + "(")) {
+          consumeWhile((value) => /\s/.test(value));
+          const functionText = word + consumeBalancedFunction();
+          append(functionText, "value", { swatch: getCssLiteralColorSwatch(functionText) });
+        } else {
+          append(word, "function");
+        }
       } else if (afterPropertyColon) {
-        append(word, "value");
+        append(word, "value", { swatch: getCssLiteralColorSwatch(word) });
       } else {
         append(code.slice(start, index));
       }

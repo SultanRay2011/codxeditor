@@ -716,6 +716,28 @@ body.light .error-token-highlight {
   color: var(--syntax-string);
 }
 
+#highlightLayer .token.css-color-value {
+  position: relative;
+}
+
+#highlightLayer .token.css-color-value::after {
+  content: "";
+  position: absolute;
+  left: calc(100% + 5px);
+  top: 50%;
+  width: 0.9em;
+  height: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 3px;
+  background: var(--css-color-swatch);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+}
+
 #highlightLayer .token.selector {
   color: var(--syntax-selector);
 }
