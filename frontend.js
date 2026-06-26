@@ -3914,6 +3914,17 @@ function renderProjectLibrary(mode = "saved") {
                 <span class="template-icon"><i class="fa-solid ${escapeHtml(template.icon || "fa-layer-group")}"></i></span>
                 <span class="template-tone">${escapeHtml(template.tone || "Starter")}</span>
               </div>
+              <div class="template-preview" aria-hidden="true">
+                <span class="template-preview-dot"></span>
+                <span class="template-preview-dot"></span>
+                <span class="template-preview-dot"></span>
+                <div class="template-preview-hero"></div>
+                <div class="template-preview-line wide"></div>
+                <div class="template-preview-line"></div>
+                <div class="template-preview-cards">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
               <h4 class="template-title">${escapeHtml(template.name)}</h4>
               <div class="template-description">${escapeHtml(template.description)}</div>
               <div class="template-meta-row">

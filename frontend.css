@@ -2332,22 +2332,54 @@ header {
 .template-library-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px;
 }
 
 .template-card {
+  position: relative;
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  gap: 14px;
+  padding: 18px;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--template-accent) 32%, var(--border-color));
   background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--template-accent) 26%, transparent), transparent 34%),
+    radial-gradient(circle at 100% 16%, color-mix(in srgb, var(--template-accent) 18%, transparent), transparent 28%),
     linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg-primary) 92%, var(--template-accent) 8%),
-      color-mix(in srgb, var(--bg-tertiary) 86%, var(--template-accent) 14%)
+      145deg,
+      color-mix(in srgb, var(--bg-primary) 94%, var(--template-accent) 6%),
+      color-mix(in srgb, var(--bg-tertiary) 88%, var(--template-accent) 12%)
     );
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.template-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.11), transparent 35%);
+  opacity: 0.65;
+}
+
+.template-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--template-accent) 68%, var(--border-color));
+  box-shadow:
+    0 24px 52px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--template-accent) 22%, transparent);
+}
+
+.template-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .template-card-top {
@@ -2358,14 +2390,17 @@ header {
 }
 
 .template-icon {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--template-accent) 18%, white);
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--template-accent) 42%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--template-accent) 25%, white), color-mix(in srgb, var(--template-accent) 14%, transparent));
   color: var(--template-accent);
-  font-size: 16px;
+  font-size: 17px;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--template-accent) 20%, transparent);
 }
 
 .template-tone {
@@ -2377,15 +2412,78 @@ header {
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  background: color-mix(in srgb, var(--template-accent) 14%, transparent);
+  background: color-mix(in srgb, var(--template-accent) 18%, transparent);
   color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--template-accent) 25%, transparent);
+}
+
+.template-preview {
+  display: grid;
+  grid-template-columns: repeat(3, 8px) 1fr;
+  align-items: center;
+  gap: 7px;
+  min-height: 112px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--template-accent) 24%, var(--border-color));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--template-accent) 18%, transparent), transparent 45%),
+    color-mix(in srgb, var(--bg-primary) 72%, transparent);
+}
+
+.template-preview-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--template-accent) 64%, var(--text-muted));
+}
+
+.template-preview-hero,
+.template-preview-line,
+.template-preview-cards {
+  grid-column: 1 / -1;
+}
+
+.template-preview-hero {
+  height: 30px;
+  margin-top: 6px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, var(--template-accent), color-mix(in srgb, var(--template-accent) 35%, white));
+  opacity: 0.92;
+}
+
+.template-preview-line {
+  width: 58%;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 42%, transparent);
+}
+
+.template-preview-line.wide {
+  width: 82%;
+}
+
+.template-preview-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.template-preview-cards span {
+  height: 24px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--template-accent) 18%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--template-accent) 20%, transparent);
 }
 
 .template-title {
   margin: 0;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .template-description {
@@ -2413,20 +2511,28 @@ header {
 }
 
 .template-meta-pill {
-  background: var(--bg-primary);
+  background: color-mix(in srgb, var(--bg-primary) 86%, var(--template-accent) 8%);
   color: var(--text-primary);
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
 }
 
 .template-highlight-pill {
-  background: color-mix(in srgb, var(--template-accent) 12%, transparent);
+  background: color-mix(in srgb, var(--template-accent) 16%, transparent);
   color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--template-accent) 18%, transparent);
 }
 
 .template-card .run-button {
   width: 100%;
   justify-content: center;
-  min-height: 44px;
+  min-height: 46px;
+  border-radius: 12px;
+  background: var(--template-accent);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--template-accent) 24%, transparent);
+}
+
+.template-card .run-button:hover {
+  filter: brightness(1.06);
 }
 
 @media (max-width: 680px) {
