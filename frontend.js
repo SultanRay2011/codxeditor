@@ -12342,27 +12342,41 @@ function renderJoinNameStep(sid, prefill = "") {
   collabHostName = "";
   setCollabCloseButtonVisible(false);
   modalTitle.innerHTML = "<strong>JOIN SESSION</strong>";
-  modalBody.innerHTML =
-    `<p><strong>Your name:</strong></p><input type="text" id="userNameInput" placeholder="Name" style="width:80%;padding:8px;" maxlength="20" value="${escapeHtml(prefill)}">`;
-  collabModal.style.display = "flex";
-  errorMsgEl.style.display = "none";
-  setModalActions(
-    `<button id="modalDoneBtn" class="run-button"><strong>NEXT</strong></button>`,
-  );
-
-  const doneBtn = getModalDoneBtn();
-  if (!doneBtn) return;
-  doneBtn.onclick = () => {
-    const name = document.getElementById("userNameInput").value.trim();
-    const v = validateUsername(name);
-    if (!v.valid) {
-      errorMsgEl.textContent = v.error;
-      errorMsgEl.style.display = "block";
-      return;
-    }
+  loadCollabPaletteParticipants(sid, (paletteParticipants) => {
+    modalBody.innerHTML = `
+      <div class="collab-form-grid">
+        <label class="collab-form-field">
+          <span>Name</span>
+          <input type="text" id="userNameInput" placeholder="Your name" maxlength="20" value="${escapeHtml(prefill)}">
+        </label>
+        <div class="collab-form-field">
+          <span>Color</span>
+          ${buildCollabColorPickerHtml("#2196F3", paletteParticipants)}
+        </div>
+      </div>
+    `;
+    collabModal.style.display = "flex";
     errorMsgEl.style.display = "none";
-    promptJoinTheme(name, sid);
-  };
+    setModalActions(
+      `<button id="modalDoneBtn" class="run-button"><strong>JOIN SESSION</strong></button>`,
+    );
+    bindCollabColorPicker("#2196F3");
+
+    const doneBtn = getModalDoneBtn();
+    if (!doneBtn) return;
+    doneBtn.onclick = () => {
+      const name = document.getElementById("userNameInput").value.trim();
+      const theme = document.getElementById("userThemeInput").value;
+      const v = validateUsername(name);
+      if (!v.valid) {
+        errorMsgEl.textContent = v.error;
+        errorMsgEl.style.display = "block";
+        return;
+      }
+      errorMsgEl.style.display = "none";
+      joinSessionWithPin(sid, name, theme);
+    };
+  });
 }
 
 function renderJoinSessionStep(prefill = {}) {
@@ -12376,10 +12390,6 @@ function renderJoinSessionStep(prefill = {}) {
         <span>Name</span>
         <input type="text" id="userNameInput" placeholder="Your name" maxlength="20" value="${escapeHtml(prefill.name || "")}">
       </label>
-      <label class="collab-form-field">
-        <span>Session pin</span>
-        <input type="text" id="sessionPinInput" class="collab-pin-input" placeholder="ABC123" maxlength="6" value="${escapeHtml(prefill.pin || "")}" autocomplete="off">
-      </label>
       <div class="collab-form-field">
         <span>Color</span>
         ${buildCollabColorPickerHtml(prefill.theme || "#2196F3", [])}
@@ -12389,17 +12399,9 @@ function renderJoinSessionStep(prefill = {}) {
   collabModal.style.display = "flex";
   errorMsgEl.style.display = "none";
   setModalActions(
-    `<button id="modalDoneBtn" class="run-button"><strong>JOIN SESSION</strong></button>`,
+    `<button id="modalDoneBtn" class="run-button"><strong>NEXT</strong></button>`,
   );
   bindCollabColorPicker(prefill.theme || "#2196F3");
-
-  const pinInput = document.getElementById("sessionPinInput");
-  if (pinInput) {
-    pinInput.addEventListener("input", () => {
-      const normalized = normalizeSessionPin(pinInput.value);
-      pinInput.value = normalized.slice(0, 6);
-    });
-  }
 
   const backBtn = document.getElementById("modalBackBtn");
   if (backBtn) backBtn.onclick = renderCollabStartMenu;
@@ -12415,7 +12417,103 @@ function renderJoinSessionStep(prefill = {}) {
       errorMsgEl.style.display = "block";
       return;
     }
-    const pinResult = validateSessionPin(document.getElementById("sessionPinInput").value);
+    errorMsgEl.style.display = "none";
+    renderJoinPinStep({ name, theme, pin: prefill.pin || "" });
+  };
+}
+
+function getJoinPinFromBoxes() {
+  return Array.from(document.querySelectorAll(".collab-pin-box"))
+    .map((box) => String(box.value || "").trim())
+    .join("");
+}
+
+function bindJoinPinBoxes(prefill = "") {
+  const boxes = Array.from(document.querySelectorAll(".collab-pin-box"));
+  const normalized = normalizeSessionPin(prefill).slice(0, 6);
+  boxes.forEach((box, index) => {
+    box.value = normalized[index] || "";
+    box.addEventListener("focus", () => box.select());
+    box.addEventListener("input", () => {
+      const chars = normalizeSessionPin(box.value).replace(/[^A-Z0-9]/g, "").slice(0, 6).split("");
+      if (chars.length > 1) {
+        chars.forEach((char, offset) => {
+          const target = boxes[index + offset];
+          if (target) target.value = char;
+        });
+        const next = boxes[Math.min(index + chars.length, boxes.length - 1)];
+        if (next) next.focus();
+        return;
+      }
+      box.value = chars[0] || "";
+      if (box.value && boxes[index + 1]) boxes[index + 1].focus();
+    });
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Backspace" && !box.value && boxes[index - 1]) {
+        boxes[index - 1].focus();
+        boxes[index - 1].value = "";
+      }
+      if (event.key === "ArrowLeft" && boxes[index - 1]) {
+        event.preventDefault();
+        boxes[index - 1].focus();
+      }
+      if (event.key === "ArrowRight" && boxes[index + 1]) {
+        event.preventDefault();
+        boxes[index + 1].focus();
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const doneBtn = getModalDoneBtn();
+        if (doneBtn) doneBtn.click();
+      }
+    });
+    box.addEventListener("paste", (event) => {
+      event.preventDefault();
+      const pasted = normalizeSessionPin(event.clipboardData?.getData("text") || "")
+        .replace(/[^A-Z0-9]/g, "")
+        .slice(0, 6);
+      pasted.split("").forEach((char, offset) => {
+        const target = boxes[index + offset];
+        if (target) target.value = char;
+      });
+      const next = boxes[Math.min(index + pasted.length, boxes.length - 1)];
+      if (next) next.focus();
+    });
+  });
+  const firstEmpty = boxes.find((box) => !box.value) || boxes[0];
+  if (firstEmpty) firstEmpty.focus();
+}
+
+function renderJoinPinStep({ name = "", theme = "#2196F3", pin = "" } = {}) {
+  collabHostName = "";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = "<strong>ENTER SESSION PIN</strong>";
+  modalBody.innerHTML = `
+    <button type="button" id="modalBackBtn" class="collab-back-button" aria-label="Go back">&#8592;</button>
+    <div class="collab-form-grid">
+      <label class="collab-form-field">
+        <span>Session pin</span>
+        <div class="collab-pin-box-grid" aria-label="Six character session pin">
+          ${Array.from({ length: 6 }, (_, index) => `<input type="text" class="collab-pin-box" inputmode="text" maxlength="6" autocomplete="off" aria-label="Session pin character ${index + 1}">`).join("")}
+        </div>
+      </label>
+      <div class="collab-section-note">Type the 6 letters or numbers from the host.</div>
+    </div>
+  `;
+  collabModal.style.display = "flex";
+  errorMsgEl.style.display = "none";
+  setModalActions(
+    `<button id="modalDoneBtn" class="run-button"><strong>JOIN SESSION</strong></button>`,
+  );
+  bindJoinPinBoxes(pin);
+
+  const backBtn = document.getElementById("modalBackBtn");
+  if (backBtn) backBtn.onclick = () => renderJoinSessionStep({ name, theme, pin: getJoinPinFromBoxes() });
+
+  const doneBtn = getModalDoneBtn();
+  if (!doneBtn) return;
+  doneBtn.onclick = () => {
+    const pinResult = validateSessionPin(getJoinPinFromBoxes());
     if (!pinResult.valid) {
       errorMsgEl.textContent = pinResult.error;
       errorMsgEl.style.display = "block";

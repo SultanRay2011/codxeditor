@@ -1958,6 +1958,31 @@ header {
   font-family: Consolas, "Courier New", monospace;
 }
 
+.collab-pin-box-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(36px, 1fr));
+  gap: 8px;
+}
+
+.collab-pin-box {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 24px;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.collab-pin-box:focus {
+  outline: 2px solid var(--accent-color);
+  border-color: var(--accent-color);
+}
+
 .collab-back-button {
   position: absolute;
   top: 10px;
