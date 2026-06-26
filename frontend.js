@@ -11794,6 +11794,11 @@ function ensureCollabSocket() {
     }
   });
 
+  collabSocket.on("collab:participant-left", (payload) => {
+    const name = String(payload?.name || "Someone").trim() || "Someone";
+    showNotification(`${escapeHtml(name)} has left this session`, "info");
+  });
+
   collabSocket.on("collab:meta", (meta) => {
     if (!meta) return;
     const previousAnnouncement = String(collabPermissions.announcementBar || "").trim();

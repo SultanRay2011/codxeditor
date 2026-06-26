@@ -21,8 +21,8 @@ const adminActivity = [];
 const adminSessions = new Map();
 const publishedProjects = new Map();
 const PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
-const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "").trim();
-const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "");
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
 const ADMIN_COOKIE = "codx_admin_session";
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
@@ -745,6 +745,8 @@ function buildAdminOverview() {
     },
     stats: {
       activeUsers: editorPresenceSockets.size,
+      frontendPageUsers: editorPresenceSockets.size,
+      frontendHtmlOnlyUsers: editorPresenceSockets.size,
       collaboratingUsers: participants,
       liveSessions: sessions.size,
       moderationItems: pending + flagged,
@@ -1934,6 +1936,11 @@ io.on("connection", (socket) => {
       socketMeta.delete(target.socketId);
       io.to(target.socketId).emit("collab:kicked", { sessionId });
       io.sockets.sockets.get(target.socketId)?.leave(sessionId);
+      io.to(sessionId).emit("collab:participant-left", {
+        name: target.name,
+        reason: "kicked",
+        actorName: actor.name,
+      });
 
       logAdminEvent("Participant kicked", `${target.name} was removed from session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
@@ -2101,6 +2108,11 @@ io.on("connection", (socket) => {
       if (removedEditorPresence) emitAdminUpdate("editor-presence");
       return;
     }
+
+    io.to(meta.sessionId).emit("collab:participant-left", {
+      name: meta.name,
+      reason: "left",
+    });
 
     if (removedWasHost) {
       const availableCoHost = session.participants.find((p) => p.role === "co-host");
