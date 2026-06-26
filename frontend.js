@@ -9522,6 +9522,7 @@ function updateFullscreenButtonState() {
 // PART 12 - COLLABORATION FEATURES (SOCKET.IO BACKEND)
 closeModalBtn.addEventListener("click", closeModal);
 collabBtn.addEventListener("click", startCollaboration);
+updateCollabButtonState();
 
 function extractSessionIdFromUrl() {
   const pathMatch = window.location.pathname.match(
@@ -9670,6 +9671,29 @@ function isCoHost() {
   return getMyRole() === "co-host";
 }
 
+function updateCollabButtonState() {
+  if (!collabBtn) return;
+  const label = !activeSessionId
+    ? "COLLAB WITH FRIENDS"
+    : canUseCoHostTools()
+      ? "MANAGE SESSION"
+      : "PARTICIPANTS";
+  const strong = collabBtn.querySelector("strong");
+  if (strong) {
+    strong.textContent = label;
+  } else {
+    collabBtn.textContent = label;
+  }
+  const readableLabel =
+    label === "MANAGE SESSION"
+      ? "Manage collaboration session"
+      : label === "PARTICIPANTS"
+        ? "View collaboration participants"
+        : "Collaborate with friends";
+  collabBtn.setAttribute("aria-label", readableLabel);
+  collabBtn.title = readableLabel;
+}
+
 function canUseCoHostTools() {
   return isHost() || isCoHost();
 }
@@ -9718,6 +9742,7 @@ function canCurrentUserEditFile(fileName) {
 }
 
 function enforceCollabPermissionsUI() {
+  updateCollabButtonState();
   if (!activeSessionId) {
     if (newFileBtn) {
       newFileBtn.disabled = false;
@@ -11491,6 +11516,13 @@ function showKickConfirmation(targetName) {
 
 function showKickedOutModal() {
   resetTransientCollabUiState();
+  activeSessionId = null;
+  collabParticipants = [];
+  collabPendingJoins = [];
+  collabShareLink = "";
+  collabSessionPin = "";
+  collabPermissions = { ...defaultCollabPermissions };
+  updateCollabButtonState();
   collabModalView = "kicked";
   setCollabCloseButtonVisible(false);
   modalTitle.innerHTML = "<strong>NOTICE</strong>";
@@ -11673,6 +11705,7 @@ function ensureCollabSocket() {
     collabShareLink = "";
     collabSessionPin = "";
     collabPermissions = { ...defaultCollabPermissions };
+    updateCollabButtonState();
     setCollabCloseButtonVisible(false);
     modalTitle.innerHTML = "<strong>BANNED FROM SESSION</strong>";
     modalBody.innerHTML = `<p style="margin:8px 0 16px;color:var(--text-primary);">You have been banned from this collaboration session on this device by the host.</p>`;
@@ -11829,6 +11862,7 @@ function ensureCollabSocket() {
     collabShareLink = "";
     collabSessionPin = "";
     collabPermissions = { ...defaultCollabPermissions };
+    updateCollabButtonState();
     setCollabCloseButtonVisible(false);
     const reason = String(payload?.reason || "The collaboration session ended.");
     modalTitle.innerHTML = "<strong>SESSION ENDED</strong>";
