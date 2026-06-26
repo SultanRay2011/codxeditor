@@ -105,50 +105,6 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, sessions: sessions.size });
 });
 
-// AI Code Assistant endpoint
-const GROQ_API_KEY = "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";
-app.post("/api/ai", async (req, res) => {
-  try {
-    const { code, prompt } = req.body || {};
-    if (!prompt) {
-      return res.status(400).json({ ok: false, error: "Prompt is required" });
-    }
-    
-    console.log("AI request received with prompt:", prompt.substring(0, 50));
-    
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "mixtral-8x7b-32768",
-        messages: [
-          { role: "system", content: "You are an expert code assistant. Help with code improvements, suggestions, and explanations. Keep responses concise and practical." },
-          { role: "user", content: code ? `Code:\n\`\`\`\n${code}\n\`\`\`\n\nRequest: ${prompt}` : prompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error("Groq API error:", data);
-      return res.status(response.status).json({ ok: false, error: data.error?.message || "Groq API error" });
-    }
-    
-    const message = data.choices?.[0]?.message?.content || "";
-    console.log("AI response generated successfully");
-    res.json({ ok: true, message });
-  } catch (error) {
-    console.error("AI endpoint error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
 app.post("/admin/api/auth", (req, res) => {
   const username = String(req.body?.username || "").trim();
   const password = String(req.body?.password || "");

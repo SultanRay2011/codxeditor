@@ -4769,64 +4769,6 @@ resetSettingsBtn.addEventListener("click", () => {
   });
 });
 
-// AI Chat Handlers
-const aiBtn = document.getElementById("aiBtn");
-const aiChatPanel = document.getElementById("aiChatPanel");
-const aiChatMessages = document.getElementById("aiChatMessages");
-const aiChatInput = document.getElementById("aiChatInput");
-const aiSendBtn = document.getElementById("aiSendBtn");
-
-function addAiChatMessage(text, isUser = false) {
-  const msg = document.createElement("div");
-  msg.style.cssText = `padding:8px 12px;border-radius:8px;font-size:12px;max-width:100%;word-wrap:break-word;${isUser ? "background:var(--accent-color);color:white;align-self:flex-end;margin-left:40px;" : "background:var(--bg-tertiary);color:var(--text-primary);align-self:flex-start;margin-right:40px;"}`;
-  msg.textContent = text;
-  aiChatMessages.appendChild(msg);
-  aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
-}
-
-if (aiBtn) {
-  aiBtn.addEventListener("click", () => {
-    aiChatPanel.style.display = "flex";
-    aiChatInput.focus();
-  });
-}
-
-if (aiSendBtn && aiChatInput) {
-  async function sendAiMessage() {
-    const prompt = aiChatInput.value.trim();
-    if (!prompt) return;
-    
-    addAiChatMessage(prompt, true);
-    aiChatInput.value = "";
-    aiSendBtn.disabled = true;
-
-    try {
-      const code = activeFile?.content || "";
-      const response = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, prompt }),
-      });
-
-      const data = await response.json();
-      if (!data.ok) {
-        addAiChatMessage(`Error: ${data.error}`);
-      } else {
-        addAiChatMessage(data.message);
-      }
-    } catch (error) {
-      addAiChatMessage(`Error: ${error.message}`);
-    } finally {
-      aiSendBtn.disabled = false;
-    }
-  }
-
-  aiSendBtn.addEventListener("click", sendAiMessage);
-  aiChatInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") sendAiMessage();
-  });
-}
-
 // PART 4 - UI CONTROLS
 showConsoleCheckbox.addEventListener("change", () => {
   if (showConsoleCheckbox.disabled) {
@@ -5338,7 +5280,7 @@ function updatePreview() {
     /<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
     (match, src) => {
       const normalizedSrc = String(src || "").trim();
-      // Preserve external scripts exactly (including API-key query params).
+      // Preserve external scripts exactly, including their query params.
       if (
         /^(https?:)?\/\//i.test(normalizedSrc) ||
         normalizedSrc.startsWith("data:") ||
