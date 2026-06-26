@@ -386,7 +386,10 @@ function findPublishedProjectEntry(id) {
 }
 
 function generatePublishVerificationKey() {
-  return `${crypto.randomBytes(3).toString("hex")}-${crypto.randomBytes(3).toString("hex")}`.toUpperCase();
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.randomBytes(6);
+  const suffix = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  return `cxprojkey-${suffix}`;
 }
 
 function extractHtmlTitle(html) {
