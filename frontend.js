@@ -6037,6 +6037,12 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeHtmlAttributeValue(text) {
+  return escapeHtml(String(text || ""))
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function wrapTokens(text, patterns) {
   const ranges = [];
   patterns.forEach((rule) => {
@@ -7889,6 +7895,85 @@ function showFileSuggestions(editor, fileSuggestions, prefix) {
   positionSuggestionPopup(editor);
 }
 
+function getSmartHtmlTagCapture(editor, tagName, prefixStart) {
+  const lineStart = editor.value.lastIndexOf("\n", Math.max(0, prefixStart - 1)) + 1;
+  const beforePrefix = editor.value.slice(lineStart, prefixStart);
+  if (!/\s$/.test(beforePrefix)) return null;
+
+  const leadingIndent = beforePrefix.match(/^\s*/)?.[0] || "";
+  const rawValue = beforePrefix.slice(leadingIndent.length).trim();
+  if (!rawValue || rawValue === "<" || rawValue === "</") return null;
+
+  const unquotedValue = rawValue.replace(/^(['"])([\s\S]*)\1$/, "$2").trim();
+  if (!unquotedValue) return null;
+
+  const tag = String(tagName || "").toLowerCase();
+  const attrValue = escapeHtmlAttributeValue(unquotedValue);
+  const textValue = escapeHtml(unquotedValue);
+  const fileExt = getFileType(unquotedValue);
+  const looksLikeUrl = /^(https?:\/\/|mailto:|tel:|#|\/|\.\/|\.\.\/)/i.test(unquotedValue);
+  const imageExts = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "avif"]);
+  const audioExts = new Set(["mp3", "wav", "ogg", "m4a"]);
+  const videoExts = new Set(["mp4", "webm", "mov", "ogg"]);
+
+  let insertedText = "";
+  let cursorOffset = 0;
+
+  if (tag === "a") {
+    insertedText = `<a href="${attrValue}"></a>`;
+    cursorOffset = insertedText.indexOf("></") + 1;
+  } else if (tag === "img") {
+    insertedText = `<img src="${attrValue}" alt="">`;
+    cursorOffset = insertedText.indexOf('alt=""') + 5;
+  } else if (tag === "link") {
+    const rel = fileExt === "css" ? ' rel="stylesheet"' : "";
+    insertedText = `<link${rel} href="${attrValue}">`;
+    cursorOffset = insertedText.length;
+  } else if (tag === "script") {
+    insertedText = `<script src="${attrValue}"></script>`;
+    cursorOffset = insertedText.length;
+  } else if (tag === "iframe") {
+    insertedText = `<iframe src="${attrValue}"></iframe>`;
+    cursorOffset = insertedText.indexOf("></") + 1;
+  } else if (tag === "source") {
+    insertedText = `<source src="${attrValue}">`;
+    cursorOffset = insertedText.length;
+  } else if (tag === "video" || (tag === "audio" && (audioExts.has(fileExt) || looksLikeUrl))) {
+    insertedText = `<${tag} controls src="${attrValue}"></${tag}>`;
+    cursorOffset = insertedText.length;
+  } else if (tag === "form") {
+    insertedText = `<form action="${attrValue}"></form>`;
+    cursorOffset = insertedText.indexOf("></") + 1;
+  } else if (tag === "input") {
+    insertedText = `<input type="text" value="${attrValue}">`;
+    cursorOffset = insertedText.length;
+  } else if (tag === "option") {
+    insertedText = `<option value="${attrValue}">${textValue}</option>`;
+    cursorOffset = insertedText.length;
+  } else if (
+    looksLikeUrl ||
+    imageExts.has(fileExt) ||
+    audioExts.has(fileExt) ||
+    videoExts.has(fileExt) ||
+    fileExt === "css" ||
+    fileExt === "js" ||
+    fileExt === "mjs"
+  ) {
+    return null;
+  } else if (!selfClosingTags.includes(tag)) {
+    insertedText = `<${tag}>${textValue}</${tag}>`;
+    cursorOffset = insertedText.length;
+  } else {
+    return null;
+  }
+
+  return {
+    replaceStart: lineStart + leadingIndent.length,
+    insertedText,
+    caretPos: lineStart + leadingIndent.length + cursorOffset,
+  };
+}
+
 /**
  * Inserts the selected suggestion into the editor.
  */
@@ -7962,6 +8047,24 @@ function selectSuggestion(tag) {
     hideSuggestions();
     editor.focus();
     return;
+  }
+
+  const plainPrefixStart = textBefore.length - prefix.length;
+  if (!isClosing && isPlain) {
+    const smartCapture = getSmartHtmlTagCapture(editor, tag, plainPrefixStart);
+    if (smartCapture) {
+      applyEditorMutation(
+        editor,
+        smartCapture.replaceStart,
+        editor.selectionEnd,
+        smartCapture.insertedText,
+        smartCapture.caretPos,
+        smartCapture.caretPos,
+      );
+      hideSuggestions();
+      editor.focus();
+      return;
+    }
   }
 
   let insertedTag = isPlain ? `<${tag}>` : `${tag}>`;
