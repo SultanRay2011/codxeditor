@@ -405,6 +405,12 @@ function extractHtmlTitle(html) {
     .trim();
 }
 
+function normalizePublishedTitle(title) {
+  return String(title || "")
+    .replace(/\s*\|\s*CodX(?: Editor)? Project\s*$/i, "")
+    .trim();
+}
+
 function loadPublishedProjects() {
   try {
     if (!fs.existsSync(PUBLISHED_PROJECTS_FILE)) return;
@@ -626,7 +632,9 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
   );
 
   const publishTitle = escapeHtmlAttribute(
-    requestTitleText || extractHtmlTitle(html) || project?.projectName || htmlFile.name,
+    normalizePublishedTitle(
+      requestTitleText || extractHtmlTitle(html) || project?.projectName || htmlFile.name,
+    ),
   );
   if (!/<title\b/i.test(html)) {
     html = html.replace(
