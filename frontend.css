@@ -676,6 +676,14 @@ body.light .error-token-highlight {
   color: var(--syntax-builtin);
 }
 
+#highlightLayer .token.constant {
+  color: var(--syntax-number);
+}
+
+#highlightLayer .token.class-name {
+  color: var(--syntax-tag);
+}
+
 #highlightLayer .token.function {
   color: var(--syntax-function);
 }

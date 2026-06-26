@@ -6246,24 +6246,168 @@ function highlightCss(code) {
 }
 
 function highlightJs(code) {
-  const patterns = [
-    { className: "comment", regex: /\/\/[^\n]*|\/\*[\s\S]*?\*\//g },
-    {
-      className: "string",
-      regex: /`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
-    },
-    { className: "regex", regex: /\/(?:\\.|[^\/\\\n])+\/[gimsuy]*/g },
-    {
-      className: "keyword",
-      regex:
-        /\b(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|class|extends|import|export|default|async|await|this|super|typeof|instanceof|in|of|null|undefined|true|false|yield|delete|void)\b/g,
-    },
-    { className: "builtin", regex: /\b(?:Math|JSON|Object|Array|String|Number|Boolean|Date|RegExp|Promise|Set|Map|console|window|document|fetch|localStorage|sessionStorage|parseInt|parseFloat|encodeURI|decodeURI)\b/g },
-    { className: "number", regex: /\b\d+(\.\d+)?\b/g },
-    { className: "operator", regex: /[=+\-*/%<>!&|^~?:]+/g },
-    { className: "punctuation", regex: /[()[\]{};,.]/g },
-  ];
-  return wrapTokens(code, patterns);
+  let result = "";
+  let index = 0;
+  let previousSignificant = "";
+
+  const keywords = new Set(
+    "as async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while with yield".split(" "),
+  );
+  const literals = new Set("true false null undefined NaN Infinity".split(" "));
+  const builtins = new Set(
+    "Array ArrayBuffer BigInt Boolean Date Error EvalError Function Intl JSON Map Math Number Object Promise Proxy RangeError ReferenceError Reflect RegExp Set String Symbol SyntaxError TypeError URIError WeakMap WeakSet console document window globalThis fetch localStorage sessionStorage navigator location history URL URLSearchParams setTimeout clearTimeout setInterval clearInterval requestAnimationFrame parseInt parseFloat isNaN isFinite encodeURI decodeURI encodeURIComponent decodeURIComponent".split(" "),
+  );
+
+  const append = (text, className = "") => {
+    if (!text) return;
+    result += className
+      ? `<span class="token ${className}">${escapeHtml(text)}</span>`
+      : escapeHtml(text);
+    if (className && !["comment", "string"].includes(className)) {
+      previousSignificant = text;
+    } else if (!className && String(text).trim()) {
+      previousSignificant = String(text).trim().slice(-1);
+    }
+  };
+  const peek = (offset = 0) => code[index + offset] || "";
+  const isIdStart = (char) => /[A-Za-z_$]/.test(char || "");
+  const isIdPart = (char) => /[A-Za-z0-9_$]/.test(char || "");
+  const consumeWhile = (test) => {
+    const start = index;
+    while (index < code.length && test(code[index])) index += 1;
+    return code.slice(start, index);
+  };
+  const consumeString = (quote) => {
+    const start = index;
+    index += 1;
+    while (index < code.length) {
+      if (code[index] === "\\") {
+        index += 2;
+        continue;
+      }
+      if (code[index] === quote) {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+    return code.slice(start, index);
+  };
+  const canStartRegex = () =>
+    !previousSignificant ||
+    /[({[=,:;!&|?+\-*~^<>]/.test(previousSignificant) ||
+    ["return", "throw", "case", "delete", "typeof", "void", "new", "in", "of", "yield", "await"].includes(previousSignificant);
+  const consumeRegex = () => {
+    const start = index;
+    index += 1;
+    let inClass = false;
+    while (index < code.length) {
+      const char = code[index];
+      if (char === "\\") {
+        index += 2;
+        continue;
+      }
+      if (char === "[") inClass = true;
+      if (char === "]") inClass = false;
+      if (char === "/" && !inClass) {
+        index += 1;
+        consumeWhile((value) => /[a-z]/i.test(value));
+        break;
+      }
+      if (char === "\n") break;
+      index += 1;
+    }
+    return code.slice(start, index);
+  };
+
+  while (index < code.length) {
+    const char = peek();
+    const next = peek(1);
+
+    if (/\s/.test(char)) {
+      append(consumeWhile((value) => /\s/.test(value)));
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      const start = index;
+      index = code.indexOf("\n", index + 2);
+      if (index === -1) index = code.length;
+      append(code.slice(start, index), "comment");
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      const end = code.indexOf("*/", index + 2);
+      const commentEnd = end === -1 ? code.length : end + 2;
+      append(code.slice(index, commentEnd), "comment");
+      index = commentEnd;
+      continue;
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      append(consumeString(char), "string");
+      continue;
+    }
+
+    if (char === "/" && canStartRegex() && next !== "/" && next !== "*") {
+      append(consumeRegex(), "regex");
+      continue;
+    }
+
+    if (/\d/.test(char) || (char === "." && /\d/.test(next))) {
+      const start = index;
+      if (char === "0" && /[xob]/i.test(next)) {
+        index += 2;
+        consumeWhile((value) => /[0-9a-fA-F_]/.test(value));
+      } else {
+        consumeWhile((value) => /[0-9_]/.test(value));
+        if (peek() === ".") {
+          index += 1;
+          consumeWhile((value) => /[0-9_]/.test(value));
+        }
+        if (/[eE]/.test(peek())) {
+          index += 1;
+          if (/[+-]/.test(peek())) index += 1;
+          consumeWhile((value) => /[0-9_]/.test(value));
+        }
+        if (peek() === "n") index += 1;
+      }
+      append(code.slice(start, index), "number");
+      continue;
+    }
+
+    if (isIdStart(char)) {
+      const word = consumeWhile(isIdPart);
+      const beforeWord = code.slice(0, index - word.length).match(/[^\s]$/)?.[0] || "";
+      const afterWord = code.slice(index);
+      if (keywords.has(word)) append(word, "keyword");
+      else if (literals.has(word)) append(word, "constant");
+      else if (builtins.has(word)) append(word, "builtin");
+      else if (/^\s*\(/.test(afterWord) && beforeWord !== ".") append(word, "function");
+      else if (/^[A-Z][A-Za-z0-9_$]*$/.test(word)) append(word, "class-name");
+      else append(word);
+      previousSignificant = word;
+      continue;
+    }
+
+    if ("+-*/%=!<>&|^~?:".includes(char)) {
+      const op = consumeWhile((value) => "+-*/%=!<>&|^~?:".includes(value));
+      append(op, "operator");
+      continue;
+    }
+
+    if ("()[]{};,.#".includes(char)) {
+      append(char, "punctuation");
+      index += 1;
+      continue;
+    }
+
+    append(char);
+    index += 1;
+  }
+
+  return result || " ";
 }
 
 function highlightPlainText(code) {
