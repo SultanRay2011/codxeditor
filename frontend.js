@@ -4940,6 +4940,18 @@ function getErrorHint(message, context = {}) {
   return "Review syntax near the reported line.";
 }
 
+function getFunctionSyntaxErrorLocation(error) {
+  const stack = String(error && error.stack ? error.stack : "");
+  const match =
+    stack.match(/<anonymous>:(\d+):(\d+)/) ||
+    stack.match(/\b[A-Za-z0-9_.-]+\.(?:js|mjs|html):(\d+):(\d+)/);
+  if (!match) return null;
+  return {
+    line: Math.max(1, Number(match[1] || 1) - 2),
+    col: Math.max(1, Number(match[2] || 1)),
+  };
+}
+
 function applyDiagnosticEntriesToFileErrors(entries) {
   const next = {};
   const locations = {};
@@ -4976,10 +4988,9 @@ function runPreflightDiagnostics(targetEntries = null) {
         // Parse-only check
         new Function(`${file.content}\n//# sourceURL=${file.name}`);
       } catch (err) {
-        const stack = String(err && err.stack ? err.stack : "");
-        const lineMatch = stack.match(/<anonymous>:(\d+):(\d+)/);
-        const lineInfo = lineMatch
-          ? `line ${lineMatch[1]}, col ${lineMatch[2]}`
+        const location = getFunctionSyntaxErrorLocation(err);
+        const lineInfo = location
+          ? `line ${location.line}, col ${location.col}`
           : "line unknown";
         emitDiagnostic(
           "error",
@@ -5068,19 +5079,25 @@ function runPreflightDiagnostics(targetEntries = null) {
       let scriptMatch;
       while ((scriptMatch = inlineScriptRegex.exec(htmlText)) !== null) {
         const scriptCode = scriptMatch[1];
-        const scriptStartLine = htmlText.slice(0, scriptMatch.index).split("\n").length;
+        const scriptContentStartIndex =
+          scriptMatch.index + scriptMatch[0].indexOf(scriptCode);
+        const scriptContentStart = getLineAndColumnFromIndex(
+          htmlText,
+          scriptContentStartIndex,
+        );
         try {
           new Function(`${scriptCode}\n//# sourceURL=${htmlFile.name}`);
         } catch (err) {
-          const stack = String(err && err.stack ? err.stack : "");
-          const lineMatch = stack.match(/<anonymous>:(\d+):(\d+)/);
-          if (lineMatch) {
-            const relLine = Number(lineMatch[1]);
-            const col = Number(lineMatch[2]);
-            const absLine = scriptStartLine + Math.max(0, relLine - 1);
+          const location = getFunctionSyntaxErrorLocation(err);
+          if (location) {
+            const absLine = scriptContentStart.line + Math.max(0, location.line - 1);
+            const absCol =
+              location.line === 1
+                ? scriptContentStart.col + Math.max(0, location.col - 1)
+                : location.col;
             emitDiagnostic(
               "error",
-              `[${htmlFile.name}] Inline JS SyntaxError (line ${absLine}, col ${col}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
+              `[${htmlFile.name}] Inline JS SyntaxError (line ${absLine}, col ${absCol}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
             );
           } else {
             emitDiagnostic(
@@ -5315,8 +5332,7 @@ function updatePreview() {
       );
       if (jsFile) {
         // Keep original file line numbers by not wrapping code in extra lines.
-        return `<script data-filename="${jsFile.name}">
-${jsFile.content}
+        return `<script data-filename="${jsFile.name}">${jsFile.content}
 //# sourceURL=${jsFile.name}
 </script>`;
       } else {
@@ -5673,13 +5689,15 @@ ${jsFile.content}
   `;
 
   // Insert console script and image CSS at the very beginning
-  const injectionContent = imageSizingCSS + consoleScript;
-  const injectedOffset = injectionContent.split("\n").length;
+  const externalHeadMarkup = Array.from(new Set(externalHeadResources)).join("");
+  const countInsertedLines = (text) => (String(text || "").match(/\n/g) || []).length;
+  const injectedOffset = countInsertedLines(
+    externalHeadMarkup + imageSizingCSS + consoleScript,
+  );
   const consoleScriptResolved = consoleScript.replace(
     "__CODEX_INJECTED_OFFSET__",
     String(injectedOffset),
   );
-  const externalHeadMarkup = Array.from(new Set(externalHeadResources)).join("");
   const injectionResolved =
     externalHeadMarkup + imageSizingCSS + consoleScriptResolved;
 
