@@ -8131,6 +8131,29 @@ function selectJsSuggestion(value) {
   editor.focus();
 }
 
+function indentMultilineSuggestionText(insertText, cursorOffset, baseIndent) {
+  const text = String(insertText || "");
+  const indent = String(baseIndent || "");
+  if (!indent || !text.includes("\n")) {
+    return { text, cursorOffset };
+  }
+  let nextCursorOffset = Number(cursorOffset || 0);
+  let consumed = 0;
+  const lines = text.split("\n");
+  const nextText = lines
+    .map((line, index) => {
+      const shouldIndent = index > 0 && line;
+      const nextLine = shouldIndent ? indent + line : line;
+      if (shouldIndent && consumed < nextCursorOffset) {
+        nextCursorOffset += indent.length;
+      }
+      consumed += line.length + (index < lines.length - 1 ? 1 : 0);
+      return nextLine;
+    })
+    .join("\n");
+  return { text: nextText, cursorOffset: nextCursorOffset };
+}
+
 function selectHtmlAttributeSuggestion(attrName) {
   const editor = document.getElementById("activeEditor");
   if (!currentSuggestionContext) return;
@@ -8185,6 +8208,8 @@ function selectCssSuggestion(value) {
   if (!currentSuggestionContext) return;
 
   const { mode, replaceStart, replaceEnd } = currentSuggestionContext;
+  const lineStart = editor.value.lastIndexOf("\n", Math.max(0, replaceStart - 1)) + 1;
+  const currentIndent = (editor.value.slice(lineStart, replaceStart).match(/^[\t ]*/) || [""])[0];
   let finalReplaceEnd = replaceEnd;
   let insertedText = value;
   let cursorOffset = value.length;
@@ -8229,6 +8254,12 @@ function selectCssSuggestion(value) {
       insertedText = `${value} {\n${INDENT_UNIT}\n}`;
       cursorOffset = value.length + 3 + INDENT_UNIT.length;
     }
+  }
+
+  if (insertedText.includes("\n")) {
+    const formatted = indentMultilineSuggestionText(insertedText, cursorOffset, currentIndent);
+    insertedText = formatted.text;
+    cursorOffset = formatted.cursorOffset;
   }
 
   const caretPos = replaceStart + cursorOffset;
@@ -8329,8 +8360,7 @@ function handleAutoCloseAndIndent(e, editor) {
     else if (
       (e.key === "Enter" &&
         (textBefore.endsWith("{") || textBefore.endsWith("(")) &&
-        textAfter.startsWith("}")) ||
-      textAfter.startsWith(")")
+        (textAfter.startsWith("}") || textAfter.startsWith(")")))
     ) {
       // User is inside a pair like {} or () and hits Enter
       isTriggered = true;
@@ -13974,8 +14004,10 @@ const tutorialStyles = `
   }
   
   #closeTutorialBtn:hover {
-    color: var(--accent-color) !important;
-    transform: rotate(90deg);
+    color: #ff1f1f !important;
+    background: rgba(255, 31, 31, 0.12) !important;
+    text-shadow: 0 0 14px rgba(255, 31, 31, 0.72) !important;
+    transform: scale(1.08);
     transition: all 0.3s ease;
   }
 `;

@@ -1054,6 +1054,39 @@ textarea::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
+#closeSettingsBtn,
+#closeModalBtn,
+#closeProjectLibraryBtn,
+#closeFontPickerBtn,
+#closeTutorialBtn {
+  width: 38px !important;
+  height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--text-muted) !important;
+  font-size: 36px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  border-radius: 10px !important;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease,
+    text-shadow 0.18s ease !important;
+}
+
+#closeSettingsBtn:hover,
+#closeModalBtn:hover,
+#closeProjectLibraryBtn:hover,
+#closeFontPickerBtn:hover,
+#closeTutorialBtn:hover {
+  color: #ff1f1f !important;
+  background: rgba(255, 31, 31, 0.12) !important;
+  text-shadow: 0 0 14px rgba(255, 31, 31, 0.72) !important;
+  transform: scale(1.08) !important;
+}
+
 .run-button {
   background: var(--accent-color);
   color: #ffffff;
@@ -2689,9 +2722,13 @@ iframe {
 
 #closeSettingsBtn:hover,
 #closeModalBtn:hover,
+#closeProjectLibraryBtn:hover,
 #closeFontPickerBtn:hover,
 #closeTutorialBtn:hover {
-  color: var(--accent-color) !important;
+  color: #ff1f1f !important;
+  background: rgba(255, 31, 31, 0.12) !important;
+  text-shadow: 0 0 14px rgba(255, 31, 31, 0.72) !important;
+  transform: scale(1.08) !important;
 }
 
 @media (max-width: 1024px) {
