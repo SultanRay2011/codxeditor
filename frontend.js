@@ -12689,15 +12689,50 @@ function showCreatedSessionPin(pin) {
   collabModalView = "created-pin";
   setCollabCloseButtonVisible(true);
   modalTitle.innerHTML = "<strong>SESSION PIN</strong>";
+  const joinInstructions = [
+    "How to join my CodX Editor session:",
+    "1. Open CodX Editor.",
+    "2. Click COLLAB WITH FRIENDS.",
+    "3. Choose Join a session.",
+    "4. Type your name and pick a color.",
+    `5. Enter this session PIN: ${pin}`,
+  ].join("\n");
   modalBody.innerHTML = `
     <div class="collab-pin-card">
       <span class="collab-meta-label">Your session pin</span>
       <div class="collab-session-pin">${escapeHtml(pin)}</div>
+      <div class="collab-action-grid" style="margin-top:4px;">
+        <button id="copySessionPinBtn" class="run-button" style="background:#2563eb;justify-content:center;"><i class="fa-regular fa-copy"></i> <strong>COPY PIN</strong></button>
+        <button id="modalDoneBtn" class="run-button" style="justify-content:center;"><strong>DONE</strong></button>
+      </div>
     </div>
+    <div class="collab-section-card" style="margin-top:14px;text-align:left;">
+      <h4 class="collab-section-title">How participants can join</h4>
+      <ol style="margin:0;padding-left:20px;color:var(--text-primary);line-height:1.7;">
+        <li>Open CodX Editor.</li>
+        <li>Click <strong>COLLAB WITH FRIENDS</strong>.</li>
+        <li>Choose <strong>Join a session</strong>.</li>
+        <li>Type their name and pick a color.</li>
+        <li>Enter the session PIN above.</li>
+      </ol>
+      <button id="copyJoinInstructionsBtn" class="run-button" style="margin-top:12px;width:100%;justify-content:center;background:#7c3aed;"><i class="fa-regular fa-clipboard"></i> <strong>COPY INSTRUCTION</strong></button>
+    </div>
+    <textarea id="collabJoinInstructionsText" readonly style="position:absolute;left:-9999px;top:auto;">${escapeHtml(joinInstructions)}</textarea>
   `;
   errorMsgEl.style.display = "none";
-  setModalActions(`<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`);
+  setModalActions("");
   collabModal.style.display = "flex";
+
+  const copySessionPinBtn = document.getElementById("copySessionPinBtn");
+  if (copySessionPinBtn) {
+    copySessionPinBtn.onclick = () => copyTextValue(pin, "Session pin copied.");
+  }
+
+  const copyJoinInstructionsBtn = document.getElementById("copyJoinInstructionsBtn");
+  if (copyJoinInstructionsBtn) {
+    copyJoinInstructionsBtn.onclick = () =>
+      copyTextValue(joinInstructions, "Join instructions copied.");
+  }
 
   const doneBtn = getModalDoneBtn();
   if (doneBtn) doneBtn.onclick = closeModal;
