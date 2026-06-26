@@ -23,6 +23,7 @@ const themeColorText = document.getElementById("themeColorText");
 const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
 const editorTextSizeInput = document.getElementById("editorTextSize");
 const textSizeValue = document.getElementById("textSizeValue");
+const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
 const editorFontEmbedInput = document.getElementById("editorFontEmbed");
 const settingsPreview = document.getElementById("settingsPreview");
@@ -3529,6 +3530,7 @@ const defaultSettings = {
   fontFamily: "'JetBrains Mono', 'Consolas', monospace",
   fontEmbed: "",
   themeColor: "#238636",
+  zenShowFiles: true,
 };
 
 // PART 2 - UTILITY FUNCTIONS
@@ -4510,6 +4512,12 @@ function loadSettings() {
         editorFontFamilySelect.value = defaultSettings.fontFamily;
       }
       editorFontEmbedInput.value = settings.fontEmbed || "";
+      if (zenShowFilesCheckbox) {
+        zenShowFilesCheckbox.checked =
+          settings.zenShowFiles !== undefined
+            ? Boolean(settings.zenShowFiles)
+            : defaultSettings.zenShowFiles;
+      }
     } catch (e) {
       console.error("Error loading settings:", e);
       resetToDefaultSettings();
@@ -4521,6 +4529,7 @@ function loadSettings() {
   updateFontControlsState();
   updateThemeColor(themeColorInput.value);
   updatePreviewBox();
+  applyZenFileVisibilitySetting();
   applySettingsToEditors();
 }
 
@@ -4533,9 +4542,21 @@ function resetToDefaultSettings() {
   textSizeValue.textContent = defaultSettings.textSize + "px";
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
+  if (zenShowFilesCheckbox) zenShowFilesCheckbox.checked = defaultSettings.zenShowFiles;
   applyGoogleFontImport("");
   updateFontControlsState();
   updateThemeColor(defaultSettings.themeColor);
+  applyZenFileVisibilitySetting(defaultSettings.zenShowFiles);
+}
+
+function applyZenFileVisibilitySetting(showFiles = null) {
+  const shouldShow =
+    typeof showFiles === "boolean"
+      ? showFiles
+      : zenShowFilesCheckbox
+        ? zenShowFilesCheckbox.checked
+        : defaultSettings.zenShowFiles;
+  document.body.classList.toggle("zen-show-files", Boolean(shouldShow));
 }
 
 function extractGoogleFontsCssUrl(rawInput) {
@@ -4753,8 +4774,10 @@ applySettingsBtn.addEventListener("click", () => {
     textSize: editorTextSizeInput.value,
     fontFamily: editorFontFamilySelect.value,
     fontEmbed: cssUrl || "",
+    zenShowFiles: zenShowFilesCheckbox ? zenShowFilesCheckbox.checked : defaultSettings.zenShowFiles,
   };
   if (safeLocalStorage("set", "editorSettings", JSON.stringify(settings))) {
+    applyZenFileVisibilitySetting(settings.zenShowFiles);
     applySettingsToEditors();
     showNotification("Settings applied successfully!", "success");
     settingsModal.style.display = "none";
@@ -4779,6 +4802,12 @@ resetSettingsBtn.addEventListener("click", () => {
     showNotification("Settings reset to default!", "success");
   });
 });
+
+if (zenShowFilesCheckbox) {
+  zenShowFilesCheckbox.addEventListener("change", () => {
+    applyZenFileVisibilitySetting(zenShowFilesCheckbox.checked);
+  });
+}
 
 // PART 4 - UI CONTROLS
 showConsoleCheckbox.addEventListener("change", () => {
@@ -9942,6 +9971,7 @@ function toggleZenMode(forceState) {
   }
   isZenMode = nextZenState;
   document.body.classList.toggle("zen-mode", isZenMode);
+  applyZenFileVisibilitySetting();
   updateZenModeButtonState();
   updateLineNumbers(editorTextarea);
   renderErrorHighlights(editorTextarea);

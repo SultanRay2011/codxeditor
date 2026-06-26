@@ -240,10 +240,13 @@ input:checked + .slider:before {
 }
 
 body.zen-mode header,
-body.zen-mode .file-explorer,
 body.zen-mode .editor-actions,
 body.zen-mode .preview,
 body.zen-mode .divider {
+  display: none !important;
+}
+
+body.zen-mode:not(.zen-show-files) .file-explorer {
   display: none !important;
 }
 
@@ -260,6 +263,10 @@ body.zen-mode .editors {
 
 body.zen-mode .code-container {
   height: 100%;
+}
+
+body.zen-mode.zen-show-files .code-container {
+  min-height: 0;
 }
 
 body.zen-mode .editor-wrapper {
