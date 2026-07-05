@@ -546,6 +546,38 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtmlAttribute(project?.projectName || "Published Project")}</title><style>body{font-family:Segoe UI,Tahoma,sans-serif;background:#f6fff7;color:#18211b;padding:32px}.box{max-width:760px;margin:0 auto;background:#fff;border:1px solid rgba(20,41,27,.12);border-radius:20px;padding:24px;box-shadow:0 18px 40px rgba(24,46,31,.08)}h1{margin:0 0 12px}p{color:#5b675f;line-height:1.7}</style></head><body><div class="box"><h1>No HTML file to publish</h1><p>This project does not contain an HTML file, so there is nothing previewable to publish yet.</p></div></body></html>`;
   }
 
+  const publishLinkBase = `/published/${encodeURIComponent(project.id)}`;
+  const isProjectHtmlNavigationHref = (rawHref) => {
+    const href = String(rawHref || "").trim();
+    if (!href || href.startsWith("#")) return false;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return false;
+    if (/^\/(?:404-for-preview\.html|published\/)/i.test(href)) return false;
+    return /\.html(?:[?#].*)?$/i.test(href);
+  };
+  const toPublishedLink = (rawHref) => {
+    const raw = String(rawHref || "").trim();
+    if (!isProjectHtmlNavigationHref(raw)) return "";
+    const [pathPart, hashPart] = raw.split("#");
+    const [pathOnly] = pathPart.split("?");
+    const baseName = pathOnly.replace(/^\.\/+/, "").replace(/^\/+/, "");
+    const linked = resolveFile(baseName, "html");
+    const target = linked ? linked.name : baseName || raw;
+    const hash = hashPart ? `#${hashPart}` : "";
+    return `${publishLinkBase}?file=${encodeURIComponent(target)}${hash}`;
+  };
+  const rewritePublishedScriptNavigation = (scriptCode) =>
+    String(scriptCode || "").replace(
+      /((?:window\.)?location(?:\.href)?\s*=\s*|(?:window\.)?location\.(?:assign|replace)\(\s*|window\.open\(\s*)(['"])([^'"]+\.html(?:[?#][^'"]*)?)(\2)(\s*\))?/gi,
+      (match, prefix, quote, href, _closingQuote, closing = "") => {
+        const url = toPublishedLink(href);
+        if (!url) return match;
+        if (/\(\s*$/i.test(prefix)) {
+          return `${prefix}${quote}${url}${quote}${closing || ")"}`;
+        }
+        return `${prefix}${quote}${url}${quote}`;
+      },
+    );
+
   let html = String(htmlFile.content || "");
   html = html.replace(/<link\b([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi, (full, before, href) => {
     const builtInAsset = resolveBuiltInAsset(href);
@@ -560,21 +592,9 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
   html = html.replace(/<script\b([^>]*?)src=["']([^"']+)["']([^>]*)><\/script>/gi, (full, before, src) => {
     const jsFile = resolveFile(src, "js");
     if (!jsFile) return full;
-    return `<script data-published-source="${escapeHtmlAttribute(jsFile.name)}">\n${String(jsFile.content || "")}\n<\/script>`;
+    const rewrittenScript = rewritePublishedScriptNavigation(jsFile.content);
+    return `<script data-published-source="${escapeHtmlAttribute(jsFile.name)}">\n${rewrittenScript}\n<\/script>`;
   });
-
-  const publishLinkBase = `/published/${encodeURIComponent(project.id)}`;
-  const toPublishedLink = (rawHref) => {
-    const raw = String(rawHref || "").trim();
-    if (!raw) return "";
-    const [pathPart, hashPart] = raw.split("#");
-    const [pathOnly] = pathPart.split("?");
-    const baseName = pathOnly.replace(/^\.\/+/, "").replace(/^\/+/, "");
-    const linked = resolveFile(baseName, "html");
-    const target = linked ? linked.name : baseName || raw;
-    const hash = hashPart ? `#${hashPart}` : "";
-    return `${publishLinkBase}?file=${encodeURIComponent(target)}${hash}`;
-  };
 
   html = html.replace(
     /<a([^>]*)href=["']([^"']+\.html(?:[?#][^"']*)?)["']([^>]*)>/gi,
@@ -596,20 +616,25 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     /\bonclick=(["'])([\s\S]*?)\1/gi,
     (match, quote, handlerCode) => {
       const rewritten = handlerCode.replace(
-        /((?:window\.)?location(?:\.href)?\s*=\s*|window\.location\.assign\(\s*|window\.open\(\s*)(['"])([^'"]+\.html(?:[?#][^'"]*)?)(\2)(\s*\))?/gi,
+        /((?:window\.)?location(?:\.href)?\s*=\s*|(?:window\.)?location\.(?:assign|replace)\(\s*|window\.open\(\s*)(['"])([^'"]+\.html(?:[?#][^'"]*)?)(\2)(\s*\))?/gi,
         (_m, prefix, q, href, _q2, closing = "") => {
           const url = toPublishedLink(href);
           if (!url) return _m;
-          if (/window\.open\(\s*$/i.test(prefix)) {
-            return `window.open(${q}${url}${q}${closing || ")"})`;
-          }
-          if (/assign\(\s*$/i.test(prefix)) {
-            return `window.location.assign(${q}${url}${q}${closing || ")"})`;
+          if (/\(\s*$/i.test(prefix)) {
+            return `${prefix}${q}${url}${q}${closing || ")"}`;
           }
           return `window.location.href = ${q}${url}${q}`;
         },
       );
       return `onclick=${quote}${rewritten}${quote}`;
+    },
+  );
+
+  html = html.replace(
+    /<script\b((?:(?!\bsrc=)[^>])*)>([\s\S]*?)<\/script>/gi,
+    (full, attrs, scriptCode) => {
+      if (!scriptCode || !/\.html(?:[?#][^'"\s)]*)?/i.test(scriptCode)) return full;
+      return `<script${attrs}>${rewritePublishedScriptNavigation(scriptCode)}</script>`;
     },
   );
 

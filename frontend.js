@@ -3320,13 +3320,14 @@ function getPreviewTargetForFile(rawHref) {
       url: `/404-for-preview.html?file=${encodeURIComponent("#")}`,
     };
   }
-  const fileName = normalizedHref.split("/").pop();
+  const cleanHref = normalizedHref.split("#")[0].split("?")[0];
+  const fileName = cleanHref.split("/").pop();
   const linkedFile = projectFiles.find((f) => {
     if (f.type !== "html") return false;
     const candidate = String(f.name || "").trim().replace(/^\.\/+/, "").toLowerCase();
     return (
-      candidate === normalizedHref.toLowerCase() ||
-      candidate.endsWith(`/${normalizedHref.toLowerCase()}`) ||
+      candidate === cleanHref.toLowerCase() ||
+      candidate.endsWith(`/${cleanHref.toLowerCase()}`) ||
       candidate.split("/").pop() === fileName.toLowerCase()
     );
   });
@@ -3346,6 +3347,51 @@ function getPreviewTargetForFile(rawHref) {
   };
 }
 
+function isProjectHtmlNavigationHref(rawHref) {
+  const href = String(rawHref || "").trim();
+  if (!href || href.startsWith("#")) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return false;
+  if (/^\/(?:404-for-preview\.html|published\/)/i.test(href)) return false;
+  return /\.html(?:[?#].*)?$/i.test(href);
+}
+
+function rewritePreviewScriptNavigation(scriptCode) {
+  let rewritten = String(scriptCode || "").replace(
+    /((?:window\.)?location(?:\.href)?\s*=\s*|(?:window\.)?location\.(?:assign|replace)\(\s*|window\.open\(\s*)(['"])([^'"]+\.html(?:[?#][^'"]*)?)(\2)(\s*\))?/gi,
+    (match, prefix, quote, href, _closingQuote, closing = "") => {
+      if (!isProjectHtmlNavigationHref(href)) return match;
+      const target = getPreviewTargetForFile(href);
+      if (!target.exists) {
+        if (/\(\s*$/i.test(prefix)) {
+          return `${prefix}${quote}${target.url}${quote}${closing || ")"}`;
+        }
+        return `${prefix}${quote}${target.url}${quote}`;
+      }
+      return `window.parent.__codxOpenPreviewFile(${JSON.stringify(target.fileName)})`;
+    },
+  );
+  rewritten = rewritten.replace(
+    /((?:window\.)?location(?:\.href)?\s*=\s*)([^;\n]+)(;?)/gi,
+    (_match, _prefix, targetExpression, semicolon = "") =>
+      `window.__codxNavigate(${targetExpression.trim()}, "href")${semicolon}`,
+  );
+  rewritten = rewritten.replace(
+    /(?:window\.)?location\.(assign|replace)\(\s*([^)]+?)\s*\)/gi,
+    (_match, mode, targetExpression) =>
+      `window.__codxNavigate(${targetExpression.trim()}, ${JSON.stringify(mode.toLowerCase())})`,
+  );
+  rewritten = rewritten.replace(
+    /window\.open\(\s*([^,)]+?)(?:\s*,[^\)]*)?\)/gi,
+    (_match, targetExpression) =>
+      `window.__codxNavigate(${targetExpression.trim()}, "open")`,
+  );
+  return rewritten;
+}
+
+function getPreviewOpenFileCall(fileName) {
+  return `window.parent.__codxOpenPreviewFile(${JSON.stringify(fileName)})`;
+}
+
 function setPreviewTarget(rawHref) {
   const nextTarget = getPreviewTargetForFile(rawHref);
   currentPreviewTarget = {
@@ -3357,6 +3403,57 @@ function setPreviewTarget(rawHref) {
 }
 
 window.__codxOpenPreviewFile = setPreviewTarget;
+
+function bindPreviewNavigationHandlers() {
+  const previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!previewDoc || previewDoc.__codxNavigationBound) return;
+  previewDoc.__codxNavigationBound = true;
+
+  previewDoc.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target;
+      const anchor = target && target.closest ? target.closest("a[href]") : null;
+      const anchorHref = anchor ? anchor.getAttribute("href") : "";
+      if (anchor && isProjectHtmlNavigationHref(anchorHref)) {
+        event.preventDefault();
+        setPreviewTarget(anchorHref);
+        return;
+      }
+
+      const button = target && target.closest
+        ? target.closest("button[formaction],button[data-href],button[data-url],button[data-link]")
+        : null;
+      if (!button) return;
+      const href =
+        button.getAttribute("formaction") ||
+        button.getAttribute("data-href") ||
+        button.getAttribute("data-url") ||
+        button.getAttribute("data-link");
+      if (isProjectHtmlNavigationHref(href)) {
+        event.preventDefault();
+        setPreviewTarget(href);
+      }
+    },
+    true,
+  );
+
+  previewDoc.addEventListener(
+    "submit",
+    (event) => {
+      const form = event.target;
+      if (!form || !form.getAttribute) return;
+      const action = form.getAttribute("action");
+      if (isProjectHtmlNavigationHref(action)) {
+        event.preventDefault();
+        setPreviewTarget(action);
+      }
+    },
+    true,
+  );
+}
+
+iframe.addEventListener("load", bindPreviewNavigationHandlers);
 let activeFile = projectFiles[0];
 
 function getDefaultHtmlStarter() {
@@ -5208,6 +5305,7 @@ function updatePreview() {
     updatePreviewTitle("Preview");
     updatePreviewLink("");
     updatePreviewFavicon("");
+    iframe.removeAttribute("src");
     iframe.srcdoc =
       '<h3 style="text-align:center;color:#aaa;">No HTML file found</h3>';
     appendConsoleMessage("warn", "WARNING: No HTML target was provided for preview navigation.");
@@ -5253,6 +5351,7 @@ function updatePreview() {
     updatePreviewTitle("Preview");
     updatePreviewLink("");
     updatePreviewFavicon("");
+    iframe.removeAttribute("src");
     iframe.srcdoc =
       '<h3 style="text-align:center;color:#aaa;">No HTML file found</h3>';
     return;
@@ -5360,8 +5459,9 @@ function updatePreview() {
         },
       );
       if (jsFile) {
+        const rewrittenScript = rewritePreviewScriptNavigation(jsFile.content);
         // Keep original file line numbers by not wrapping code in extra lines.
-        return `<script data-filename="${jsFile.name}">${jsFile.content}
+        return `<script data-filename="${jsFile.name}">${rewrittenScript}
 //# sourceURL=${jsFile.name}
 </script>`;
       } else {
@@ -5372,26 +5472,30 @@ function updatePreview() {
     },
   );
 
-  // === 3. Handle <a href> links to other HTML files and preview-only missing anchors
+  // === 3. Keep project links intact; the injected preview bridge handles clicks at runtime.
   html = html.replace(
     /<a([^>]*)href=["']([^"']+)["']([^>]*)>/gi,
     (match, before, href, after) => {
       const normalizedHref = String(href || "").trim();
-      if (!/\.html$/i.test(normalizedHref) && normalizedHref !== "#") {
+      if (normalizedHref === "#") {
+        return match;
+      }
+      if (!isProjectHtmlNavigationHref(normalizedHref)) {
         return match;
       }
       const target = getPreviewTargetForFile(href);
-      if (normalizedHref === "#" || !target.exists) {
+      if (!target.exists) {
         return `<a${before}href="${target.url}"${after}>`;
       }
-      return `<a${before}href="javascript:void(0)" onclick="return window.parent.__codxOpenPreviewFile('${target.fileName}')"${after}>`;
+      return match;
     },
   );
 
   // === 3a. Handle <form action> navigation to project HTML files
   html = html.replace(
-    /<form([^>]*)action=["']([^"']+\.html)["']([^>]*)>/gi,
+    /<form([^>]*)action=["']([^"']+\.html(?:[?#][^"']*)?)["']([^>]*)>/gi,
     (match, before, action, after) => {
+      if (!isProjectHtmlNavigationHref(action)) return match;
       const target = getPreviewTargetForFile(action);
       if (!target.exists) {
         return `<form${before}action="${target.url}"${after}>`;
@@ -5405,8 +5509,8 @@ function updatePreview() {
         handlerParts.push(existingOnsubmit.replace(/;?\s*$/, ""));
       }
       handlerParts.push("event.preventDefault()");
-      handlerParts.push(`return window.parent.__codxOpenPreviewFile('${target.fileName}')`);
-      return `<form${cleanedAttrs} action="javascript:void(0)" onsubmit="${handlerParts.join("; ")}">`;
+      handlerParts.push(`return ${getPreviewOpenFileCall(target.fileName)}`);
+      return `<form${cleanedAttrs} action="javascript:void(0)" onsubmit="${escapeHtmlAttributeValue(handlerParts.join("; "))}">`;
     },
   );
 
@@ -5414,23 +5518,17 @@ function updatePreview() {
   html = html.replace(
     /\bonclick=(["'])([\s\S]*?)\1/gi,
     (match, quote, handlerCode) => {
-      const rewritten = handlerCode.replace(
-        /((?:window\.)?location(?:\.href)?\s*=\s*|window\.location\.assign\(\s*|window\.open\(\s*)(['"])([^'"]+\.html)(\2)(\s*\))?/gi,
-        (_m, prefix, q, href, _q2, closing = "") => {
-          const target = getPreviewTargetForFile(href);
-          if (!target.exists) {
-            if (/window\.open\(\s*$/i.test(prefix)) {
-              return `window.open(${q}${target.url}${q}${closing || ")"})`;
-            }
-            if (/assign\(\s*$/i.test(prefix)) {
-              return `window.location.assign(${q}${target.url}${q}${closing || ")"})`;
-            }
-            return `window.location.href = ${q}${target.url}${q}`;
-          }
-          return `window.parent.__codxOpenPreviewFile(${q}${target.fileName}${q})`;
-        },
-      );
-      return `onclick=${quote}${rewritten}${quote}`;
+      const rewritten = rewritePreviewScriptNavigation(handlerCode);
+      return `onclick="${escapeHtmlAttributeValue(rewritten)}"`;
+    },
+  );
+
+  // === 3c. Handle inline script navigation to project HTML files
+  html = html.replace(
+    /<script\b((?:(?!\bsrc=)[^>])*)>([\s\S]*?)<\/script>/gi,
+    (match, attrs, scriptCode) => {
+      if (!scriptCode || !/\.html(?:[?#][^'"\s)]*)?/i.test(scriptCode)) return match;
+      return `<script${attrs}>${rewritePreviewScriptNavigation(scriptCode)}</script>`;
     },
   );
 
@@ -5484,6 +5582,74 @@ function updatePreview() {
           const CODEX_HTML_FILE = ${JSON.stringify(htmlFile.name)};
           const CODEX_INJECTED_OFFSET = __CODEX_INJECTED_OFFSET__;
           const parentConsole = window.parent.document.getElementById('consoleOutput');
+          function isCodxPreviewHtmlHref(rawHref) {
+            const href = String(rawHref || '').trim();
+            if (!href || href.startsWith('#')) return false;
+            if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return false;
+            if (/^\\/(?:404-for-preview\\.html|published\\/)/i.test(href)) return false;
+            return /\\.html(?:[?#].*)?$/i.test(href);
+          }
+
+          function openCodxPreviewHref(rawHref) {
+            if (
+              window.parent &&
+              typeof window.parent.__codxOpenPreviewFile === 'function' &&
+              isCodxPreviewHtmlHref(rawHref)
+            ) {
+              window.parent.__codxOpenPreviewFile(String(rawHref || '').trim());
+              return true;
+            }
+            return false;
+          }
+
+          window.__codxNavigate = function(rawHref, mode) {
+            const href = String(rawHref || '').trim();
+            if (openCodxPreviewHref(href)) return true;
+            if (!mode) return false;
+            if (mode === 'open') {
+              window.open(href);
+            } else if (mode === 'replace') {
+              window.location.replace(href);
+            } else {
+              window.location.href = href;
+            }
+            return true;
+          };
+
+          document.addEventListener('click', function(event) {
+            const target = event.target;
+            const anchor = target && target.closest ? target.closest('a[href]') : null;
+            const anchorHref = anchor ? anchor.getAttribute('href') : '';
+            if (anchor && isCodxPreviewHtmlHref(anchorHref)) {
+              event.preventDefault();
+              window.__codxNavigate(anchorHref);
+              return;
+            }
+            const button = target && target.closest
+              ? target.closest('button[formaction],button[data-href],button[data-url],button[data-link]')
+              : null;
+            if (!button) return;
+            const href =
+              button.getAttribute('formaction') ||
+              button.getAttribute('data-href') ||
+              button.getAttribute('data-url') ||
+              button.getAttribute('data-link');
+            if (isCodxPreviewHtmlHref(href)) {
+              event.preventDefault();
+              window.__codxNavigate(href);
+            }
+          }, true);
+
+          document.addEventListener('submit', function(event) {
+            const form = event.target;
+            if (!form || !form.getAttribute) return;
+            const action = form.getAttribute('action');
+            if (isCodxPreviewHtmlHref(action)) {
+              event.preventDefault();
+              window.__codxNavigate(action);
+            }
+          }, true);
+
           if (!parentConsole) return;
 
           function appendMessage(type, prefix, args) {
@@ -5741,7 +5907,9 @@ function updatePreview() {
     html = injectionResolved + html;
   }
 
+  iframe.removeAttribute("src");
   iframe.srcdoc = html;
+  setTimeout(bindPreviewNavigationHandlers, 0);
 }
 
 // Helper: Append message to console (for editor-side warnings)
@@ -14329,7 +14497,7 @@ if (settingsModalContent) {
 
 // 2. Define the navigation function separately
 function navigateToHomepage() {
-    window.location.href = 'index.html'; 
+    window.location.href = "/index.html"; 
 }
 
 // 3. Attach the function to the click event
