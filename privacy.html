@@ -25,6 +25,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         min-height: 100vh;
@@ -70,11 +79,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -771,16 +786,14 @@
         color: #000;
       }
     </style>
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-     crossorigin="anonymous"></script>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -813,6 +826,14 @@
         <div class="badge">PRIVACY POLICY</div>
         <h1>Privacy Policy</h1>
         <p class="last-updated">Last Updated: March 1, 2026</p>
+
+        <svg viewBox="0 0 200 140" width="180" height="126" role="img" aria-labelledby="privacyIllTitle" style="margin:16px auto;display:block;">
+          <title id="privacyIllTitle">Illustration of a shield with a padlock, representing user data privacy</title>
+          <path d="M100 10 L170 30 V70 C170 105 140 128 100 135 C60 128 30 105 30 70 V30 Z" fill="#eafaf0" stroke="#4caf50" stroke-width="3"/>
+          <rect x="80" y="65" width="40" height="32" rx="6" fill="#4caf50"/>
+          <path d="M88 65 V52 a12 12 0 0 1 24 0 V65" fill="none" stroke="#4caf50" stroke-width="6"/>
+          <circle cx="100" cy="80" r="5" fill="#eafaf0"/>
+        </svg>
         <div class="privacy-guarantee">
           <h3><i class="fa-solid fa-shield-halved"></i> Your Code Privacy Commitment</h3>
           <p>
@@ -1245,8 +1266,10 @@
       const navButtons = document.querySelector(".nav-buttons");
 
       menuToggle.addEventListener("click", () => {
-        menuToggle.classList.toggle("active");
-        navButtons.classList.toggle("active");
+        const isOpen = menuToggle.classList.toggle("active");
+        navButtons.classList.toggle("active", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("nav-open", isOpen);
       });
 
       // Close menu when clicking a link (mobile)
@@ -1254,6 +1277,8 @@
         btn.addEventListener("click", () => {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         });
       });
 
@@ -1262,6 +1287,18 @@
         if (!navButtons.contains(e.target) && !menuToggle.contains(e.target)) {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
+        }
+      });
+
+      // Close menu on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          menuToggle.classList.remove("active");
+          navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         }
       });
     </script>

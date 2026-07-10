@@ -30,6 +30,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         display: flex;
@@ -80,11 +89,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -1081,14 +1096,14 @@
         color: #000;
       }
     </style>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -1542,14 +1557,18 @@
       const navLinks = document.querySelectorAll(".nav-btn");
 
       menuToggle.addEventListener("click", () => {
-        menuToggle.classList.toggle("active");
-        navButtons.classList.toggle("active");
+        const isOpen = menuToggle.classList.toggle("active");
+        navButtons.classList.toggle("active", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("nav-open", isOpen);
       });
 
       navLinks.forEach((link) => {
         link.addEventListener("click", () => {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         });
       });
 
@@ -1558,6 +1577,18 @@
         if (!e.target.closest(".header-content")) {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
+        }
+      });
+
+      // Close menu on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          menuToggle.classList.remove("active");
+          navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         }
       });
     </script>

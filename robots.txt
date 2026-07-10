@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /adminprivate.html
+Disallow: /published-projects.json
+
+Sitemap: https://codxeditor.up.railway.app/sitemap.xml

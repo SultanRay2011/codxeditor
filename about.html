@@ -25,6 +25,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         min-height: 100vh;
@@ -70,11 +79,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -769,16 +784,14 @@
         color: #000;
       }
     </style>
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-     crossorigin="anonymous"></script>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -812,6 +825,19 @@
 
         <h1><span class="brand-wordmark"><span class="cod">Cod</span><span class="x">X</span><span class="editor"> Editor</span></span></h1>
         <p>Empowering developers to code anywhere, anytime</p>
+
+        <svg viewBox="0 0 240 140" width="220" height="128" role="img" aria-labelledby="aboutIllTitle" style="margin:22px auto 0;display:block;">
+          <title id="aboutIllTitle">Illustration of a browser window with code brackets and a rocket, representing CodX Editor's mission</title>
+          <rect x="10" y="10" width="220" height="120" rx="14" fill="#eafaf0" stroke="#4caf50" stroke-width="2"/>
+          <circle cx="26" cy="26" r="4" fill="#e53935"/>
+          <circle cx="38" cy="26" r="4" fill="#f9a825"/>
+          <circle cx="50" cy="26" r="4" fill="#4caf50"/>
+          <text x="30" y="70" font-family="monospace" font-size="26" fill="#2e7d32">&lt;/&gt;</text>
+          <path d="M150 90 L175 55 L200 90 Z" fill="#4caf50" opacity="0.85"/>
+          <circle cx="175" cy="70" r="6" fill="#eafaf0"/>
+          <path d="M168 90 L164 105 L175 96 Z" fill="#f57c00"/>
+          <path d="M182 90 L186 105 L175 96 Z" fill="#f57c00"/>
+        </svg>
       </div>
 
       <div class="content-section">
@@ -1004,14 +1030,18 @@
       const navLinks = document.querySelectorAll(".nav-btn");
 
       menuToggle.addEventListener("click", () => {
-        menuToggle.classList.toggle("active");
-        navButtons.classList.toggle("active");
+        const isOpen = menuToggle.classList.toggle("active");
+        navButtons.classList.toggle("active", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("nav-open", isOpen);
       });
 
       navLinks.forEach((link) => {
         link.addEventListener("click", () => {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         });
       });
 
@@ -1020,6 +1050,18 @@
         if (!e.target.closest(".header-content")) {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
+        }
+      });
+
+      // Close menu on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          menuToggle.classList.remove("active");
+          navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         }
       });
     </script>

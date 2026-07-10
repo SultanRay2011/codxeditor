@@ -25,6 +25,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       :root {
         --green: #4caf50;
         --green-dark: #2e7d32;
@@ -83,11 +92,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -480,19 +495,14 @@
         }
       }
     </style>
-    <script
-      async
-      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-      crossorigin="anonymous"
-    ></script>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -1041,8 +1051,28 @@
 
       if (menuToggle && navButtons) {
         menuToggle.addEventListener("click", () => {
-          menuToggle.classList.toggle("active");
-          navButtons.classList.toggle("active");
+          const isOpen = menuToggle.classList.toggle("active");
+          navButtons.classList.toggle("active", isOpen);
+          menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+          document.body.classList.toggle("nav-open", isOpen);
+        });
+
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest(".header-content")) {
+            menuToggle.classList.remove("active");
+            navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
+          }
+        });
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            menuToggle.classList.remove("active");
+            navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
+          }
         });
       }
 
@@ -1051,6 +1081,8 @@
           if (menuToggle && navButtons) {
             menuToggle.classList.remove("active");
             navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
           }
         });
       });

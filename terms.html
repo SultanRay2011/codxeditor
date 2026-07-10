@@ -26,6 +26,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         min-height: 100vh;
@@ -71,11 +80,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -697,16 +712,14 @@
         color: #000;
       }
     </style>
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-     crossorigin="anonymous"></script>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -740,6 +753,16 @@
 
         <h1>Terms and Conditions</h1>
         <p class="last-updated">Last Updated: February 28, 2026</p>
+
+        <svg viewBox="0 0 180 140" width="170" height="132" role="img" aria-labelledby="termsIllTitle" style="margin:16px auto;display:block;">
+          <title id="termsIllTitle">Illustration of a document with a checkmark, representing the terms and conditions</title>
+          <rect x="30" y="10" width="120" height="120" rx="8" fill="#eafaf0" stroke="#4caf50" stroke-width="3"/>
+          <line x1="50" y1="40" x2="130" y2="40" stroke="#4caf50" stroke-width="4"/>
+          <line x1="50" y1="60" x2="130" y2="60" stroke="#4caf50" stroke-width="4" opacity="0.6"/>
+          <line x1="50" y1="80" x2="105" y2="80" stroke="#4caf50" stroke-width="4" opacity="0.6"/>
+          <circle cx="120" cy="105" r="22" fill="#4caf50"/>
+          <path d="M110 105 L117 113 L131 97" fill="none" stroke="#eafaf0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
 
         <div class="important-note">
           <p>
@@ -1019,14 +1042,18 @@
       const navLinks = document.querySelectorAll(".nav-btn");
 
       menuToggle.addEventListener("click", () => {
-        menuToggle.classList.toggle("active");
-        navButtons.classList.toggle("active");
+        const isOpen = menuToggle.classList.toggle("active");
+        navButtons.classList.toggle("active", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("nav-open", isOpen);
       });
 
       navLinks.forEach((link) => {
         link.addEventListener("click", () => {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         });
       });
 
@@ -1035,6 +1062,18 @@
         if (!e.target.closest(".header-content")) {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
+        }
+      });
+
+      // Close menu on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          menuToggle.classList.remove("active");
+          navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         }
       });
     </script>

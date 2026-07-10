@@ -25,6 +25,15 @@
         box-sizing: border-box;
       }
 
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         display: flex;
@@ -72,11 +81,17 @@
       .menu-toggle {
         display: none;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 5px;
         background: none;
         border: none;
         cursor: pointer;
         padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
         z-index: 1001;
       }
 
@@ -830,16 +845,14 @@
         color: #000;
       }
     </style>
-      <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2215422685538558"
-     crossorigin="anonymous"></script>
-  </head>
+</head>
   <body>
     <header>
       <div class="header-content">
         <div class="logo-container">
           <img src="cx.png" alt="CodX Editor Logo" />
         </div>
-        <button class="menu-toggle" aria-label="Toggle menu">
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -877,6 +890,17 @@
           Have questions, feedback, or suggestions? We'd love to hear from you!
           Reach out to us through any of the methods below.
         </p>
+
+        <svg viewBox="0 0 240 130" width="220" height="119" role="img" aria-labelledby="contactIllTitle" style="margin:20px auto;display:block;">
+          <title id="contactIllTitle">Illustration of an envelope with a chat bubble, representing contacting the CodX Editor team</title>
+          <rect x="20" y="30" width="150" height="90" rx="10" fill="#eafaf0" stroke="#4caf50" stroke-width="2"/>
+          <path d="M20 38 L95 90 L170 38" fill="none" stroke="#4caf50" stroke-width="2"/>
+          <rect x="150" y="10" width="75" height="50" rx="10" fill="#4caf50"/>
+          <path d="M165 60 L165 72 L180 60 Z" fill="#4caf50"/>
+          <circle cx="172" cy="35" r="4" fill="#eafaf0"/>
+          <circle cx="188" cy="35" r="4" fill="#eafaf0"/>
+          <circle cx="204" cy="35" r="4" fill="#eafaf0"/>
+        </svg>
 
         <div class="contact-methods">
           <div class="contact-card">
@@ -1005,14 +1029,18 @@
       const pageHeader = document.querySelector('header');
 
       menuToggle.addEventListener("click", () => {
-        menuToggle.classList.toggle("active");
-        navButtons.classList.toggle("active");
+        const isOpen = menuToggle.classList.toggle("active");
+        navButtons.classList.toggle("active", isOpen);
+        menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("nav-open", isOpen);
       });
 
       navLinks.forEach((link) => {
         link.addEventListener("click", () => {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         });
       });
 
@@ -1021,6 +1049,18 @@
         if (!e.target.closest(".header-content")) {
           menuToggle.classList.remove("active");
           navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
+        }
+      });
+
+      // Close menu on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          menuToggle.classList.remove("active");
+          navButtons.classList.remove("active");
+          menuToggle.setAttribute("aria-expanded", "false");
+          document.body.classList.remove("nav-open");
         }
       });
 
