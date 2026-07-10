@@ -204,6 +204,7 @@ let isRestoringEditorHistory = false;
 // ADDED: Tag suggestion elements
 const suggestionPopup = document.getElementById("suggestionPopup");
 let activeSuggestion = -1;
+let activeCssColorPicker = null;
 
 const selfClosingTags = [
   "img",
@@ -4649,6 +4650,7 @@ function scheduleSessionUpdate() {
 }
 
 function renderFileList() {
+  __codxRescanProjectSuggestionCacheSoon();
   fileList.innerHTML = "";
   projectFiles.forEach((file) => {
     const fileItem = document.createElement("div");
@@ -5195,6 +5197,41 @@ themeColorText.addEventListener("input", (e) => {
     updatePreviewBox();
   }
 });
+
+function bindSettingsColorPicker(colorInput, title) {
+  if (!colorInput) return;
+  colorInput.title = title;
+  const openPicker = () => {
+    openCssColorPicker(
+      colorInput,
+      colorInput.value,
+      (color) => {
+        colorInput.value = color;
+        colorInput.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      title,
+    );
+  };
+  colorInput.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openPicker();
+  });
+  colorInput.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.detail === 0) openPicker();
+  });
+  colorInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    openPicker();
+  });
+}
+
+bindSettingsColorPicker(editorBgColorInput, "Choose editor background color");
+bindSettingsColorPicker(themeColorInput, "Choose theme color");
 
 if (resetThemeColorBtn) {
   resetThemeColorBtn.addEventListener("click", () => {
@@ -6651,7 +6688,7 @@ function highlightHtml(code) {
 
     if (match[1]) {
       result += highlightHtmlSegment(match[1]);
-      result += highlightCss(match[2] || "");
+      result += highlightCss(match[2] || "", match.index + match[1].length);
       result += highlightHtmlSegment(match[3]);
     } else {
       result += highlightHtmlSegment(match[4]);
@@ -6685,7 +6722,7 @@ function getCssLiteralColorSwatch(value) {
   return "";
 }
 
-function highlightCss(code) {
+function highlightCss(code, sourceOffset = 0) {
   let result = "";
   let index = 0;
   let blockDepth = 0;
@@ -6703,7 +6740,10 @@ function highlightCss(code) {
     const swatchStyle = swatch
       ? ` style="--css-color-swatch:${escapeHtmlAttributeValue(swatch)}"`
       : "";
-    result += `<span class="token ${className}${swatchClass}"${swatchStyle}>${escapeHtml(text)}</span>`;
+    const swatchData = swatch && Number.isFinite(options.start) && Number.isFinite(options.end)
+      ? ` data-css-color-start="${sourceOffset + options.start}" data-css-color-end="${sourceOffset + options.end}"`
+      : "";
+    result += `<span class="token ${className}${swatchClass}"${swatchStyle}${swatchData}>${escapeHtml(text)}</span>`;
   };
   const isIdentifierStart = (char) => /[a-zA-Z_-]/.test(char || "");
   const isIdentifierPart = (char) => /[a-zA-Z0-9_-]/.test(char || "");
@@ -6837,7 +6877,11 @@ function highlightCss(code) {
       index += 1;
       consumeWhile((value) => /[0-9a-fA-F]/.test(value));
       const hexValue = code.slice(start, index);
-      append(hexValue, "hex", { swatch: afterPropertyColon ? getCssLiteralColorSwatch(hexValue) : "" });
+      append(hexValue, "hex", {
+        swatch: afterPropertyColon ? getCssLiteralColorSwatch(hexValue) : "",
+        start,
+        end: index,
+      });
       continue;
     }
 
@@ -6875,12 +6919,20 @@ function highlightCss(code) {
         if (afterPropertyColon && getCssLiteralColorSwatch(word + "(")) {
           consumeWhile((value) => /\s/.test(value));
           const functionText = word + consumeBalancedFunction();
-          append(functionText, "value", { swatch: getCssLiteralColorSwatch(functionText) });
+          append(functionText, "value", {
+            swatch: getCssLiteralColorSwatch(functionText),
+            start,
+            end: index,
+          });
         } else {
           append(word, "function");
         }
       } else if (afterPropertyColon) {
-        append(word, "value", { swatch: getCssLiteralColorSwatch(word) });
+        append(word, "value", {
+          swatch: getCssLiteralColorSwatch(word),
+          start,
+          end: index,
+        });
       } else {
         append(code.slice(start, index));
       }
@@ -7162,6 +7214,7 @@ function initializeEditor() {
 
   // MODIFIED: Replaced Tab logic with comprehensive keydown handler
   editor.addEventListener("keydown", handleEditorKeyDown);
+  editor.addEventListener("pointerdown", handleInlineCssColorSwatchPointerDown);
   editor.addEventListener("click", () => {
     if (
       activeInlineHtmlCorrection &&
@@ -7181,7 +7234,10 @@ function initializeEditor() {
   editor.addEventListener("blur", () => {
     setTimeout(() => {
       const active = document.activeElement;
-      if (!active || !suggestionPopup.contains(active)) {
+      if (
+        !active ||
+        (!suggestionPopup.contains(active) && !activeCssColorPicker?.contains(active))
+      ) {
         hideSuggestions();
       }
     }, 0);
@@ -7240,6 +7296,23 @@ function handleSuggestions(e) {
     currentSuggestionContext = envContext;
     showJsSuggestions(editor, envSuggestions, "env");
     return;
+  }
+
+  const codeFileContext = getCodeFileSuggestionContext(
+    textBefore,
+    isCssFile || isHtmlStyleContext ? "css" : isJsFile || isHtmlScriptContext ? "js" : "",
+  );
+  if (codeFileContext) {
+    const files = getRankedFileSuggestions(
+      codeFileContext.valuePrefix,
+      codeFileContext.attr,
+      codeFileContext.tag,
+    );
+    if (files.length) {
+      currentSuggestionContext = codeFileContext;
+      showFileSuggestions(editor, files, codeFileContext.valuePrefix, codeFileContext);
+      return;
+    }
   }
   if (
     activeFile.type === "html" &&
@@ -7390,7 +7463,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    showFileSuggestions(editor, files, fileContext.valuePrefix);
+    showFileSuggestions(editor, files, fileContext.valuePrefix, fileContext);
     return;
   }
 
@@ -7465,6 +7538,7 @@ function handleSuggestions(e) {
  * Hides tag suggestion popup and resets active item.
  */
 function hideSuggestions() {
+  closeCssColorPicker();
   suggestionPopup.style.display = "none";
   suggestionPopup.innerHTML = "";
   suggestionPopup.dataset.mode = "";
@@ -7506,6 +7580,7 @@ const __codxLearnedSuggestionDefaults = {
   css: { selectors: [], properties: [], values: [], vars: [], colors: [] },
   js: { identifiers: [], members: [] },
   env: { keys: [] },
+  files: { names: [] },
 };
 
 function __codxLoadLearnedSuggestions() {
@@ -7638,8 +7713,13 @@ function __codxTokenizeCss(projectFiles) {
   const colors = new Set();
 
   for (const file of projectFiles) {
-    if (file.type !== "css") continue;
+    if (file.type !== "css" && file.type !== "html") continue;
     let text = String(file.content || "");
+    if (file.type === "html") {
+      text = Array.from(text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi))
+        .map((match) => match[1] || "")
+        .join("\n");
+    }
 
     // Strip comments
     text = text.replace(/\/\*[\s\S]*?\*\//g, " ");
@@ -7653,6 +7733,11 @@ function __codxTokenizeCss(projectFiles) {
 
     const colorRe = /#[\da-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\([^;{}]+\)/gi;
     while ((m = colorRe.exec(text)) !== null) colors.add(m[0].trim());
+    const colorDeclarationRe = /(?:^|[;{]\s*)(?:color|background(?:-color)?|border(?:-(?:top|right|bottom|left))?-color|outline-color|fill|stroke|caret-color|accent-color)\s*:\s*([^;}{]+)/gim;
+    while ((m = colorDeclarationRe.exec(text)) !== null) {
+      const value = String(m[1] || "").trim();
+      if (value && value.length <= 160) colors.add(value);
+    }
 
     // Properties
     const propRe = /(^|[;{]\s*)([a-zA-Z-]+)\s*:/gm;
@@ -7703,8 +7788,13 @@ function __codxTokenizeJs(projectFiles) {
   };
 
   for (const file of projectFiles) {
-    if (file.type !== "js") continue;
-    const text = String(file.content || "");
+    if (file.type !== "js" && file.type !== "html") continue;
+    let text = String(file.content || "");
+    if (file.type === "html") {
+      text = Array.from(text.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))
+        .map((match) => match[1] || "")
+        .join("\n");
+    }
 
     // const/let/var X
     let m;
@@ -7736,7 +7826,7 @@ function __codxTokenizeJs(projectFiles) {
     // querySelector(".class" / "#id")
     const qsRe = /querySelector(All)?\s*\(\s*("([^"]+)"|'([^']+)')/gim;
     while ((m = qsRe.exec(text)) !== null) {
-      const sel = String(m[4] || m[5] || "").trim();
+      const sel = String(m[3] || m[4] || "").trim();
       if (!sel) continue;
       if (sel.startsWith("#")) domIds.add(sel.slice(1));
       if (sel.startsWith(".")) sel.split(/\s*,\s*/).forEach((s) => { if (s.startsWith('.')) domClasses.add(s.slice(1)); });
@@ -7752,11 +7842,17 @@ function __codxTokenizeJs(projectFiles) {
 function __codxTokenizeEnv(projectFiles) {
   const keys = new Set();
   for (const file of projectFiles) {
-    if (file.type !== "env") continue;
     const text = String(file.content || "");
-    for (const line of text.split(/\r?\n/)) {
-      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-      if (match) keys.add(match[1]);
+    if (file.type === "env") {
+      for (const line of text.split(/\r?\n/)) {
+        const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+        if (match) keys.add(match[1]);
+      }
+    }
+    if (file.type === "js" || file.type === "html") {
+      const envRe = /\b(?:process\.env|import\.meta\.env)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+      let match;
+      while ((match = envRe.exec(text)) !== null) keys.add(match[1]);
     }
   }
   return { keys };
@@ -7776,6 +7872,11 @@ function __codxLearnFromProjectCache() {
   __codxRememberLearnedValues("js", "identifiers", cache.js.identFreq.keys());
   __codxRememberLearnedValues("js", "members", cache.js.memberKeys);
   __codxRememberLearnedValues("env", "keys", cache.env.keys);
+  __codxRememberLearnedValues(
+    "files",
+    "names",
+    projectFiles.map((file) => file.name),
+  );
   __codxSaveLearnedSuggestions();
 }
 
@@ -7801,8 +7902,8 @@ function __codxRescanProjectSuggestionCacheSoon() {
 }
 
 function __codxProjectIsReady() {
-  // Ensure at least one scan has occurred.
-  if (!__codxProjectSuggestionCache || !__codxProjectSuggestionCache.hash) {
+  const nextHash = __codxHashProjectFiles(projectFiles);
+  if (!__codxProjectSuggestionCache || nextHash !== __codxProjectSuggestionCache.hash) {
     __codxRescanProjectSuggestionCacheSoon();
   }
 }
@@ -8166,11 +8267,13 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
     }));
   } else if (mode === "css-value" || mode === "css-inline-value") {
     const propertyValues = cssValueSuggestionsByProperty[propertyName] || [];
+    const rememberedValues = isCssColorProperty(propertyName)
+      ? [...__codxProjectSuggestionCache.css.colors, ...__codxLearnedSuggestions.css.colors]
+      : [...__codxProjectSuggestionCache.css.valueFreq.keys(), ...__codxLearnedSuggestions.css.values];
     const learnedValues = [
-      ...__codxProjectSuggestionCache.css.valueFreq.keys(),
-      ...__codxProjectSuggestionCache.css.colors,
-      ...__codxLearnedSuggestions.css.values,
-      ...__codxLearnedSuggestions.css.colors,
+      ...rememberedValues,
+      ...__codxProjectSuggestionCache.css.vars,
+      ...__codxLearnedSuggestions.css.vars,
       ...Array.from(__codxProjectSuggestionCache.css.vars).map((value) => `var(${value})`),
       ...__codxLearnedSuggestions.css.vars.map((value) => `var(${value})`),
     ];
@@ -8302,9 +8405,39 @@ function getFileSuggestionContext(textBefore) {
   );
   if (!match) return null;
   return {
+    mode: "file",
     tag: match[1].toLowerCase(),
     attr: match[2].toLowerCase(),
     valuePrefix: match[3],
+    replaceStart: textBefore.length - match[3].length,
+    replaceEnd: textBefore.length,
+  };
+}
+
+function getCodeFileSuggestionContext(textBefore, language) {
+  const lineStart = textBefore.lastIndexOf("\n") + 1;
+  const lineText = textBefore.slice(lineStart);
+  let match = null;
+  let tag = "";
+  let attr = "";
+  if (language === "css") {
+    match = lineText.match(/url\(\s*["']?([^"')\s;]*)$|@import\s+["']([^"']*)$/i);
+    tag = match?.[2] !== undefined ? "css-import" : "css-url";
+    attr = match?.[2] !== undefined ? "import" : "url";
+  } else if (language === "js") {
+    match = lineText.match(/(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bfetch\s*\(\s*|\bnew\s+Worker\s*\(\s*)["']([^"']*)$/i);
+    tag = "js-file";
+    attr = "src";
+  }
+  if (!match) return null;
+  const valuePrefix = String(match[1] ?? match[2] ?? "");
+  return {
+    mode: "file",
+    tag,
+    attr,
+    valuePrefix,
+    replaceStart: textBefore.length - valuePrefix.length,
+    replaceEnd: textBefore.length,
   };
 }
 
@@ -8394,6 +8527,9 @@ function matchesExtensionByContext(fileName, attr, tag) {
   if (attr === "href" && tag === "a") return true;
   if (attr === "src" && tag === "script") return ext === "js" || ext === "mjs";
   if (attr === "src" && tag === "img") return imageExt.has(ext);
+  if (tag === "css-import") return ext === "css";
+  if (tag === "js-file") return true;
+  if (tag === "css-url") return true;
   if (attr === "src" && (tag === "audio" || tag === "video" || tag === "source")) {
     return mediaExt.has(ext);
   }
@@ -8401,9 +8537,14 @@ function matchesExtensionByContext(fileName, attr, tag) {
 }
 
 function getRankedFileSuggestions(prefix, attr, tag) {
+  __codxProjectIsReady();
   const q = (prefix || "").toLowerCase().replace(/^\.?\//, "");
-  const candidates = projectFiles
-    .map((f) => f.name)
+  const candidates = Array.from(
+    new Set([
+      ...projectFiles.map((file) => file.name),
+      ...__codxLearnedSuggestions.files.names,
+    ]),
+  )
     .filter((name) => matchesExtensionByContext(name, attr, tag));
 
   const matches = candidates.filter((name) =>
@@ -8601,6 +8742,186 @@ function showSuggestions(editor, suggestions, prefix, mode) {
   positionSuggestionPopup(editor);
 }
 
+function cssRgbToHex(red, green, blue) {
+  return `#${[red, green, blue]
+    .map((value) => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function cssColorToHex(rawColor) {
+  const value = String(rawColor || "").trim();
+  const hexMatch = value.match(/^#([\da-f]{3,8})$/i);
+  if (hexMatch) {
+    let hex = hexMatch[1];
+    if (hex.length === 3 || hex.length === 4) hex = hex.slice(0, 3).split("").map((char) => char + char).join("");
+    return `#${hex.slice(0, 6).padEnd(6, "0")}`.toLowerCase();
+  }
+  try {
+    const context = document.createElement("canvas").getContext("2d");
+    context.fillStyle = "#000000";
+    context.fillStyle = value;
+    const normalized = context.fillStyle;
+    if (/^#[\da-f]{6}$/i.test(normalized)) return normalized.toLowerCase();
+    const rgbMatch = normalized.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgbMatch) return cssRgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
+  } catch (_err) {
+    // Use black when the CSS value cannot be represented by a native color input.
+  }
+  return "#000000";
+}
+
+function cssHexToRgb(hex) {
+  const normalized = cssColorToHex(hex).slice(1);
+  return {
+    red: Number.parseInt(normalized.slice(0, 2), 16),
+    green: Number.parseInt(normalized.slice(2, 4), 16),
+    blue: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function closeCssColorPicker() {
+  activeCssColorPicker?.remove();
+  activeCssColorPicker = null;
+}
+
+function getInlineCssColorTokenAtPoint(clientX, clientY) {
+  const tokens = highlightLayer?.querySelectorAll(".css-color-value[data-css-color-start]") || [];
+  for (const token of tokens) {
+    const rect = token.getBoundingClientRect();
+    const fontSize = Number.parseFloat(window.getComputedStyle(token).fontSize) || 13;
+    const swatchLeft = rect.left - 1;
+    const swatchRight = rect.left + fontSize * 0.9 + 2;
+    if (
+      clientX >= swatchLeft &&
+      clientX <= swatchRight &&
+      clientY >= rect.top - 2 &&
+      clientY <= rect.bottom + 2
+    ) {
+      return token;
+    }
+  }
+  return null;
+}
+
+function handleInlineCssColorSwatchPointerDown(event) {
+  if (event.button !== 0 || !["css", "html"].includes(activeFile?.type)) return;
+  const token = getInlineCssColorTokenAtPoint(event.clientX, event.clientY);
+  if (!token) return;
+  const replaceStart = Number(token.dataset.cssColorStart);
+  const replaceEnd = Number(token.dataset.cssColorEnd);
+  if (!Number.isInteger(replaceStart) || !Number.isInteger(replaceEnd) || replaceEnd <= replaceStart) return;
+  event.preventDefault();
+  event.stopPropagation();
+  currentSuggestionContext = {
+    mode: "css-value",
+    propertyName: "color",
+    prefix: token.textContent || "",
+    replaceStart,
+    replaceEnd,
+  };
+  openCssColorPicker(token, token.textContent || "#000000");
+}
+
+function openCssColorPicker(anchor, initialValue, onSelect = null, pickerTitle = "Choose color") {
+  closeCssColorPicker();
+  const initialHex = cssColorToHex(initialValue);
+  const presets = [
+    "#000000", "#333333", "#64748b", "#ffffff", "#ef4444", "#f97316", "#eab308", "#22c55e",
+    "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#ec4899",
+    "#7f1d1d", "#78350f", "#14532d", "#134e4a", "#164e63", "#1e3a8a", "#4c1d95", "#831843",
+  ];
+  const picker = document.createElement("div");
+  picker.className = "css-color-picker-popover";
+  picker.setAttribute("role", "dialog");
+  picker.setAttribute("aria-label", pickerTitle);
+  picker.innerHTML = `
+    <div class="css-color-picker-header">
+      <strong>${escapeHtml(pickerTitle)}</strong>
+      <button class="css-color-picker-close" type="button" aria-label="Close color picker">&times;</button>
+    </div>
+    <div class="css-color-picker-custom">
+      <input class="css-native-color-input" type="color" value="${initialHex}" aria-label="Open visual color picker">
+      <input class="css-color-hex-input" type="text" value="${initialHex}" maxlength="7" aria-label="HEX color">
+    </div>
+    <div class="css-color-presets" aria-label="Preset colors">
+      ${presets.map((color) => `<button class="css-color-preset" type="button" data-color="${color}" style="background:${color}" aria-label="Use ${color}"></button>`).join("")}
+    </div>
+    <div class="css-color-picker-rgb">
+      <label><input class="css-color-red" type="number" min="0" max="255">R</label>
+      <label><input class="css-color-green" type="number" min="0" max="255">G</label>
+      <label><input class="css-color-blue" type="number" min="0" max="255">B</label>
+    </div>
+    <div class="css-color-picker-actions">
+      <button class="css-color-cancel" type="button">Cancel</button>
+      <button class="css-color-apply" type="button">Apply</button>
+    </div>
+  `;
+  document.body.appendChild(picker);
+  activeCssColorPicker = picker;
+
+  const nativeInput = picker.querySelector(".css-native-color-input");
+  const hexInput = picker.querySelector(".css-color-hex-input");
+  const redInput = picker.querySelector(".css-color-red");
+  const greenInput = picker.querySelector(".css-color-green");
+  const blueInput = picker.querySelector(".css-color-blue");
+  const setFieldsFromHex = (hex) => {
+    const normalized = cssColorToHex(hex);
+    const rgb = cssHexToRgb(normalized);
+    nativeInput.value = normalized;
+    hexInput.value = normalized;
+    redInput.value = rgb.red;
+    greenInput.value = rgb.green;
+    blueInput.value = rgb.blue;
+  };
+  const setFieldsFromRgb = () => setFieldsFromHex(cssRgbToHex(redInput.value, greenInput.value, blueInput.value));
+  const applyColor = (color) => {
+    const normalized = cssColorToHex(color);
+    if (typeof onSelect === "function") {
+      onSelect(normalized);
+      closeCssColorPicker();
+      return;
+    }
+    selectCssSuggestion(normalized);
+  };
+  setFieldsFromHex(initialHex);
+
+  nativeInput.addEventListener("input", () => setFieldsFromHex(nativeInput.value));
+  nativeInput.addEventListener("change", () => applyColor(nativeInput.value));
+  hexInput.addEventListener("input", () => {
+    if (/^#[\da-f]{6}$/i.test(hexInput.value.trim())) setFieldsFromHex(hexInput.value.trim());
+  });
+  hexInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") applyColor(hexInput.value);
+  });
+  [redInput, greenInput, blueInput].forEach((input) => input.addEventListener("input", setFieldsFromRgb));
+  picker.querySelectorAll(".css-color-preset").forEach((button) => {
+    button.addEventListener("click", () => applyColor(button.dataset.color));
+  });
+  picker.querySelector(".css-color-picker-close").addEventListener("click", closeCssColorPicker);
+  picker.querySelector(".css-color-cancel").addEventListener("click", closeCssColorPicker);
+  picker.querySelector(".css-color-apply").addEventListener("click", () => applyColor(hexInput.value));
+  picker.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const pickerRect = picker.getBoundingClientRect();
+  const left = Math.max(10, Math.min(anchorRect.left, window.innerWidth - pickerRect.width - 10));
+  const belowTop = anchorRect.bottom + 8;
+  const top = belowTop + pickerRect.height <= window.innerHeight - 10
+    ? belowTop
+    : Math.max(10, anchorRect.top - pickerRect.height - 8);
+  picker.style.left = `${left}px`;
+  picker.style.top = `${top}px`;
+  nativeInput.focus();
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (activeCssColorPicker && !activeCssColorPicker.contains(event.target)) closeCssColorPicker();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && activeCssColorPicker) closeCssColorPicker();
+});
+
 function showCssSuggestions(editor, suggestions, mode) {
   suggestionPopup.innerHTML = "";
   suggestionPopup.dataset.mode = mode;
@@ -8627,12 +8948,12 @@ function showCssSuggestions(editor, suggestions, mode) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     const preview = entry.swatch
-      ? `<span class="suggestion-color-preview" style="background:${escapeHtml(entry.swatch)}"></span>`
+      ? `<button class="suggestion-color-preview" type="button" style="background:${escapeHtml(entry.swatch)}" aria-label="Choose a color for ${escapeHtml(entry.value)}"></button>`
       : "";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${preview || "CSS"}</span>
+      ${preview ? "" : '<span class="suggestion-icon">CSS</span>'}
       <span class="suggestion-content">
-        <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
+        <div class="suggestion-tag${preview ? " suggestion-tag-color" : ""}">${preview}<span>${escapeHtml(entry.value)}</span></div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "CSS suggestion")}</div>
       </span>
     `;
@@ -8641,6 +8962,18 @@ function showCssSuggestions(editor, suggestions, mode) {
       e.preventDefault();
       selectSuggestion(entry.value);
     });
+    const colorButton = suggestionItem.querySelector(".suggestion-color-preview");
+    if (colorButton) {
+      colorButton.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      colorButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openCssColorPicker(colorButton, entry.value);
+      });
+    }
     suggestionPopup.appendChild(suggestionItem);
   });
 
@@ -8735,10 +9068,10 @@ function showJsSuggestions(editor, suggestions, mode = "js") {
   positionSuggestionPopup(editor);
 }
 
-function showFileSuggestions(editor, fileSuggestions, prefix) {
+function showFileSuggestions(editor, fileSuggestions, prefix, context = null) {
   suggestionPopup.innerHTML = "";
   suggestionPopup.dataset.mode = "file";
-  currentSuggestionContext = null;
+  currentSuggestionContext = context;
 
   const header = document.createElement("div");
   header.className = "suggestion-header";
@@ -9172,13 +9505,14 @@ function selectFileSuggestion(filePath) {
   const editor = document.getElementById("activeEditor");
   const pos = editor.selectionStart;
   const textBefore = editor.value.substring(0, pos);
-  const match = textBefore.match(
+  const fallbackMatch = textBefore.match(
     /(<[a-zA-Z0-9-]+[^<>]*\b(?:href|src)=["'])([^"']*)$/i,
   );
-  if (!match) return;
-
-  const typedPrefix = match[2];
-  const replaceStart = pos - typedPrefix.length;
+  const context = currentSuggestionContext?.mode === "file" ? currentSuggestionContext : null;
+  const typedPrefix = context?.valuePrefix ?? fallbackMatch?.[2] ?? "";
+  const replaceStart = context?.replaceStart ?? (fallbackMatch ? pos - typedPrefix.length : -1);
+  const replaceEnd = context?.replaceEnd ?? editor.selectionEnd;
+  if (replaceStart < 0) return;
   let finalPath = filePath;
   if (/^\.\//.test(typedPrefix) && !finalPath.startsWith("./")) {
     finalPath = `./${finalPath}`;
@@ -9188,7 +9522,7 @@ function selectFileSuggestion(filePath) {
   applyEditorMutation(
     editor,
     replaceStart,
-    editor.selectionEnd,
+    replaceEnd,
     finalPath,
     caretPos,
     caretPos,
