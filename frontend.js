@@ -24,6 +24,7 @@ const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
 const editorTextSizeInput = document.getElementById("editorTextSize");
 const textSizeValue = document.getElementById("textSizeValue");
 const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
+const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
 const editorFontEmbedInput = document.getElementById("editorFontEmbed");
 const settingsPreview = document.getElementById("settingsPreview");
@@ -40,10 +41,10 @@ const editorWatermark = document.getElementById("editorWatermark");
 const exportZipBtn = document.querySelector('button[aria-label="Export project as ZIP"]');
 const importZipBtn = document.querySelector('button[aria-label="Import ZIP file"]');
 const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
-const previewIframe = document.getElementById("output");
 const previewTitleEl = document.getElementById("previewTitle");
 const previewLinkEl = document.getElementById("previewLink");
 const previewFaviconEl = document.getElementById("previewFavicon");
+const previewInspectBtn = document.getElementById("previewInspectBtn");
 const errorMsgEl = document.getElementById("errorMsg");
 const zenModeBtn = document.getElementById("zenModeBtn");
 const zenExitBtn = document.getElementById("zenExitBtn");
@@ -3302,6 +3303,7 @@ let currentPreviewTarget = {
   mode: "html",
   fileName: "index.html",
 };
+let isPreviewInspecting = false;
 let zenModeLayoutSnapshot = null;
 let backgroundTimersRunning = false;
 let cursorPruneInterval = null;
@@ -3412,6 +3414,11 @@ function bindPreviewNavigationHandlers() {
   previewDoc.addEventListener(
     "click",
     (event) => {
+      if (isPreviewInspecting) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const target = event.target;
       const anchor = target && target.closest ? target.closest("a[href]") : null;
       const anchorHref = anchor ? anchor.getAttribute("href") : "";
@@ -3441,6 +3448,11 @@ function bindPreviewNavigationHandlers() {
   previewDoc.addEventListener(
     "submit",
     (event) => {
+      if (isPreviewInspecting) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const form = event.target;
       if (!form || !form.getAttribute) return;
       const action = form.getAttribute("action");
@@ -3453,7 +3465,139 @@ function bindPreviewNavigationHandlers() {
   );
 }
 
-iframe.addEventListener("load", bindPreviewNavigationHandlers);
+function getInspectorMarkup(element) {
+  if (!element || !element.outerHTML) return "";
+  const clone = element.cloneNode(true);
+  clone
+    .querySelectorAll("#__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles")
+    .forEach((node) => node.remove());
+  clone.querySelectorAll("script, style").forEach((node) => {
+    node.textContent = node.tagName === "SCRIPT" ? "/* script content */" : "/* styles */";
+  });
+  let markup = clone.outerHTML;
+  if (markup.length > 1800) markup = `${markup.slice(0, 1800)}\n...`;
+  return markup;
+}
+
+function removePreviewInspector(previewDoc) {
+  if (!previewDoc) return;
+  previewDoc.getElementById("__codx-inspector-overlay")?.remove();
+  previewDoc.getElementById("__codx-inspector-outline")?.remove();
+  previewDoc.documentElement?.classList.remove("__codx-inspecting");
+  previewDoc.__codxInspectedElement = null;
+}
+
+function positionPreviewInspector(previewDoc, element) {
+  const overlay = previewDoc?.getElementById("__codx-inspector-overlay");
+  const outline = previewDoc?.getElementById("__codx-inspector-outline");
+  if (!overlay || !outline || !element?.isConnected) return;
+
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = previewDoc.documentElement.clientWidth;
+  const viewportHeight = previewDoc.documentElement.clientHeight;
+  outline.style.left = `${Math.max(0, rect.left)}px`;
+  outline.style.top = `${Math.max(0, rect.top)}px`;
+  outline.style.width = `${Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(0, rect.left))}px`;
+  outline.style.height = `${Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(0, rect.top))}px`;
+
+  const overlayWidth = Math.min(Math.max(rect.width, 280), Math.max(0, viewportWidth - 16));
+  overlay.style.width = `${overlayWidth}px`;
+  const overlayHeight = overlay.offsetHeight;
+  const preferredTop = rect.top - overlayHeight - 8;
+  const top = preferredTop >= 8
+    ? preferredTop
+    : Math.min(viewportHeight - overlayHeight - 8, rect.bottom + 8);
+  overlay.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - overlayWidth - 8))}px`;
+  overlay.style.top = `${Math.max(8, top)}px`;
+}
+
+function showPreviewInspector(previewDoc, element) {
+  if (!element || element.id?.startsWith("__codx-inspector")) return;
+  let overlay = previewDoc.getElementById("__codx-inspector-overlay");
+  let outline = previewDoc.getElementById("__codx-inspector-outline");
+  if (!outline) {
+    outline = previewDoc.createElement("div");
+    outline.id = "__codx-inspector-outline";
+    previewDoc.body.appendChild(outline);
+  }
+  if (!overlay) {
+    overlay = previewDoc.createElement("div");
+    overlay.id = "__codx-inspector-overlay";
+    overlay.innerHTML = '<div class="__codx-inspector-label">HTML</div><pre><code></code></pre>';
+    previewDoc.body.appendChild(overlay);
+  }
+  previewDoc.__codxInspectedElement = element;
+  overlay.querySelector("code").innerHTML = highlightHtml(getInspectorMarkup(element));
+  positionPreviewInspector(previewDoc, element);
+}
+
+function bindPreviewInspector() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    return;
+  }
+  if (!previewDoc?.documentElement) return;
+  removePreviewInspector(previewDoc);
+  if (!isPreviewInspecting) return;
+
+  previewDoc.documentElement.classList.add("__codx-inspecting");
+  if (!previewDoc.getElementById("__codx-inspector-styles")) {
+    const styles = previewDoc.createElement("style");
+    styles.id = "__codx-inspector-styles";
+    styles.textContent = `
+      html.__codx-inspecting, html.__codx-inspecting * { cursor: crosshair !important; }
+      #__codx-inspector-outline { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #58a6ff; background: rgba(88,166,255,.12); box-sizing: border-box; }
+      #__codx-inspector-overlay { position: fixed; z-index: 2147483646; pointer-events: none; box-sizing: border-box; max-height: 190px; overflow: hidden; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #c9d1d9; box-shadow: 0 12px 32px rgba(0,0,0,.38); font: 12px/1.5 Consolas, Monaco, monospace; }
+      #__codx-inspector-overlay .__codx-inspector-label { padding: 4px 8px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; }
+      #__codx-inspector-overlay pre { margin: 0; padding: 8px 10px; max-height: 155px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+      #__codx-inspector-overlay .token.comment { color: #8b949e; } #__codx-inspector-overlay .token.keyword { color: #ff7b72; }
+      #__codx-inspector-overlay .token.string { color: #a5d6ff; } #__codx-inspector-overlay .token.tag { color: #7ee787; }
+      #__codx-inspector-overlay .token.attr { color: #d2a8ff; } #__codx-inspector-overlay .token.number { color: #79c0ff; }
+      #__codx-inspector-overlay .token.property { color: #ffa657; } #__codx-inspector-overlay .token.selector { color: #f2cc60; }
+      #__codx-inspector-overlay .token.operator, #__codx-inspector-overlay .token.punctuation { color: #c9d1d9; }
+    `;
+    (previewDoc.head || previewDoc.documentElement).appendChild(styles);
+  }
+
+  if (!previewDoc.__codxInspectorBound) {
+    previewDoc.__codxInspectorBound = true;
+    previewDoc.addEventListener("pointerover", (event) => {
+      if (isPreviewInspecting) showPreviewInspector(previewDoc, event.target);
+    }, true);
+    previewDoc.addEventListener("click", (event) => {
+      if (!isPreviewInspecting) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+    previewDoc.addEventListener("scroll", () => {
+      if (isPreviewInspecting) positionPreviewInspector(previewDoc, previewDoc.__codxInspectedElement);
+    }, true);
+  }
+}
+
+function setPreviewInspecting(enabled) {
+  isPreviewInspecting = Boolean(enabled);
+  previewInspectBtn?.setAttribute("aria-pressed", String(isPreviewInspecting));
+  if (previewInspectBtn) {
+    previewInspectBtn.title = isPreviewInspecting
+      ? "Stop inspecting preview elements"
+      : "Inspect preview elements";
+    previewInspectBtn.setAttribute("aria-label", previewInspectBtn.title);
+  }
+  bindPreviewInspector();
+}
+
+previewInspectBtn?.addEventListener("click", () => setPreviewInspecting(!isPreviewInspecting));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && isPreviewInspecting) setPreviewInspecting(false);
+});
+
+iframe.addEventListener("load", () => {
+  bindPreviewNavigationHandlers();
+  bindPreviewInspector();
+});
 let activeFile = projectFiles[0];
 
 function getDefaultHtmlStarter() {
@@ -3628,6 +3772,7 @@ const defaultSettings = {
   fontEmbed: "",
   themeColor: "#238636",
   zenShowFiles: true,
+  fullscreenPreviewPanel: true,
 };
 
 // PART 2 - UTILITY FUNCTIONS
@@ -4615,6 +4760,12 @@ function loadSettings() {
             ? Boolean(settings.zenShowFiles)
             : defaultSettings.zenShowFiles;
       }
+      if (fullscreenPreviewPanelCheckbox) {
+        fullscreenPreviewPanelCheckbox.checked =
+          settings.fullscreenPreviewPanel !== undefined
+            ? Boolean(settings.fullscreenPreviewPanel)
+            : defaultSettings.fullscreenPreviewPanel;
+      }
     } catch (e) {
       console.error("Error loading settings:", e);
       resetToDefaultSettings();
@@ -4640,6 +4791,9 @@ function resetToDefaultSettings() {
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
   if (zenShowFilesCheckbox) zenShowFilesCheckbox.checked = defaultSettings.zenShowFiles;
+  if (fullscreenPreviewPanelCheckbox) {
+    fullscreenPreviewPanelCheckbox.checked = defaultSettings.fullscreenPreviewPanel;
+  }
   applyGoogleFontImport("");
   updateFontControlsState();
   updateThemeColor(defaultSettings.themeColor);
@@ -4872,6 +5026,9 @@ applySettingsBtn.addEventListener("click", () => {
     fontFamily: editorFontFamilySelect.value,
     fontEmbed: cssUrl || "",
     zenShowFiles: zenShowFilesCheckbox ? zenShowFilesCheckbox.checked : defaultSettings.zenShowFiles,
+    fullscreenPreviewPanel: fullscreenPreviewPanelCheckbox
+      ? fullscreenPreviewPanelCheckbox.checked
+      : defaultSettings.fullscreenPreviewPanel,
   };
   if (safeLocalStorage("set", "editorSettings", JSON.stringify(settings))) {
     applyZenFileVisibilitySetting(settings.zenShowFiles);
@@ -9872,12 +10029,15 @@ document.addEventListener("fullscreenchange", updateFullscreenButtonState);
 
 function togglePreviewFullscreen() {
   if (!document.fullscreenElement) {
-    if (previewIframe.requestFullscreen) {
-      previewIframe.requestFullscreen();
-    } else if (previewIframe.webkitRequestFullscreen) {
-      previewIframe.webkitRequestFullscreen();
-    } else if (previewIframe.msRequestFullscreen) {
-      previewIframe.msRequestFullscreen();
+    const fullscreenTarget = fullscreenPreviewPanelCheckbox?.checked === false
+      ? iframe
+      : previewPanel;
+    if (fullscreenTarget.requestFullscreen) {
+      fullscreenTarget.requestFullscreen();
+    } else if (fullscreenTarget.webkitRequestFullscreen) {
+      fullscreenTarget.webkitRequestFullscreen();
+    } else if (fullscreenTarget.msRequestFullscreen) {
+      fullscreenTarget.msRequestFullscreen();
     }
   } else {
     document.exitFullscreen();
@@ -9885,7 +10045,7 @@ function togglePreviewFullscreen() {
 }
 
 function updateFullscreenButtonState() {
-  if (document.fullscreenElement === previewIframe) {
+  if (document.fullscreenElement === previewPanel || document.fullscreenElement === iframe) {
     previewFullscreenBtn.innerHTML = `
       <svg class="btn-icon" viewBox="0 0 24 24">
         <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
@@ -14442,7 +14602,7 @@ tutorialPrevBtn.addEventListener("click", () => {
 closeTutorialBtn.addEventListener("click", async () => {
   const dialog = await showAppConfirm(
     "SKIP TUTORIAL",
-    "Are you sure you want to skip the tutorial? You can always restart it from the settings.",
+    "Are you sure you want to skip the tutorial?",
     "SKIP",
     "CANCEL",
     "background:#d32f2f;",
@@ -14468,30 +14628,6 @@ window.addEventListener("resize", () => {
     }
   }
 });
-
-// Add "Restart Tutorial" option to settings modal
-const settingsModalContent = document.querySelector("#settingsModal > div");
-if (settingsModalContent) {
-  const restartTutorialBtn = document.createElement("button");
-  restartTutorialBtn.className = "run-button";
-  restartTutorialBtn.style.cssText =
-    "width: 100%; margin-top: 15px; background: #9C27B0;";
-  restartTutorialBtn.innerHTML =
-    '<i class="fa-solid fa-graduation-cap"></i> <strong>RESTART TUTORIAL</strong>';
-  restartTutorialBtn.addEventListener("click", () => {
-    settingsModal.style.display = "none";
-    safeLocalStorage("remove", "tutorialCompleted");
-    startTutorial();
-  });
-
-  // Insert before action buttons
-  const actionButtons = settingsModalContent.querySelector(
-    'div[style*="display: flex"][style*="justify-content: space-between"]',
-  );
-  if (actionButtons) {
-    actionButtons.parentNode.insertBefore(restartTutorialBtn, actionButtons);
-  }
-}
 
 // Navigate To Homepage
 
