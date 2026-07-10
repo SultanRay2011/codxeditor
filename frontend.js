@@ -45,6 +45,13 @@ const previewTitleEl = document.getElementById("previewTitle");
 const previewLinkEl = document.getElementById("previewLink");
 const previewFaviconEl = document.getElementById("previewFavicon");
 const previewInspectBtn = document.getElementById("previewInspectBtn");
+const previewZoomBtn = document.getElementById("previewZoomBtn");
+const previewZoomModal = document.getElementById("previewZoomModal");
+const closePreviewZoomBtn = document.getElementById("closePreviewZoomBtn");
+const previewZoomValue = document.getElementById("previewZoomValue");
+const previewZoomOutBtn = document.getElementById("previewZoomOutBtn");
+const previewZoomInBtn = document.getElementById("previewZoomInBtn");
+const previewZoomResetBtn = document.getElementById("previewZoomResetBtn");
 const errorMsgEl = document.getElementById("errorMsg");
 const zenModeBtn = document.getElementById("zenModeBtn");
 const zenExitBtn = document.getElementById("zenExitBtn");
@@ -209,6 +216,7 @@ const selfClosingTags = [
   "base",
   "col",
   "embed",
+  "frame",
   "param",
   "source",
   "track",
@@ -582,6 +590,18 @@ const htmlTags = [
   "video",
   "wbr",
 ];
+
+const additionalHtmlTags = `
+  acronym big center dir fencedframe font frame frameset geolocation hgroup marquee math menu nobr
+  noembed noframes plaintext rb rtc search selectedcontent slot strike tt xmp
+`
+  .trim()
+  .split(/\s+/);
+additionalHtmlTags.forEach((tag) => {
+  if (!htmlTags.includes(tag)) htmlTags.push(tag);
+});
+if (!allHtmlTags.includes("svg")) htmlTags.push("svg");
+
 const knownHtmlTags = new Set([...allHtmlTags, ...htmlTags, ...selfClosingTags]);
 // END: Tag suggestion elements
 
@@ -601,6 +621,20 @@ htmlTags.forEach((tag) => {
       category: "other",
     });
   }
+});
+const deprecatedHtmlTags = new Set(
+  "acronym big center dir font frame frameset marquee nobr noembed noframes param plaintext rb rtc strike tt xmp".split(" "),
+);
+const experimentalHtmlTags = new Set(
+  "fencedframe geolocation selectedcontent".split(" "),
+);
+deprecatedHtmlTags.forEach((tag) => {
+  const meta = htmlTagMetaMap.get(tag);
+  if (meta) htmlTagMetaMap.set(tag, { ...meta, desc: "Deprecated HTML element", badge: "deprecated" });
+});
+experimentalHtmlTags.forEach((tag) => {
+  const meta = htmlTagMetaMap.get(tag);
+  if (meta) htmlTagMetaMap.set(tag, { ...meta, desc: "Experimental HTML element", badge: "experimental" });
 });
 htmlTagMetaMap.set("lorem", {
   tag: "lorem",
@@ -1155,6 +1189,89 @@ const cssPropertySuggestions = [
   "content",
 ];
 
+const additionalStandardCssProperties = `
+  alignment-baseline anchor-name anchor-scope animation-composition animation-play-state
+  animation-range animation-range-end animation-range-start animation-timeline backface-visibility
+  background-position-x background-position-y background-repeat-x background-repeat-y baseline-shift
+  baseline-source block-size border-block border-block-color border-block-end border-block-end-color
+  border-block-end-style border-block-end-width border-block-start border-block-start-color
+  border-block-start-style border-block-start-width border-block-style border-block-width
+  border-end-end-radius border-end-start-radius border-inline border-inline-color border-inline-end
+  border-inline-end-color border-inline-end-style border-inline-end-width border-inline-start
+  border-inline-start-color border-inline-start-style border-inline-start-width border-inline-style
+  border-inline-width border-start-end-radius border-start-start-radius box-align box-decoration-break
+  box-direction box-flex box-flex-group box-lines box-ordinal-group box-orient box-pack break-after
+  break-before break-inside caret caret-animation caret-shape clear clip clip-rule color-interpolation
+  color-interpolation-filters color-scheme column-fill column-height column-rule-visibility-items columns
+  column-width column-wrap contain container container-name container-type contain-intrinsic-block-size
+  contain-intrinsic-height contain-intrinsic-inline-size contain-intrinsic-size contain-intrinsic-width
+  content-visibility corner-block-end-shape corner-block-start-shape corner-bottom-left-shape
+  corner-bottom-right-shape corner-bottom-shape corner-end-end-shape corner-end-start-shape
+  corner-inline-end-shape corner-inline-start-shape corner-left-shape corner-right-shape corner-shape
+  corner-start-end-shape corner-start-start-shape corner-top-left-shape corner-top-right-shape
+  corner-top-shape counter-increment counter-reset counter-set cx cy d direction dominant-baseline
+  dynamic-range-limit empty-cells field-sizing fill fill-opacity fill-rule flex-flow float flood-color
+  flood-opacity font-feature-settings font-kerning font-language-override font-optical-sizing font-palette
+  font-size-adjust font-smooth font-stretch font-synthesis font-synthesis-position
+  font-synthesis-small-caps font-synthesis-style font-synthesis-weight font-variant
+  font-variant-alternates font-variant-caps font-variant-east-asian font-variant-emoji
+  font-variant-ligatures font-variant-numeric font-variant-position font-variation-settings font-width
+  forced-color-adjust grid grid-area grid-column-end grid-column-start grid-row-end grid-row-start
+  grid-template hanging-punctuation hyphenate-character hyphenate-limit-chars hyphens image-orientation
+  image-rendering image-resolution initial-letter inline-size inset-block inset-block-end
+  inset-block-start inset-inline inset-inline-end inset-inline-start interactivity interest-delay
+  interest-delay-end interest-delay-start interpolate-size lighting-color line-break line-clamp
+  line-height-step list-style-image margin-block-end margin-block-start margin-inline-end
+  margin-inline-start margin-trim marker marker-end marker-mid marker-start mask mask-border
+  mask-border-mode mask-border-outset mask-border-repeat mask-border-slice mask-border-source
+  mask-border-width mask-clip mask-composite mask-image mask-mode mask-origin mask-position mask-repeat
+  mask-size mask-type math-depth math-shift math-style max-block-size max-inline-size min-block-size
+  min-inline-size object-view-box offset offset-anchor offset-distance offset-path offset-position
+  offset-rotate orphans overflow-anchor overflow-block overflow-clip-margin overflow-inline overlay
+  overscroll-behavior overscroll-behavior-block overscroll-behavior-inline overscroll-behavior-x
+  overscroll-behavior-y padding-block-end padding-block-start padding-inline-end padding-inline-start
+  page page-break-after page-break-before page-break-inside paint-order position-anchor position-area
+  position-try position-try-fallbacks position-try-order position-visibility print-color-adjust quotes r
+  reading-flow reading-order rotate row-rule-visibility-items ruby-align ruby-overhang ruby-position
+  rule-visibility-items rx ry scale scrollbar-color scrollbar-gutter scrollbar-width
+  scroll-initial-target scroll-margin scroll-margin-block scroll-margin-block-end
+  scroll-margin-block-start scroll-margin-bottom scroll-margin-inline scroll-margin-inline-end
+  scroll-margin-inline-start scroll-margin-left scroll-margin-right scroll-margin-top
+  scroll-marker-group scroll-padding scroll-padding-block scroll-padding-block-end
+  scroll-padding-block-start scroll-padding-bottom scroll-padding-inline scroll-padding-inline-end
+  scroll-padding-inline-start scroll-padding-left scroll-padding-right scroll-padding-top
+  scroll-snap-stop scroll-target-group scroll-timeline scroll-timeline-axis scroll-timeline-name
+  shape-image-threshold shape-margin shape-outside shape-rendering speak-as stop-color stop-opacity stroke
+  stroke-dasharray stroke-dashoffset stroke-linecap stroke-linejoin stroke-miterlimit stroke-opacity
+  stroke-width tab-size text-align-last text-anchor text-autospace text-box text-box-edge text-box-trim
+  text-combine-upright text-decoration-inset text-decoration-line text-decoration-skip
+  text-decoration-style text-emphasis text-emphasis-color text-emphasis-position text-emphasis-style
+  text-indent text-justify text-rendering text-size-adjust text-spacing-trim text-underline-offset
+  text-underline-position text-wrap-mode text-wrap-style timeline-scope touch-action transform-box
+  transition-behavior translate unicode-bidi user-modify vector-effect vertical-align view-timeline
+  view-timeline-axis view-timeline-inset view-timeline-name view-transition-class view-transition-name
+  view-transition-scope white-space-collapse widows will-change word-spacing x y zoom
+`
+  .trim()
+  .split(/\s+/);
+
+additionalStandardCssProperties.forEach((property) => {
+  if (!cssPropertySuggestions.includes(property)) cssPropertySuggestions.push(property);
+});
+
+// Include every additional property implemented by the current browser, including vendor extensions.
+try {
+  const browserComputedStyle = window.getComputedStyle(document.documentElement);
+  for (let index = 0; index < browserComputedStyle.length; index += 1) {
+    const property = browserComputedStyle[index];
+    if (property && !property.startsWith("--") && !cssPropertySuggestions.includes(property)) {
+      cssPropertySuggestions.push(property);
+    }
+  }
+} catch (_err) {
+  // The static MDN-derived property catalog remains available.
+}
+
 const cssValueSuggestionsByProperty = {
   display: ["block", "inline", "inline-block", "flex", "grid", "none"],
   position: ["static", "relative", "absolute", "fixed", "sticky"],
@@ -1691,6 +1808,47 @@ const jsSuggestions = [
   { value: "try", desc: "Handle exceptions", insertText: "try {\n" + INDENT_UNIT + "\n} catch (error) {\n" + INDENT_UNIT + "console.error(error);\n}" },
   { value: "class", desc: "Define a class", insertText: "class Name {\n" + INDENT_UNIT + "constructor() {\n" + INDENT_UNIT + INDENT_UNIT + "\n" + INDENT_UNIT + "}\n}" },
 ];
+
+const standardJavaScriptBuiltins = `
+  AggregateError Array ArrayBuffer AsyncDisposableStack AsyncFunction AsyncGenerator
+  AsyncGeneratorFunction AsyncIterator Atomics BigInt BigInt64Array BigUint64Array Boolean
+  DataView Date decodeURI decodeURIComponent DisposableStack encodeURI encodeURIComponent Error
+  escape eval EvalError FinalizationRegistry Float16Array Float32Array Float64Array Function
+  Generator GeneratorFunction globalThis Infinity Int16Array Int32Array Int8Array InternalError Intl
+  isFinite isNaN Iterator JSON Map Math NaN Number Object parseFloat parseInt Promise Proxy
+  RangeError ReferenceError Reflect RegExp Set SharedArrayBuffer String SuppressedError Symbol
+  SyntaxError Temporal TypedArray TypeError Uint16Array Uint32Array Uint8Array Uint8ClampedArray undefined
+  unescape URIError WeakMap WeakRef WeakSet
+`
+  .trim()
+  .split(/\s+/);
+
+const standardJavaScriptLanguageEntries = [
+  "var", "break", "case", "catch", "continue", "debugger", "default", "delete", "do",
+  "export", "extends", "finally", "for...in", "for...of", "function*", "async function",
+  "async function*", "import", "in", "instanceof", "new", "null", "of", "static", "super",
+  "switch", "this", "throw", "true", "false", "typeof", "using", "await using", "void",
+  "with", "yield", "constructor", "get", "set",
+];
+
+const browserJavaScriptGlobals = (() => {
+  try {
+    return Object.getOwnPropertyNames(globalThis).filter((name) => /^[A-Za-z_$][\w$]*$/.test(name));
+  } catch (_err) {
+    return [];
+  }
+})();
+
+const existingJsSuggestionValues = new Set(jsSuggestions.map((entry) => entry.value));
+[
+  ...standardJavaScriptBuiltins.map((value) => ({ value, desc: "JavaScript standard built-in" })),
+  ...standardJavaScriptLanguageEntries.map((value) => ({ value, desc: "JavaScript language construct" })),
+  ...browserJavaScriptGlobals.map((value) => ({ value, desc: "Browser JavaScript global" })),
+].forEach((entry) => {
+  if (existingJsSuggestionValues.has(entry.value)) return;
+  existingJsSuggestionValues.add(entry.value);
+  jsSuggestions.push(entry);
+});
 
 let hasUnsavedChanges = false;
 let activeSavedProjectName = null;
@@ -3304,6 +3462,8 @@ let currentPreviewTarget = {
   fileName: "index.html",
 };
 let isPreviewInspecting = false;
+let previewZoomPercent = 100;
+let previewZoomLastFocusedElement = null;
 let zenModeLayoutSnapshot = null;
 let backgroundTimersRunning = false;
 let cursorPruneInterval = null;
@@ -3469,7 +3629,7 @@ function getInspectorMarkup(element) {
   if (!element || !element.outerHTML) return "";
   const clone = element.cloneNode(true);
   clone
-    .querySelectorAll("#__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles")
+    .querySelectorAll("#__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-preview-zoom-styles")
     .forEach((node) => node.remove());
   clone.querySelectorAll("script, style").forEach((node) => {
     node.textContent = node.tagName === "SCRIPT" ? "/* script content */" : "/* styles */";
@@ -3589,14 +3749,78 @@ function setPreviewInspecting(enabled) {
   bindPreviewInspector();
 }
 
+function applyPreviewZoom() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    return;
+  }
+  if (!previewDoc?.documentElement) return;
+
+  let zoomStyles = previewDoc.getElementById("__codx-preview-zoom-styles");
+  if (previewZoomPercent === 100) {
+    zoomStyles?.remove();
+    return;
+  }
+  if (!zoomStyles) {
+    zoomStyles = previewDoc.createElement("style");
+    zoomStyles.id = "__codx-preview-zoom-styles";
+    (previewDoc.head || previewDoc.documentElement).appendChild(zoomStyles);
+  }
+  zoomStyles.textContent = `html { zoom: ${previewZoomPercent / 100} !important; }`;
+}
+
+function updatePreviewZoomUI() {
+  if (previewZoomValue) previewZoomValue.textContent = `${previewZoomPercent}%`;
+  if (previewZoomOutBtn) previewZoomOutBtn.disabled = previewZoomPercent <= 50;
+  if (previewZoomInBtn) previewZoomInBtn.disabled = previewZoomPercent >= 200;
+  if (previewZoomResetBtn) previewZoomResetBtn.disabled = previewZoomPercent === 100;
+}
+
+function setPreviewZoom(percent) {
+  previewZoomPercent = Math.max(50, Math.min(200, Math.round(Number(percent) / 25) * 25));
+  updatePreviewZoomUI();
+  applyPreviewZoom();
+}
+
+function openPreviewZoomModal() {
+  if (!previewZoomModal) return;
+  previewZoomLastFocusedElement = document.activeElement;
+  previewZoomModal.hidden = false;
+  previewZoomBtn?.setAttribute("aria-expanded", "true");
+  updatePreviewZoomUI();
+  closePreviewZoomBtn?.focus();
+}
+
+function closePreviewZoomModal() {
+  if (!previewZoomModal || previewZoomModal.hidden) return;
+  previewZoomModal.hidden = true;
+  previewZoomBtn?.setAttribute("aria-expanded", "false");
+  if (previewZoomLastFocusedElement?.focus) previewZoomLastFocusedElement.focus();
+  previewZoomLastFocusedElement = null;
+}
+
 previewInspectBtn?.addEventListener("click", () => setPreviewInspecting(!isPreviewInspecting));
+previewZoomBtn?.addEventListener("click", openPreviewZoomModal);
+closePreviewZoomBtn?.addEventListener("click", closePreviewZoomModal);
+previewZoomOutBtn?.addEventListener("click", () => setPreviewZoom(previewZoomPercent - 25));
+previewZoomInBtn?.addEventListener("click", () => setPreviewZoom(previewZoomPercent + 25));
+previewZoomResetBtn?.addEventListener("click", () => setPreviewZoom(100));
+previewZoomModal?.addEventListener("click", (event) => {
+  if (event.target === previewZoomModal) closePreviewZoomModal();
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && isPreviewInspecting) setPreviewInspecting(false);
+  if (event.key === "Escape" && previewZoomModal && !previewZoomModal.hidden) {
+    closePreviewZoomModal();
+  }
 });
 
 iframe.addEventListener("load", () => {
   bindPreviewNavigationHandlers();
   bindPreviewInspector();
+  applyPreviewZoom();
 });
 let activeFile = projectFiles[0];
 
@@ -6910,6 +7134,7 @@ function initializeEditor() {
       lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo";
     hasUnsavedChanges = true;
     activeFile.content = editor.value;
+    __codxRescanProjectSuggestionCacheSoon();
     updateProjectStatusUI();
     updateLineNumbers(editor);
     if (autoRunCheckbox.checked) debouncedUpdatePreview();
@@ -6992,6 +7217,7 @@ function handleSuggestions(e) {
   const isJsFile = activeFile.type === "js";
   const isHtmlScriptContext =
     activeFile.type === "html" && isInsideScriptTag(textBefore);
+  const isEnvFile = activeFile.type === "env";
 
   const currentLineText = textBefore.slice(textBefore.lastIndexOf("\n") + 1);
   const lastLt = textBefore.lastIndexOf("<");
@@ -6999,6 +7225,22 @@ function handleSuggestions(e) {
   const outsideTag = lastGt >= lastLt;
   const emmetOpeningMatch = textBefore.match(/<([a-zA-Z][a-zA-Z0-9:-]*:)$/);
   const emmetPlainMatch = currentLineText.match(/([a-zA-Z][a-zA-Z0-9:-]*:)$/);
+
+  if (isEnvFile) {
+    const envContext = getEnvSuggestionContext(textBefore);
+    if (!envContext || !envContext.prefix) {
+      hideSuggestions();
+      return;
+    }
+    const envSuggestions = getRankedEnvSuggestions(envContext.prefix);
+    if (!envSuggestions.length) {
+      hideSuggestions();
+      return;
+    }
+    currentSuggestionContext = envContext;
+    showJsSuggestions(editor, envSuggestions, "env");
+    return;
+  }
   if (
     activeFile.type === "html" &&
     !isHtmlStyleContext &&
@@ -7118,6 +7360,19 @@ function handleSuggestions(e) {
 
   const fileContext = getFileSuggestionContext(textBefore);
 
+  const htmlValueContext = getHtmlAttributeValueSuggestionContext(textBefore);
+  if (htmlValueContext) {
+    const valueSuggestions = getRankedHtmlAttributeValueSuggestions(
+      htmlValueContext.attr,
+      htmlValueContext.prefix,
+    );
+    if (valueSuggestions.length) {
+      currentSuggestionContext = htmlValueContext;
+      showJsSuggestions(editor, valueSuggestions, "html-value");
+      return;
+    }
+  }
+
   if (fileContext) {
     const files = getRankedFileSuggestions(
       fileContext.valuePrefix,
@@ -7231,6 +7486,7 @@ let __codxProjectSuggestionCache = {
     propertyFreq: new Map(),
     valueFreq: new Map(),
     vars: new Set(),
+    colors: new Set(),
   },
   js: {
     identFreq: new Map(),
@@ -7238,12 +7494,65 @@ let __codxProjectSuggestionCache = {
     domIds: new Set(),
     domClasses: new Set(),
   },
+  env: {
+    keys: new Set(),
+  },
 };
+
+const CODEX_LEARNED_SUGGESTIONS_KEY = "codxLearnedSuggestionsV1";
+const CODEX_LEARNED_SUGGESTION_LIMIT = 600;
+const __codxLearnedSuggestionDefaults = {
+  html: { tags: [], attrs: [], ids: [], classes: [] },
+  css: { selectors: [], properties: [], values: [], vars: [], colors: [] },
+  js: { identifiers: [], members: [] },
+  env: { keys: [] },
+};
+
+function __codxLoadLearnedSuggestions() {
+  const saved = safeLocalStorage("get", CODEX_LEARNED_SUGGESTIONS_KEY);
+  if (!saved) return structuredClone(__codxLearnedSuggestionDefaults);
+  try {
+    const parsed = JSON.parse(saved);
+    const normalized = structuredClone(__codxLearnedSuggestionDefaults);
+    Object.keys(normalized).forEach((language) => {
+      Object.keys(normalized[language]).forEach((category) => {
+        const values = parsed?.[language]?.[category];
+        normalized[language][category] = Array.isArray(values)
+          ? values.filter((value) => typeof value === "string" && value.trim()).slice(-CODEX_LEARNED_SUGGESTION_LIMIT)
+          : [];
+      });
+    });
+    return normalized;
+  } catch (_err) {
+    return structuredClone(__codxLearnedSuggestionDefaults);
+  }
+}
+
+let __codxLearnedSuggestions = __codxLoadLearnedSuggestions();
+
+function __codxRememberLearnedValues(language, category, values) {
+  const target = __codxLearnedSuggestions?.[language]?.[category];
+  if (!Array.isArray(target)) return;
+  const seen = new Set(target.map((value) => value.toLowerCase()));
+  for (const rawValue of values || []) {
+    const value = String(rawValue || "").trim();
+    if (!value || value.length > 160 || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    target.push(value);
+  }
+  if (target.length > CODEX_LEARNED_SUGGESTION_LIMIT) {
+    target.splice(0, target.length - CODEX_LEARNED_SUGGESTION_LIMIT);
+  }
+}
+
+function __codxSaveLearnedSuggestions() {
+  safeLocalStorage("set", CODEX_LEARNED_SUGGESTIONS_KEY, JSON.stringify(__codxLearnedSuggestions));
+}
 
 function __codxHashProjectFiles(files) {
   try {
     const sig = (files || [])
-      .map((f) => `${f.name}|${f.type}|${String(f.content || "").length}`)
+      .map((f) => `${f.name}|${f.type}|${String(f.content || "")}`)
       .join("\n");
     let h = 0;
     for (let i = 0; i < sig.length; i++) {
@@ -7326,6 +7635,7 @@ function __codxTokenizeCss(projectFiles) {
   const propertyFreq = new Map();
   const valueFreq = new Map();
   const vars = new Set();
+  const colors = new Set();
 
   for (const file of projectFiles) {
     if (file.type !== "css") continue;
@@ -7340,6 +7650,9 @@ function __codxTokenizeCss(projectFiles) {
     while ((m = varRe.exec(text)) !== null) {
       vars.add(m[0]);
     }
+
+    const colorRe = /#[\da-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\([^;{}]+\)/gi;
+    while ((m = colorRe.exec(text)) !== null) colors.add(m[0].trim());
 
     // Properties
     const propRe = /(^|[;{]\s*)([a-zA-Z-]+)\s*:/gm;
@@ -7373,7 +7686,7 @@ function __codxTokenizeCss(projectFiles) {
     }
   }
 
-  return { selectorFreq, propertyFreq, valueFreq, vars };
+  return { selectorFreq, propertyFreq, valueFreq, vars, colors };
 }
 
 function __codxTokenizeJs(projectFiles) {
@@ -7436,6 +7749,36 @@ function __codxTokenizeJs(projectFiles) {
   return { identFreq, memberKeys, domIds, domClasses };
 }
 
+function __codxTokenizeEnv(projectFiles) {
+  const keys = new Set();
+  for (const file of projectFiles) {
+    if (file.type !== "env") continue;
+    const text = String(file.content || "");
+    for (const line of text.split(/\r?\n/)) {
+      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      if (match) keys.add(match[1]);
+    }
+  }
+  return { keys };
+}
+
+function __codxLearnFromProjectCache() {
+  const cache = __codxProjectSuggestionCache;
+  __codxRememberLearnedValues("html", "tags", cache.html.tagFreq.keys());
+  __codxRememberLearnedValues("html", "attrs", cache.html.attrFreq.keys());
+  __codxRememberLearnedValues("html", "ids", cache.html.ids);
+  __codxRememberLearnedValues("html", "classes", cache.html.classes);
+  __codxRememberLearnedValues("css", "selectors", cache.css.selectorFreq.keys());
+  __codxRememberLearnedValues("css", "properties", cache.css.propertyFreq.keys());
+  __codxRememberLearnedValues("css", "values", cache.css.valueFreq.keys());
+  __codxRememberLearnedValues("css", "vars", cache.css.vars);
+  __codxRememberLearnedValues("css", "colors", cache.css.colors);
+  __codxRememberLearnedValues("js", "identifiers", cache.js.identFreq.keys());
+  __codxRememberLearnedValues("js", "members", cache.js.memberKeys);
+  __codxRememberLearnedValues("env", "keys", cache.env.keys);
+  __codxSaveLearnedSuggestions();
+}
+
 let __codxProjectScannerTimer = null;
 function __codxRescanProjectSuggestionCacheSoon() {
   clearTimeout(__codxProjectScannerTimer);
@@ -7449,6 +7792,8 @@ function __codxRescanProjectSuggestionCacheSoon() {
       __codxProjectSuggestionCache.html = __codxTokenizeHtml(projectFiles);
       __codxProjectSuggestionCache.css = __codxTokenizeCss(projectFiles);
       __codxProjectSuggestionCache.js = __codxTokenizeJs(projectFiles);
+      __codxProjectSuggestionCache.env = __codxTokenizeEnv(projectFiles);
+      __codxLearnFromProjectCache();
     } catch (e) {
       // fail safe
     }
@@ -7473,7 +7818,9 @@ function getRankedTagSuggestions(prefix, options = {}) {
   );
 
   const projectTags = __codxProjectSuggestionCache.html.tagFreq;
-  const projectTagEntries = Array.from(projectTags.keys())
+  const projectTagEntries = Array.from(
+    new Set([...projectTags.keys(), ...__codxLearnedSuggestions.html.tags]),
+  )
     .filter((t) => t && t.includes(q))
     .slice(0, 300);
 
@@ -7636,6 +7983,87 @@ function getJsSuggestionContext(textBefore) {
   };
 }
 
+function getEnvSuggestionContext(textBefore) {
+  const lineStart = textBefore.lastIndexOf("\n") + 1;
+  const lineText = textBefore.slice(lineStart);
+  if (lineText.includes("=") || /^\s*#/.test(lineText)) return null;
+  const match = lineText.match(/(?:^\s*(?:export\s+)?)?([A-Za-z_][A-Za-z0-9_]*)$/);
+  if (!match) return null;
+  const prefix = match[1] || "";
+  return {
+    mode: "env",
+    prefix,
+    replaceStart: textBefore.length - prefix.length,
+    replaceEnd: textBefore.length,
+  };
+}
+
+function getHtmlAttributeValueSuggestionContext(textBefore) {
+  const lastLt = textBefore.lastIndexOf("<");
+  const lastGt = textBefore.lastIndexOf(">");
+  if (lastLt < 0 || lastGt > lastLt) return null;
+  const match = textBefore.slice(lastLt).match(/\b(class|id)\s*=\s*(["'])([^"']*)$/i);
+  if (!match) return null;
+  const attr = match[1].toLowerCase();
+  const fullValue = match[3] || "";
+  const prefix = attr === "class" ? fullValue.slice(fullValue.lastIndexOf(" ") + 1) : fullValue;
+  return {
+    mode: "html-value",
+    attr,
+    prefix,
+    replaceStart: textBefore.length - prefix.length,
+    replaceEnd: textBefore.length,
+  };
+}
+
+function getRankedHtmlAttributeValueSuggestions(attr, prefix) {
+  __codxProjectIsReady();
+  const q = String(prefix || "").toLowerCase();
+  const isClass = attr === "class";
+  const projectValues = isClass
+    ? __codxProjectSuggestionCache.html.classes
+    : __codxProjectSuggestionCache.html.ids;
+  const jsValues = isClass
+    ? __codxProjectSuggestionCache.js.domClasses
+    : __codxProjectSuggestionCache.js.domIds;
+  const learnedValues = isClass
+    ? __codxLearnedSuggestions.html.classes
+    : __codxLearnedSuggestions.html.ids;
+  const cssValues = [
+    ...__codxProjectSuggestionCache.css.selectorFreq.keys(),
+    ...__codxLearnedSuggestions.css.selectors,
+  ]
+    .filter((value) => String(value).startsWith(isClass ? "." : "#"))
+    .map((value) => String(value).slice(1));
+  const values = Array.from(new Set([...projectValues, ...jsValues, ...learnedValues, ...cssValues]));
+  return values
+    .filter((value) => !q || value.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const aStarts = a.toLowerCase().startsWith(q) ? 1 : 0;
+      const bStarts = b.toLowerCase().startsWith(q) ? 1 : 0;
+      return bStarts - aStarts || a.length - b.length || a.localeCompare(b);
+    })
+    .slice(0, 40)
+    .map((value) => ({ value, desc: `Learned HTML ${attr}` }));
+}
+
+function getRankedEnvSuggestions(prefix) {
+  __codxProjectIsReady();
+  const q = String(prefix || "").toLowerCase();
+  const values = Array.from(
+    new Set([...__codxProjectSuggestionCache.env.keys, ...__codxLearnedSuggestions.env.keys]),
+  );
+  return values
+    .filter((value) => value.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const aStarts = a.toLowerCase().startsWith(q) ? 1 : 0;
+      const bStarts = b.toLowerCase().startsWith(q) ? 1 : 0;
+      return bStarts - aStarts || a.length - b.length || a.localeCompare(b);
+    })
+    .slice(0, 40)
+    .map((value) => ({ value, desc: "Learned environment variable name" }));
+}
+
 function getHtmlInlineStyleSuggestionContext(textBefore) {
   const match = textBefore.match(
     /<([a-zA-Z][a-zA-Z0-9-]*)[^<>]*\bstyle=(["'])([^"']*)$/i,
@@ -7727,13 +8155,26 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
   const q = (prefix || "").toLowerCase();
   let source = [];
   if (mode === "css-property" || mode === "css-inline-property") {
-    source = cssPropertySuggestions.map((value) => ({
+    const properties = [
+      ...cssPropertySuggestions,
+      ...__codxProjectSuggestionCache.css.propertyFreq.keys(),
+      ...__codxLearnedSuggestions.css.properties,
+    ];
+    source = properties.map((value) => ({
       value,
       desc: "CSS property",
     }));
   } else if (mode === "css-value" || mode === "css-inline-value") {
     const propertyValues = cssValueSuggestionsByProperty[propertyName] || [];
-    source = [...propertyValues, ...cssGenericValueSuggestions].map((value) => ({
+    const learnedValues = [
+      ...__codxProjectSuggestionCache.css.valueFreq.keys(),
+      ...__codxProjectSuggestionCache.css.colors,
+      ...__codxLearnedSuggestions.css.values,
+      ...__codxLearnedSuggestions.css.colors,
+      ...Array.from(__codxProjectSuggestionCache.css.vars).map((value) => `var(${value})`),
+      ...__codxLearnedSuggestions.css.vars.map((value) => `var(${value})`),
+    ];
+    source = [...propertyValues, ...learnedValues, ...cssGenericValueSuggestions].map((value) => ({
       value,
       desc: `Value for ${propertyName || "property"}`,
       swatch: getCssColorSwatch(value, propertyName),
@@ -7747,7 +8188,15 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
       });
     }
   } else {
-    source = cssSelectorSuggestions.map((value) => ({
+    const learnedSelectors = [
+      ...__codxProjectSuggestionCache.css.selectorFreq.keys(),
+      ...__codxLearnedSuggestions.css.selectors,
+      ...Array.from(__codxProjectSuggestionCache.html.classes).map((value) => `.${value}`),
+      ...Array.from(__codxProjectSuggestionCache.html.ids).map((value) => `#${value}`),
+      ...__codxLearnedSuggestions.html.classes.map((value) => `.${value}`),
+      ...__codxLearnedSuggestions.html.ids.map((value) => `#${value}`),
+    ];
+    source = [...learnedSelectors, ...cssSelectorSuggestions].map((value) => ({
       value,
       desc: "Selector or at-rule",
     }));
@@ -7773,7 +8222,23 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
 
 function getRankedJsSuggestions(prefix) {
   const q = (prefix || "").toLowerCase();
-  const matches = jsSuggestions.filter((entry) =>
+  const runtimeMembers = getRuntimeJsMemberSuggestions(prefix);
+  const learnedEntries = [
+    ...__codxProjectSuggestionCache.js.identFreq.keys(),
+    ...__codxProjectSuggestionCache.js.memberKeys,
+    ...__codxLearnedSuggestions.js.identifiers,
+    ...__codxLearnedSuggestions.js.members,
+  ].map((value) => ({ value, desc: "Learned JavaScript identifier" }));
+  const envEntries = [
+    ...__codxProjectSuggestionCache.env.keys,
+    ...__codxLearnedSuggestions.env.keys,
+  ].map((key) => ({ value: `process.env.${key}`, desc: "Learned environment variable" }));
+  const source = Array.from(
+    new Map(
+      [...learnedEntries, ...envEntries, ...jsSuggestions, ...runtimeMembers].map((entry) => [entry.value, entry]),
+    ).values(),
+  );
+  const matches = source.filter((entry) =>
     entry.value.toLowerCase().includes(q),
   );
   matches.sort((a, b) => {
@@ -7786,6 +8251,49 @@ function getRankedJsSuggestions(prefix) {
     return aValue.localeCompare(bValue);
   });
   return matches.slice(0, 20);
+}
+
+function getRuntimeJsMemberSuggestions(prefix) {
+  const rawPrefix = String(prefix || "");
+  const lastDot = rawPrefix.lastIndexOf(".");
+  if (lastDot < 1) return [];
+
+  const objectPath = rawPrefix.slice(0, lastDot);
+  const segments = objectPath.split(".");
+  if (
+    segments.length > 6 ||
+    segments.some((segment) => !/^[A-Za-z_$][\w$]*$/.test(segment) || ["__proto__", "prototype", "constructor"].includes(segment))
+  ) {
+    return [];
+  }
+
+  let target = globalThis;
+  try {
+    for (const segment of segments) {
+      target = target?.[segment];
+      if (target == null) return [];
+    }
+  } catch (_err) {
+    return [];
+  }
+
+  const memberNames = new Set();
+  let current = target;
+  for (let depth = 0; current != null && depth < 5; depth += 1) {
+    try {
+      Object.getOwnPropertyNames(current).forEach((name) => {
+        if (/^[A-Za-z_$][\w$]*$/.test(name) && name !== "constructor") memberNames.add(name);
+      });
+      current = Object.getPrototypeOf(current);
+    } catch (_err) {
+      break;
+    }
+  }
+
+  return Array.from(memberNames).map((name) => ({
+    value: `${objectPath}.${name}`,
+    desc: `JavaScript member of ${objectPath}`,
+  }));
 }
 
 function getFileSuggestionContext(textBefore) {
@@ -7840,7 +8348,12 @@ function getHtmlAttributeSuggestionContext(textBefore) {
 function getRankedHtmlAttributeSuggestions(tagName, prefix, usedAttributes) {
   const meta = htmlTagMetaMap.get(tagName) || { attrs: [] };
   const used = new Set((usedAttributes || []).map((value) => value.toLowerCase()));
-  const source = [...globalHtmlAttributes, ...(meta.attrs || [])];
+  const source = [
+    ...__codxProjectSuggestionCache.html.attrFreq.keys(),
+    ...__codxLearnedSuggestions.html.attrs,
+    ...globalHtmlAttributes,
+    ...(meta.attrs || []),
+  ];
   const unique = Array.from(new Set(source));
   const q = (prefix || "").toLowerCase();
   const matches = unique
@@ -8179,14 +8692,16 @@ function showHtmlAttributeSuggestions(editor, suggestions) {
   positionSuggestionPopup(editor);
 }
 
-function showJsSuggestions(editor, suggestions) {
+function showJsSuggestions(editor, suggestions, mode = "js") {
   suggestionPopup.innerHTML = "";
-  suggestionPopup.dataset.mode = "js";
+  suggestionPopup.dataset.mode = mode;
+  const title = mode === "env" ? "Environment variables" : mode === "html-value" ? "HTML values" : "JavaScript";
+  const icon = mode === "env" ? "ENV" : mode === "html-value" ? "HTML" : "JS";
 
   const header = document.createElement("div");
   header.className = "suggestion-header";
   header.innerHTML = `
-    <span>JavaScript (${suggestions.length})</span>
+    <span>${title} (${suggestions.length})</span>
     <span class="suggestion-shortcuts">
       <span class="suggestion-shortcut">Enter</span>
       <span class="suggestion-shortcut">Tab</span>
@@ -8199,7 +8714,7 @@ function showJsSuggestions(editor, suggestions) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">JS</span>
+      <span class="suggestion-icon">${icon}</span>
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "JavaScript suggestion")}</div>
@@ -8371,7 +8886,7 @@ function selectSuggestion(tag) {
     selectCssSuggestion(tag);
     return;
   }
-  if (mode === "js") {
+  if (mode === "js" || mode === "env" || mode === "html-value") {
     selectJsSuggestion(tag);
     return;
   }

@@ -429,6 +429,56 @@
             >
               <i class="fa-solid fa-code" aria-hidden="true"></i>
             </button>
+            <button
+              id="previewZoomBtn"
+              class="preview-icon-button"
+              type="button"
+              title="Adjust preview zoom"
+              aria-label="Adjust preview zoom"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+        <div
+          id="previewZoomModal"
+          class="preview-zoom-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="previewZoomModalTitle"
+          hidden
+        >
+          <div class="preview-zoom-dialog">
+            <div class="preview-zoom-dialog-header">
+              <div>
+                <span class="preview-zoom-eyebrow">Preview scale</span>
+                <strong id="previewZoomModalTitle">Zoom</strong>
+              </div>
+              <button
+                id="closePreviewZoomBtn"
+                class="preview-zoom-close"
+                type="button"
+                aria-label="Close preview zoom"
+                title="Close"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+            <output id="previewZoomValue" class="preview-zoom-value" aria-live="polite">100%</output>
+            <div class="preview-zoom-controls" aria-label="Preview zoom controls">
+              <button id="previewZoomOutBtn" type="button" aria-label="Zoom out" title="Zoom out">
+                <i class="fa-solid fa-minus" aria-hidden="true"></i>
+              </button>
+              <button id="previewZoomInBtn" type="button" aria-label="Zoom in" title="Zoom in">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              </button>
+            </div>
+            <button id="previewZoomResetBtn" class="preview-zoom-reset" type="button">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+              Reset to 100%
+            </button>
           </div>
         </div>
         <iframe id="output" title="Preview output"></iframe>
