@@ -38,6 +38,7 @@ const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
 const LEGACY_SESSION_ID_RE = /^\d{10,}$/;
 const SESSION_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const COLLAB_CURSOR_STYLES = new Set(["pointer", "hand", "mouse", "crosshair", "pen", "text"]);
 const DEFAULT_PERMISSIONS = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -1341,6 +1342,7 @@ function sanitizeParticipant(p) {
   return {
     name: p.name,
     theme: p.theme,
+    cursorStyle: normalizeCollabCursorStyle(p.cursorStyle),
     role: p.role || "participant",
     mutedChat: Boolean(p.mutedChat),
     frozenEditing: Boolean(p.frozenEditing),
@@ -1350,6 +1352,11 @@ function sanitizeParticipant(p) {
     allowedFiles: Array.isArray(p.allowedFiles) ? [...p.allowedFiles] : null,
     disabledFeatures: Array.isArray(p.disabledFeatures) ? [...p.disabledFeatures] : [],
   };
+}
+
+function normalizeCollabCursorStyle(value) {
+  const requested = String(value || "").trim().toLowerCase();
+  return COLLAB_CURSOR_STYLES.has(requested) ? requested : "pointer";
 }
 
 function sanitizeBanEntry(entry) {
@@ -1552,6 +1559,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
   if (!session) return false;
   const meta = socketMeta.get(socketId) || {};
   const deviceId = String(meta.deviceId || "").trim();
+  const cursorStyle = normalizeCollabCursorStyle(meta.cursorStyle);
   if (deviceId && Array.isArray(session.bans) && session.bans.some((entry) => entry.deviceId === deviceId)) {
     io.to(socketId).emit("collab:join-rejected", { reason: "This device is banned from the session." });
     return false;
@@ -1563,6 +1571,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     socketId,
     name,
     theme,
+    cursorStyle,
     role: "participant",
     mutedChat: false,
     frozenEditing: false,
@@ -1575,7 +1584,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
   });
   const socketRef = io.sockets.sockets.get(socketId);
   if (socketRef) socketRef.join(sessionId);
-  socketMeta.set(socketId, { sessionId, name, theme, deviceId });
+  socketMeta.set(socketId, { sessionId, name, theme, cursorStyle, deviceId });
   io.to(socketId).emit("collab:join-approved", {
     ok: true,
     sessionId,
@@ -1607,6 +1616,7 @@ io.on("connection", (socket) => {
       const sessionId = requestedId || generateSessionId();
       const name = String(payload?.name || "").trim();
       const theme = String(payload?.theme || "#4CAF50");
+      const cursorStyle = normalizeCollabCursorStyle(payload?.cursorStyle);
       const files = cloneFiles(payload?.files);
       const activeFileName = payload?.activeFileName || null;
       const baseUrl = String(payload?.baseUrl || "");
@@ -1630,6 +1640,7 @@ io.on("connection", (socket) => {
         socketId: socket.id,
         name,
         theme,
+        cursorStyle,
         role: "host",
         mutedChat: false,
         frozenEditing: false,
@@ -1655,7 +1666,7 @@ io.on("connection", (socket) => {
       });
 
       socket.join(sessionId);
-      socketMeta.set(socket.id, { sessionId, name, theme, deviceId });
+      socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
       ack?.({
         ok: true,
         sessionId,
@@ -1681,6 +1692,7 @@ io.on("connection", (socket) => {
         : findSessionIdByPin(requestedSessionId);
       const name = String(payload?.name || "").trim();
       const theme = String(payload?.theme || "#2196F3");
+      const cursorStyle = normalizeCollabCursorStyle(payload?.cursorStyle);
       const deviceId = String(payload?.deviceId || "").trim();
 
       const session = sessions.get(sessionId);
@@ -1726,10 +1738,11 @@ io.on("connection", (socket) => {
           socketId: socket.id,
           name,
           theme,
+          cursorStyle,
           requestedAt: Date.now(),
           deviceId,
         });
-        socketMeta.set(socket.id, { sessionId, name, theme, deviceId });
+        socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
         logAdminEvent("Join approval requested", `${name} requested access to session ${sessionId}.`, sessionId);
         emitSessionMeta(sessionId);
         ack?.({ ok: false, pending: true, error: "Waiting for host approval." });
@@ -1740,6 +1753,7 @@ io.on("connection", (socket) => {
         socketId: socket.id,
         name,
         theme,
+        cursorStyle,
         role: "participant",
         mutedChat: false,
         frozenEditing: false,
@@ -1751,7 +1765,7 @@ io.on("connection", (socket) => {
         deviceId,
       });
       socket.join(sessionId);
-      socketMeta.set(socket.id, { sessionId, name, theme, deviceId });
+      socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
 
       ack?.({
         ok: true,
@@ -1794,6 +1808,7 @@ io.on("connection", (socket) => {
       const sessionId = normalizeSessionId(payload?.sessionId);
       const name = String(payload?.name || "").trim();
       const theme = String(payload?.theme || "#2196F3");
+      const cursorStyle = normalizeCollabCursorStyle(payload?.cursorStyle);
       const deviceId = String(payload?.deviceId || "").trim();
 
       const session = sessions.get(sessionId);
@@ -1817,12 +1832,14 @@ io.on("connection", (socket) => {
       if (participant) {
         participant.socketId = socket.id;
         participant.theme = theme || participant.theme;
+        participant.cursorStyle = cursorStyle || participant.cursorStyle;
         participant.deviceId = deviceId || participant.deviceId || "";
       } else {
         participant = {
           socketId: socket.id,
           name,
           theme,
+          cursorStyle,
           role: "participant",
           mutedChat: false,
           frozenEditing: false,
@@ -1846,6 +1863,7 @@ io.on("connection", (socket) => {
         sessionId,
         name: participant.name,
         theme: participant.theme,
+        cursorStyle: normalizeCollabCursorStyle(participant.cursorStyle),
         deviceId: participant.deviceId || deviceId,
       });
 
@@ -2613,6 +2631,7 @@ io.on("connection", (socket) => {
       ? {
           name: meta.name,
           theme: meta.theme,
+          cursorStyle: normalizeCollabCursorStyle(meta.cursorStyle),
           fileName: payload.cursor.fileName || null,
           x: Number(payload.cursor.x || 0),
           y: Number(payload.cursor.y || 0),

@@ -534,19 +534,19 @@ body.zen-mode #zenExitBtn {
 }
 
 .remote-cursor::before {
-  content: "";
+  content: none;
+}
+
+.remote-cursor-icon {
   display: block;
-  width: 2px;
-  height: 18px;
-  background: var(--cursor-color, var(--accent-color));
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
-  animation: remoteCursorBlink 1s steps(1, end) infinite;
+  color: var(--cursor-color, var(--accent-color));
+  font-size: 18px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.75));
 }
 
 .remote-cursor-label {
   position: absolute;
-  top: -20px;
+  top: -22px;
   left: 0;
   padding: 2px 6px;
   border-radius: 999px;
@@ -2504,6 +2504,47 @@ header {
   color: var(--text-primary);
   font: inherit;
 }
+
+.collab-waiting-room-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.collab-waiting-room-row > div { display: grid; gap: 4px; }
+.collab-waiting-room-row small { color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.collab-waiting-room-row .switch { flex: 0 0 44px; }
+
+.collab-cursor-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collab-cursor-choice {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.collab-cursor-choice i { font-size: 18px; color: var(--text-muted); }
+.collab-cursor-choice span { overflow: hidden; max-width: 100%; font-size: 10px; text-overflow: ellipsis; }
+.collab-cursor-choice:hover,
+.collab-cursor-choice.selected { border-color: var(--accent-color); background: color-mix(in srgb, var(--accent-color) 14%, var(--bg-primary)); }
+.collab-cursor-choice.selected i { color: var(--accent-color); }
 
 .collab-pin-input,
 .collab-session-pin,

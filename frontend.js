@@ -3814,24 +3814,48 @@ let projectFiles = [
 
       <section class="grid">
         <article class="card">
-          <h2>What you can do</h2>
+          <h2>Build in the editor</h2>
           <ul>
-            <li>Create and switch between multiple files</li>
-            <li>Use Auto-Run for instant preview updates</li>
-            <li>Debug quickly with the built-in console</li>
-            <li>Import/Export projects as ZIP files</li>
+            <li>Create HTML, CSS, JavaScript, JSON, environment, and Node backend files</li>
+            <li>Use Auto-Run or the Run button to update the preview</li>
+            <li>Inspect preview HTML and adjust preview zoom from its header</li>
+            <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
         </article>
 
         <article class="card">
-          <h2>Controls</h2>
+          <h2>Projects & sharing</h2>
+          <ul>
+            <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
+            <li>Import or export complete projects as ZIP archives</li>
+            <li>Add images, audio, and video with Add Media</li>
+            <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
+            <li>Start a collaboration session for shared files, chat, cursors, roles, and room controls</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Node.js</h2>
+          <ul>
+            <li>Open More and choose Enable Node.js</li>
+            <li>The normal preview closes and the console becomes a command terminal</li>
+            <li>Install dependencies with <code>npm install package-name</code></li>
+            <li>Run the starter server with <code>npm start</code></li>
+            <li>Open the clickable <code>http://localhost:8000</code> link in a new preview tab</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Keyboard controls</h2>
           <ul>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> Export your project as a ZIP</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd> Run preview manually</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd> Create a new file</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> Toggle console</li>
-            <li><kbd>Esc</kbd> Exit Zen Mode</li>
+            <li><kbd>Esc</kbd> Close supported dialogs or exit Zen Mode</li>
             <li>Type <strong>cxstart</strong> in an empty HTML file and press <kbd>Enter</kbd></li>
+            <li>Type an Emmet abbreviation and press <kbd>Tab</kbd> to expand it</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd> Open developer tools</li>
           </ul>
         </article>
@@ -3935,15 +3959,19 @@ li {
   color: var(--muted);
 }
 
-kbd {
+kbd,
+code {
   background: #f3f4f6;
   border: 1px solid #d1d5db;
-  border-bottom-width: 2px;
   border-radius: 6px;
   padding: 2px 6px;
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.82rem;
+}
+
+kbd {
+  border-bottom-width: 2px;
 }
 
 @media (max-width: 760px) {
@@ -13610,6 +13638,7 @@ function resumeCollabSession(successMessage) {
       sessionId: activeSessionId,
       name: myInfo.name,
       theme: myInfo.theme || "#4CAF50",
+      cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
       deviceId: getOrCreateDeviceId(),
     },
     (res) => {
@@ -13903,7 +13932,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:join-approved", (res) => {
     if (!res?.ok) return;
     activeSessionId = res.sessionId || activeSessionId;
-    myInfo = { name: joinRequestContext.name || myInfo.name, theme: myInfo.theme };
+    myInfo = { name: joinRequestContext.name || myInfo.name, theme: myInfo.theme, cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle) };
     collabParticipants = res.participants || [];
     collabHostName =
       (collabParticipants.find((p) => p.role === "host") || {}).name ||
@@ -14169,6 +14198,7 @@ function renderRemoteCursors() {
         ),
       );
       return `<div class="remote-cursor" style="left:${left}px;top:${top}px;--cursor-color:${escapeHtml(entry.theme || "#4CAF50")};">
+        <i class="remote-cursor-icon ${getCollabCursorIconClass(entry.cursorStyle)}" aria-hidden="true"></i>
         <span class="remote-cursor-label">${escapeHtml(entry.name || "User")}</span>
       </div>`;
     })
@@ -14261,6 +14291,7 @@ function emitCursorFromClientCoords(clientX, clientY) {
     cursor: {
       name: myInfo.name,
       theme: myInfo.theme,
+      cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
       fileName: activeFile.name,
       x,
       y,
@@ -14361,6 +14392,20 @@ function renderHostNameStep(prefill = "") {
         <span>Color</span>
         ${buildCollabColorPickerHtml("#4CAF50", [])}
       </div>
+      <div class="collab-waiting-room-row">
+        <div>
+          <strong>Waiting room</strong>
+          <small>Review people before they enter the session.</small>
+        </div>
+        <label class="switch" title="Activate waiting room">
+          <input type="checkbox" id="collabWaitingRoomInput" aria-label="Activate waiting room">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="collab-form-field">
+        <span>Collaboration cursor</span>
+        ${buildCollabCursorPickerHtml("pointer")}
+      </div>
     </div>
   `;
   collabModal.style.display = "flex";
@@ -14369,6 +14414,7 @@ function renderHostNameStep(prefill = "") {
     `<button id="modalDoneBtn" class="run-button"><strong>CREATE SESSION</strong></button>`,
   );
   bindCollabColorPicker("#4CAF50");
+  bindCollabCursorPicker("pointer");
 
   const backBtn = document.getElementById("modalBackBtn");
   if (backBtn) backBtn.onclick = renderCollabStartMenu;
@@ -14386,6 +14432,8 @@ function renderHostNameStep(prefill = "") {
     errorMsgEl.style.display = "none";
     sessionData.host = name;
     sessionData.theme = document.getElementById("userThemeInput").value;
+    sessionData.waitingRoom = Boolean(document.getElementById("collabWaitingRoomInput")?.checked);
+    sessionData.cursorStyle = document.getElementById("userCursorInput")?.value || "pointer";
     createNumericSession();
   };
 }
@@ -14405,6 +14453,10 @@ function renderJoinNameStep(sid, prefill = "") {
           <span>Color</span>
           ${buildCollabColorPickerHtml("#2196F3", paletteParticipants)}
         </div>
+        <div class="collab-form-field">
+          <span>Collaboration cursor</span>
+          ${buildCollabCursorPickerHtml("pointer")}
+        </div>
       </div>
     `;
     collabModal.style.display = "flex";
@@ -14413,12 +14465,14 @@ function renderJoinNameStep(sid, prefill = "") {
       `<button id="modalDoneBtn" class="run-button"><strong>JOIN SESSION</strong></button>`,
     );
     bindCollabColorPicker("#2196F3");
+    bindCollabCursorPicker("pointer");
 
     const doneBtn = getModalDoneBtn();
     if (!doneBtn) return;
     doneBtn.onclick = () => {
       const name = document.getElementById("userNameInput").value.trim();
       const theme = document.getElementById("userThemeInput").value;
+      const cursorStyle = document.getElementById("userCursorInput")?.value || "pointer";
       const v = validateUsername(name);
       if (!v.valid) {
         errorMsgEl.textContent = v.error;
@@ -14426,7 +14480,7 @@ function renderJoinNameStep(sid, prefill = "") {
         return;
       }
       errorMsgEl.style.display = "none";
-      joinSessionWithPin(sid, name, theme);
+      joinSessionWithPin(sid, name, theme, cursorStyle);
     };
   });
 }
@@ -14442,10 +14496,14 @@ function renderJoinSessionStep(prefill = {}) {
         <span>Name</span>
         <input type="text" id="userNameInput" placeholder="Your name" maxlength="20" value="${escapeHtml(prefill.name || "")}">
       </label>
-      <div class="collab-form-field">
-        <span>Color</span>
-        ${buildCollabColorPickerHtml(prefill.theme || "#2196F3", [])}
-      </div>
+        <div class="collab-form-field">
+          <span>Color</span>
+          ${buildCollabColorPickerHtml(prefill.theme || "#2196F3", [])}
+        </div>
+        <div class="collab-form-field">
+          <span>Collaboration cursor</span>
+          ${buildCollabCursorPickerHtml(prefill.cursorStyle || "pointer")}
+        </div>
     </div>
   `;
   collabModal.style.display = "flex";
@@ -14454,6 +14512,7 @@ function renderJoinSessionStep(prefill = {}) {
     `<button id="modalDoneBtn" class="run-button"><strong>NEXT</strong></button>`,
   );
   bindCollabColorPicker(prefill.theme || "#2196F3");
+  bindCollabCursorPicker(prefill.cursorStyle || "pointer");
 
   const backBtn = document.getElementById("modalBackBtn");
   if (backBtn) backBtn.onclick = renderCollabStartMenu;
@@ -14463,6 +14522,7 @@ function renderJoinSessionStep(prefill = {}) {
   doneBtn.onclick = () => {
     const name = document.getElementById("userNameInput").value.trim();
     const theme = document.getElementById("userThemeInput").value;
+    const cursorStyle = document.getElementById("userCursorInput")?.value || "pointer";
     const nameResult = validateUsername(name);
     if (!nameResult.valid) {
       errorMsgEl.textContent = nameResult.error;
@@ -14470,7 +14530,7 @@ function renderJoinSessionStep(prefill = {}) {
       return;
     }
     errorMsgEl.style.display = "none";
-    renderJoinPinStep({ name, theme, pin: prefill.pin || "" });
+    renderJoinPinStep({ name, theme, cursorStyle, pin: prefill.pin || "" });
   };
 }
 
@@ -14536,7 +14596,7 @@ function bindJoinPinBoxes(prefill = "") {
   if (firstEmpty) firstEmpty.focus();
 }
 
-function renderJoinPinStep({ name = "", theme = "#2196F3", pin = "" } = {}) {
+function renderJoinPinStep({ name = "", theme = "#2196F3", cursorStyle = "pointer", pin = "" } = {}) {
   collabHostName = "";
   setCollabCloseButtonVisible(true);
   modalTitle.innerHTML = "<strong>ENTER SESSION PIN</strong>";
@@ -14560,7 +14620,7 @@ function renderJoinPinStep({ name = "", theme = "#2196F3", pin = "" } = {}) {
   bindJoinPinBoxes(pin);
 
   const backBtn = document.getElementById("modalBackBtn");
-  if (backBtn) backBtn.onclick = () => renderJoinSessionStep({ name, theme, pin: getJoinPinFromBoxes() });
+  if (backBtn) backBtn.onclick = () => renderJoinSessionStep({ name, theme, cursorStyle, pin: getJoinPinFromBoxes() });
 
   const doneBtn = getModalDoneBtn();
   if (!doneBtn) return;
@@ -14571,7 +14631,7 @@ function renderJoinPinStep({ name = "", theme = "#2196F3", pin = "" } = {}) {
       errorMsgEl.style.display = "block";
       return;
     }
-    joinSessionWithPin(pinResult.pin, name, theme);
+    joinSessionWithPin(pinResult.pin, name, theme, cursorStyle);
   };
 }
 
@@ -14598,6 +14658,56 @@ const collabColorPalette = [
   "#009688",
   "#795548",
 ];
+
+const collabCursorChoices = [
+  { id: "pointer", label: "Pointer", icon: "fa-solid fa-arrow-pointer" },
+  { id: "hand", label: "Hand", icon: "fa-regular fa-hand-pointer" },
+  { id: "mouse", label: "Mouse", icon: "fa-solid fa-computer-mouse" },
+  { id: "crosshair", label: "Crosshair", icon: "fa-solid fa-crosshairs" },
+  { id: "pen", label: "Pen", icon: "fa-solid fa-pen-nib" },
+  { id: "text", label: "Text", icon: "fa-solid fa-i-cursor" },
+];
+
+function normalizeCollabCursorStyle(value) {
+  const requested = String(value || "").trim().toLowerCase();
+  return collabCursorChoices.some((choice) => choice.id === requested) ? requested : "pointer";
+}
+
+function getCollabCursorIconClass(value) {
+  const style = normalizeCollabCursorStyle(value);
+  return collabCursorChoices.find((choice) => choice.id === style)?.icon || collabCursorChoices[0].icon;
+}
+
+function buildCollabCursorPickerHtml(selectedStyle = "pointer") {
+  const selected = normalizeCollabCursorStyle(selectedStyle);
+  return `
+    <input type="hidden" id="userCursorInput" value="${selected}">
+    <div class="collab-cursor-choice-grid" role="radiogroup" aria-label="Collaboration cursor">
+      ${collabCursorChoices.map((choice) => `
+        <button type="button" class="collab-cursor-choice${choice.id === selected ? " selected" : ""}" data-cursor-style="${choice.id}" role="radio" aria-checked="${choice.id === selected ? "true" : "false"}" title="${choice.label}">
+          <i class="${choice.icon}" aria-hidden="true"></i>
+          <span>${choice.label}</span>
+        </button>`).join("")}
+    </div>`;
+}
+
+function bindCollabCursorPicker(selectedStyle = "pointer") {
+  const input = document.getElementById("userCursorInput");
+  if (!input) return;
+  const apply = (value) => {
+    const selected = normalizeCollabCursorStyle(value);
+    input.value = selected;
+    document.querySelectorAll(".collab-cursor-choice").forEach((button) => {
+      const active = button.dataset.cursorStyle === selected;
+      button.classList.toggle("selected", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  };
+  document.querySelectorAll(".collab-cursor-choice").forEach((button) => {
+    button.addEventListener("click", () => apply(button.dataset.cursorStyle));
+  });
+  apply(selectedStyle);
+}
 
 function normalizeThemeColor(value) {
   return String(value || "").trim().toLowerCase();
@@ -14799,10 +14909,11 @@ function createNumericSession() {
     {
       name: sessionData.host,
       theme: sessionData.theme,
+      cursorStyle: normalizeCollabCursorStyle(sessionData.cursorStyle),
       deviceId: getOrCreateDeviceId(),
       files: projectFiles,
       activeFileName: activeFile ? activeFile.name : null,
-      permissions: defaultCollabPermissions,
+      permissions: { ...defaultCollabPermissions, requireJoinApproval: Boolean(sessionData.waitingRoom) },
       baseUrl: window.location.origin,
     },
     (res) => {
@@ -14817,7 +14928,7 @@ function createNumericSession() {
       activeSessionId = sid;
       collabShareLink = link;
       collabSessionPin = pin;
-      myInfo = { name: sessionData.host, theme: sessionData.theme };
+      myInfo = { name: sessionData.host, theme: sessionData.theme, cursorStyle: normalizeCollabCursorStyle(sessionData.cursorStyle) };
       collabParticipants = res.participants || [myInfo];
       collabHostName = res.hostName || sessionData.host;
       collabPermissions = normalizeCollabPermissions(res.permissions);
@@ -14834,18 +14945,18 @@ function createNumericSession() {
   );
 }
 
-function joinSessionWithPin(sid, name, theme) {
+function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
   if (!ensureCollabSocket()) return;
   resetTransientCollabUiState();
   errorMsgEl.style.display = "none";
 
   collabSocket.emit(
     "collab:join",
-    { sessionId: sid, name, theme, deviceId: getOrCreateDeviceId() },
+    { sessionId: sid, name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle), deviceId: getOrCreateDeviceId() },
     (res) => {
       if (!res || !res.ok) {
         if (res && res.pending) {
-          myInfo = { name, theme };
+          myInfo = { name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
           showJoinPendingState(sid, name);
           return;
         }
@@ -14859,7 +14970,7 @@ function joinSessionWithPin(sid, name, theme) {
 
       const resolvedSessionId = res.sessionId || sid;
       activeSessionId = resolvedSessionId;
-      myInfo = { name, theme };
+      myInfo = { name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
       collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${resolvedSessionId}`;
       collabSessionPin = res.sessionPin || sid;
       collabParticipants = res.participants || [];
