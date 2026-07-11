@@ -628,7 +628,8 @@
                 <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
                 <ul>
                   <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
-                  <li>Editor Extras contains Enable Node.js, Fonts, Zen Mode, and Homepage.</li>
+                  <li>Editor Extras contains Enable Node.js, Fonts, Get Icons, Zen Mode, and Homepage.</li>
+                  <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML.</li>
                   <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
                 </ul>
               </article>
@@ -653,7 +654,6 @@
                 <ul>
                   <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
                   <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
-                  <li>Color suggestions show small swatches beside matching values.</li>
                   <li>Typing <code>lorem</code> can insert placeholder text.</li>
                   <li>Path suggestions help when typing links, scripts, stylesheets, and media sources.</li>
                 </ul>
@@ -662,7 +662,7 @@
                 <h3><i class="fa-solid fa-bolt"></i> Fast HTML Helpers</h3>
                 <ul>
                   <li>Type <code>cxstart</code> in an empty HTML file and press <kbd>Enter</kbd> to insert a starter page structure.</li>
-                  <li>Use Emmet-style abbreviations such as <code>div&gt;ul&gt;li*3</code>, then press <kbd>Tab</kbd> to expand them.</li>
+                  <li>Use Emmet-style abbreviations such as <code>div&gt;ul&gt;li*3</code>, then press <kbd>Tab</kbd> to expand them. The caret is placed inside the generated tag, or inside the first editable child when the abbreviation is nested.</li>
                   <li>Brackets, quotes, braces, and common tag patterns are completed for you while typing.</li>
                 </ul>
               </article>
@@ -682,6 +682,8 @@
                   <li>Error badges can appear beside affected files.</li>
                   <li>Click an error badge to jump toward the first detected problem.</li>
                   <li>The console also catches logs, warnings, runtime errors, and promise failures from the preview.</li>
+                  <li>JavaScript diagnostics identify exact lines, columns, and causes for dangling operators, reversed comparisons, and mismatched or missing brackets.</li>
+                  <li>Click a located console diagnostic to open the correct file at the exact problem.</li>
                   <li>Large error counts are shortened so file badges stay readable.</li>
                 </ul>
               </article>
@@ -866,6 +868,8 @@
                 <ul>
                   <li>Toggle the console panel from the header.</li>
                   <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li>Smart syntax messages report the actual problematic operator or bracket instead of only showing the token where parsing stopped.</li>
+                  <li>Located diagnostics are clickable and jump to the reported line and column.</li>
                   <li>Use Clear to remove old console messages.</li>
                   <li>When Node.js is enabled, this area becomes an interactive command terminal and the normal preview closes.</li>
                 </ul>
@@ -959,15 +963,16 @@
                   <li>Preview settings before applying them.</li>
                   <li>Reset settings back to defaults when needed.</li>
                   <li>Use toggle controls for Show files in Zen Mode and Preview panel in fullscreen.</li>
-                  <li>Background and theme color fields use the same interactive color picker as CSS color values.</li>
+                  <li>Background and theme color fields use interactive color picker controls in Settings.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-font"></i> Font Picker</h3>
                 <ul>
-                  <li>Browse a large list of built-in font stacks.</li>
-                  <li>Search by font name or style keyword.</li>
-                  <li>Click a font card to copy its CSS font-family value.</li>
+                  <li>Browse system fonts plus the full free, open-source Fontsource catalog.</li>
+                  <li>Search every available family by name, category, or style keyword.</li>
+                  <li>Font previews load only as they enter view, keeping the picker fast.</li>
+                  <li>Click a system font to copy its font-family value, or a catalog font to copy ready-to-use @font-face CSS.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1002,6 +1007,8 @@
                 <ul>
                   <li>Create a session and share the invite link.</li>
                   <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
+                  <li>When someone requests entry, the host receives a waiting-room popup showing the person’s name and chosen color with Accept and Deny buttons.</li>
+                  <li>Admit All processes every current request only after the host confirms the bulk action in a second dialog.</li>
                   <li>Join with a display name, personal color, and a collaboration cursor icon.</li>
                   <li>Invalid session links show a friendly not-found page.</li>
                   <li>If approval is enabled, guests wait until the host accepts them.</li>

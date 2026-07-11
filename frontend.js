@@ -11230,7 +11230,26 @@ function parseEmmetAbbreviation(abbreviation) {
   return parsed;
 }
 
-function renderEmmetNodes(nodes, baseIndent = "") {
+const EMMET_CARET_MARKER = "\uE000codx-emmet-caret\uE001";
+
+function findFirstEmmetCaretNode(nodes) {
+  for (const root of nodes || []) {
+    if (selfClosingTags.includes(String(root?.tag || "").toLowerCase())) continue;
+
+    let target = root;
+    while (Array.isArray(target.children) && target.children.length) {
+      const firstEditableChild = target.children.find(
+        (child) => !selfClosingTags.includes(String(child?.tag || "").toLowerCase()),
+      );
+      if (!firstEditableChild) break;
+      target = firstEditableChild;
+    }
+    return target;
+  }
+  return null;
+}
+
+function renderEmmetNodes(nodes, baseIndent = "", caretTarget = null) {
   const renderNode = (node, depth) => {
     const indent = baseIndent + INDENT_UNIT.repeat(depth);
     const attrs = [];
@@ -11245,13 +11264,15 @@ function renderEmmetNodes(nodes, baseIndent = "") {
       return `${indent}${openTag.replace(/>$/, " />")}`;
     }
 
+    const caretMarker = node === caretTarget ? EMMET_CARET_MARKER : "";
+
     if (!node.children.length) {
-      return `${indent}${openTag}${node.text || ""}</${node.tag}>`;
+      return `${indent}${openTag}${caretMarker}${node.text || ""}</${node.tag}>`;
     }
 
     const childMarkup = node.children.map((child) => renderNode(child, depth + 1)).join("\n");
     const textLine = node.text ? `\n${baseIndent}${INDENT_UNIT.repeat(depth + 1)}${node.text}` : "";
-    return `${indent}${openTag}${textLine}\n${childMarkup}\n${indent}</${node.tag}>`;
+    return `${indent}${openTag}${caretMarker}${textLine}\n${childMarkup}\n${indent}</${node.tag}>`;
   };
 
   return nodes.map((node) => renderNode(node, 0)).join("\n");
@@ -11299,14 +11320,18 @@ function expandEmmetAbbreviation(editor, options = {}) {
       context.replaceStart,
     );
     const shouldPreserveIndent = /^[\t ]*$/.test(textBeforeAbbreviation);
-    const replacement = renderEmmetNodes(
+    const caretTarget = findFirstEmmetCaretNode(nodes);
+    const markedReplacement = renderEmmetNodes(
       nodes,
       shouldPreserveIndent ? context.lineIndent : "",
+      caretTarget,
     );
+    const caretOffset = markedReplacement.indexOf(EMMET_CARET_MARKER);
+    const replacement = markedReplacement.replace(EMMET_CARET_MARKER, "");
     const insertStart = shouldPreserveIndent
       ? editor.value.lastIndexOf("\n", context.replaceStart - 1) + 1
       : context.replaceStart;
-    const caretPos = insertStart + replacement.length;
+    const caretPos = insertStart + (caretOffset >= 0 ? caretOffset : replacement.length);
 
     applyEditorMutation(
       editor,
