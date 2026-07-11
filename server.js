@@ -95,6 +95,15 @@ function loadEnvFile() {
 }
 
 app.use(express.json({ limit: "25mb" }));
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+  next();
+});
+app.use(
+  "/vendor/webcontainer",
+  express.static(path.join(__dirname, "node_modules", "@webcontainer", "api", "dist")),
+);
 app.use(express.static(path.join(__dirname)));
 loadPublishedProjects();
 
@@ -957,7 +966,7 @@ async function githubApiRequest(session, apiPath, options = {}) {
 function normalizeGitHubFilePath(value) {
   const pathValue = String(value || "").replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
   if (!pathValue || pathValue.length > 1024 || /[\0-\x1f\x7f]/.test(pathValue)) return "";
-  const segments = pathValue.split("/");
+  const segments = pathValue.split("/").map((segment) => segment.trim().replace(/\s+/g, "-"));
   if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment === ".git")) return "";
   return segments.join("/");
 }

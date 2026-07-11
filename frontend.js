@@ -78,6 +78,8 @@ const templatesBtn = document.getElementById("templatesBtn");
 const publishProjectBtn = document.getElementById("publishProjectBtn");
 const connectGitHubBtn = document.getElementById("connectGitHubBtn");
 const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
+const enableNodeRuntimeBtn = document.getElementById("enableNodeRuntimeBtn");
+const enableNodeRuntimeBtnLabel = document.getElementById("enableNodeRuntimeBtnLabel");
 const githubRepoModal = document.getElementById("githubRepoModal");
 const githubRepoModalTitle = document.getElementById("githubRepoModalTitle");
 const githubRepoModalBody = document.getElementById("githubRepoModalBody");
@@ -387,7 +389,8 @@ function renderGitHubFileEditorControls() {
 }
 
 function stageGitHubEditedFile() {
-  const path = document.getElementById("githubFilePath")?.value.trim().replace(/\\/g, "/");
+  const rawPath = String(document.getElementById("githubFilePath")?.value || "").trim();
+  const path = rawPath ? normalizeProjectFileName(rawPath) : "";
   const content = document.getElementById("githubFileContent")?.value || "";
   if (!path || path.split("/").some((part) => !part || part === "." || part === "..")) {
     showNotification("Enter a valid repository file path.", "error");
@@ -407,7 +410,8 @@ async function handleGitHubFileUpload(event) {
       reader.onerror = () => reject(reader.error || new Error("Unable to read upload."));
       reader.readAsDataURL(file);
     });
-    githubRepoFileState.staged.set(file.name, { path: file.name, content: dataUrl.split(",")[1] || "", encoding: "base64" });
+    const fileName = normalizeProjectFileName(file.name);
+    githubRepoFileState.staged.set(fileName, { path: fileName, content: dataUrl.split(",")[1] || "", encoding: "base64" });
   }
   event.target.value = "";
   renderGitHubStagedFiles();
@@ -474,6 +478,34 @@ githubRepoModalBody?.addEventListener("click", async (event) => {
     showNotification("GitHub account disconnected.", "info");
   }
 });
+
+enableNodeRuntimeBtn?.addEventListener("click", async () => {
+  if (!window.codxNodeRuntime) {
+    showNotification("The Node.js runtime is still loading. Try again in a moment.", "warn");
+    return;
+  }
+  try {
+    await window.codxNodeRuntime.toggle();
+  } catch (error) {
+    showNotification(String(error?.message || error || "Unable to enable Node.js."), "error");
+  }
+});
+
+window.codxGetNodeProjectFiles = () => (Array.isArray(projectFiles) ? projectFiles : []).map((file) => ({
+  name: String(file?.name || ""),
+  content: String(file?.content || ""),
+  type: String(file?.type || ""),
+})).filter((file) => file.name);
+
+window.codxUpsertNodeRuntimeFile = (name, content) => {
+  const fileName = normalizeProjectFileName(name);
+  if (!fileName || fileName.startsWith("node_modules/")) return;
+  const existing = projectFiles.find((file) => String(file.name).toLowerCase() === fileName.toLowerCase());
+  if (existing) existing.content = String(content || "");
+  else projectFiles.push({ name: fileName, type: getFileType(fileName), content: String(content || ""), active: false });
+  renderFileList();
+  scheduleProjectAutosave();
+};
 
 if (announcementPopupOkBtn) {
   announcementPopupOkBtn.onclick = closeAnnouncementPopup;
@@ -2266,7 +2298,7 @@ let activeDialogResolver = null;
 let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
-const editableTextExtensions = ["html", "css", "js", "env"];
+const editableTextExtensions = ["html", "htm", "css", "scss", "less", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "jsonc", "env", "md", "txt"];
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
@@ -2276,7 +2308,68 @@ let autosaveTimer = null;
 let lastAutosaveAt = null;
 let sessionSyncTimeout = null;
 let lastEditorInputType = "";
+let fileNameMigrationNoticeShown = false;
 const defaultScriptWelcomeText = `console.log("WELCOME TO CODX EDITOR");`;
+
+function normalizeProjectFileName(value, fallback = "file.txt") {
+  const normalized = String(value || fallback)
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((segment) => segment.trim().replace(/\s+/g, "-"))
+    .filter(Boolean)
+    .join("/");
+  return normalized || fallback;
+}
+
+function makeUniqueProjectFileName(name, usedNames) {
+  const normalized = normalizeProjectFileName(name);
+  if (!usedNames.has(normalized.toLowerCase())) return normalized;
+  const slashIndex = normalized.lastIndexOf("/");
+  const directory = slashIndex >= 0 ? normalized.slice(0, slashIndex + 1) : "";
+  const leaf = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+  const dotIndex = leaf.lastIndexOf(".");
+  const stem = dotIndex > 0 ? leaf.slice(0, dotIndex) : leaf;
+  const extension = dotIndex > 0 ? leaf.slice(dotIndex) : "";
+  let counter = 2;
+  let candidate = "";
+  do candidate = `${directory}${stem}-${counter++}${extension}`;
+  while (usedNames.has(candidate.toLowerCase()));
+  return candidate;
+}
+
+function normalizeProjectFileNamesInPlace(files, previewTarget = currentPreviewTarget) {
+  if (!Array.isArray(files)) return false;
+  const usedNames = new Set();
+  const renames = [];
+  files.forEach((file, index) => {
+    if (!file) return;
+    const oldName = String(file.name || `file-${index + 1}.txt`);
+    const nextName = makeUniqueProjectFileName(normalizeProjectFileName(oldName, `file-${index + 1}.txt`), usedNames);
+    usedNames.add(nextName.toLowerCase());
+    if (oldName !== nextName) {
+      file.name = nextName;
+      file.type = getFileType(nextName) || file.type;
+      renames.push([oldName, nextName]);
+    }
+  });
+  if (!renames.length) return false;
+  const renameMap = new Map(renames);
+  const renamePattern = new RegExp(
+    [...renameMap.keys()]
+      .sort((left, right) => right.length - left.length)
+      .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|"),
+    "g",
+  );
+  files.forEach((file) => {
+    if (!file || typeof file.content !== "string") return;
+    file.content = file.content.replace(renamePattern, (oldName) => renameMap.get(oldName) || oldName);
+  });
+  renames.forEach(([oldName, nextName]) => {
+    if (previewTarget?.fileName === oldName) previewTarget.fileName = nextName;
+  });
+  return true;
+}
 
 const starterTemplates = [
   {
@@ -3642,7 +3735,7 @@ let projectFiles = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodX Editor Starter</title>
+    <title>Get started with CodX Editor</title>
     <link rel="icon" href="cx.png">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -4065,10 +4158,15 @@ function bindPreviewInspector() {
       #__codx-inspector-overlay .__codx-inspector-label { padding: 4px 8px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; }
       #__codx-inspector-overlay pre { margin: 0; padding: 8px 10px; max-height: 155px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
       #__codx-inspector-overlay .token.comment { color: #8b949e; } #__codx-inspector-overlay .token.keyword { color: #ff7b72; }
-      #__codx-inspector-overlay .token.string { color: #a5d6ff; } #__codx-inspector-overlay .token.tag { color: #7ee787; }
+      #__codx-inspector-overlay .token.string { color: #a5d6ff; } #__codx-inspector-overlay .token.tag, #__codx-inspector-overlay .token.tag-punctuation { color: #7ee787; }
       #__codx-inspector-overlay .token.attr { color: #d2a8ff; } #__codx-inspector-overlay .token.number { color: #79c0ff; }
       #__codx-inspector-overlay .token.property { color: #ffa657; } #__codx-inspector-overlay .token.selector { color: #f2cc60; }
       #__codx-inspector-overlay .token.operator, #__codx-inspector-overlay .token.punctuation { color: #c9d1d9; }
+      #__codx-inspector-overlay .token.identifier, #__codx-inspector-overlay .token.variable, #__codx-inspector-overlay .token.declaration { color: #c4a7e7; }
+      #__codx-inspector-overlay .token.function, #__codx-inspector-overlay .token.method, #__codx-inspector-overlay .token.property-access { color: #ff9bce; }
+      #__codx-inspector-overlay .token.builtin, #__codx-inspector-overlay .token.constant { color: #79c0ff; }
+      #__codx-inspector-overlay .token.json-key, #__codx-inspector-overlay .token.env-key { color: #7ee787; }
+      #__codx-inspector-overlay .token.html-text { color: #f0f6fc; }
     `;
     (previewDoc.head || previewDoc.documentElement).appendChild(styles);
   }
@@ -4418,13 +4516,14 @@ function applyProjectState(snapshot, sourceLabel = "project") {
   }
 
   projectFiles = upgradeStarterScriptIfNeeded(files).map((file, index) => ({
-    name: String(file.name || `file-${index + 1}.html`),
+    name: normalizeProjectFileName(file.name, `file-${index + 1}.html`),
     type: String(file.type || "html"),
     content: String(file.content || ""),
     active: false,
   }));
 
-  const requestedActiveName = String(snapshot?.activeFileName || "").trim();
+  normalizeProjectFileNamesInPlace(projectFiles);
+  const requestedActiveName = normalizeProjectFileName(snapshot?.activeFileName || "");
   activeFile =
     projectFiles.find((file) => file.name === requestedActiveName) ||
     projectFiles.find((file) => file.active) ||
@@ -4481,7 +4580,22 @@ function scheduleProjectAutosave() {
 
 function getSavedProjects() {
   try {
-    return JSON.parse(safeLocalStorage("get", SAVED_PROJECTS_KEY) || "[]");
+    const projects = JSON.parse(safeLocalStorage("get", SAVED_PROJECTS_KEY) || "[]");
+    let migrated = false;
+    if (Array.isArray(projects)) {
+      projects.forEach((project) => {
+        const snapshot = project?.snapshot;
+        if (!Array.isArray(snapshot?.files)) return;
+        const requestedActiveName = normalizeProjectFileName(snapshot.activeFileName || "");
+        if (normalizeProjectFileNamesInPlace(snapshot.files, snapshot.previewTarget)) migrated = true;
+        if (snapshot.activeFileName !== requestedActiveName) {
+          snapshot.activeFileName = requestedActiveName;
+          migrated = true;
+        }
+      });
+      if (migrated) safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects));
+    }
+    return Array.isArray(projects) ? projects : [];
   } catch (_err) {
     return [];
   }
@@ -5001,6 +5115,14 @@ function scheduleSessionUpdate() {
 }
 
 function renderFileList() {
+  const normalizedLegacyNames = normalizeProjectFileNamesInPlace(projectFiles);
+  if (normalizedLegacyNames) {
+    scheduleProjectAutosave();
+    if (!fileNameMigrationNoticeShown) {
+      fileNameMigrationNoticeShown = true;
+      showNotification("Spaces in file names were replaced with dashes.", "info");
+    }
+  }
   __codxRescanProjectSuggestionCacheSoon();
   fileList.innerHTML = "";
   projectFiles.forEach((file) => {
@@ -5156,19 +5278,21 @@ async function createNewFile() {
   }
   const dialog = await showAppPrompt(
     "NEW FILE",
-    "Enter file name (e.g., newfile.html or .env):",
+    "Enter a file name. Spaces become dashes; underscores and dashes are allowed.",
     "",
     "newfile.html",
   );
   if (!dialog?.ok) return;
   const name = dialog.value;
   if (!name) return;
-  const trimmedName = name.trim();
+  const rawName = String(name).trim();
+  if (!rawName) return;
+  const trimmedName = normalizeProjectFileName(rawName);
   if (!trimmedName) return;
   const ext = trimmedName.split(".").pop().toLowerCase();
 
   if (!editableTextExtensions.includes(ext)) {
-    showNotification("File must be .html, .css, .js, or .env", "error");
+    showNotification(`Unsupported file type .${ext}`, "error");
     return;
   }
   if (projectFiles.some((file) => file.name.toLowerCase() === trimmedName.toLowerCase())) {
@@ -5215,19 +5339,21 @@ async function renameFile(oldName) {
 
   const dialog = await showAppPrompt(
     "RENAME FILE",
-    "Enter the new file name:",
+    "Enter the new file name. Spaces become dashes:",
     oldName,
     oldName,
   );
   if (!dialog?.ok) return;
   const nextName = dialog.value;
   if (!nextName) return;
-  const name = nextName.trim();
+  const rawName = String(nextName).trim();
+  if (!rawName) return;
+  const name = normalizeProjectFileName(rawName);
   if (!name || name === oldName) return;
 
   const ext = name.split(".").pop().toLowerCase();
   if (!editableTextExtensions.includes(ext)) {
-    showNotification("File must be .html, .css, .js, or .env", "error");
+    showNotification(`Unsupported file type .${ext}`, "error");
     return;
   }
   if (
@@ -7000,20 +7126,85 @@ function wrapTokens(text, patterns) {
 }
 
 function highlightHtmlSegment(code) {
-  const patterns = [
-    { className: "comment", regex: /<!--[\s\S]*?-->/g },
-    { className: "keyword", regex: /<!DOCTYPE[\s\S]*?>/gi },
-    { className: "string", regex: /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g },
-    // Ensure full closing tags like </div> are colorized as tags.
-    { className: "tag", regex: /<\/[a-zA-Z][a-zA-Z0-9-]*\s*>/g },
-    {
-      className: "attr",
-      regex: /\b[a-zA-Z-:]+(?=\s*=\s*(?:"[^"]*"|'[^']*'))/g,
-    },
-    { className: "tag", regex: /<[a-zA-Z][a-zA-Z0-9-]*/g },
-    { className: "tag", regex: /\/?>/g },
-  ];
-  return wrapTokens(code, patterns);
+  let result = "";
+  let index = 0;
+  const token = (value, className) => `<span class="token ${className}">${escapeHtml(value)}</span>`;
+  const tagRegex = /<!--[\s\S]*?-->|<!DOCTYPE[\s\S]*?>|<\/?[A-Za-z][^>]*>/gi;
+  let match;
+
+  const highlightText = (text) => {
+    if (!text) return "";
+    return text.split(/(&[A-Za-z0-9#]+;)/g).map((part) => {
+      if (/^&[A-Za-z0-9#]+;$/.test(part)) return token(part, "entity");
+      return /\S/.test(part) ? token(part, "html-text") : escapeHtml(part);
+    }).join("");
+  };
+
+  const highlightTag = (tagSource) => {
+    if (tagSource.startsWith("<!--")) return token(tagSource, "comment");
+    if (/^<!doctype/i.test(tagSource)) return token(tagSource, "keyword");
+    let output = "";
+    let cursor = 0;
+    const opening = tagSource.match(/^<\/?/)[0];
+    output += token(opening, "tag-punctuation");
+    cursor = opening.length;
+    const tagName = tagSource.slice(cursor).match(/^[A-Za-z][A-Za-z0-9:-]*/)?.[0] || "";
+    output += token(tagName, "tag");
+    cursor += tagName.length;
+
+    while (cursor < tagSource.length) {
+      if (tagSource.startsWith("/>", cursor)) {
+        output += token("/>", "tag-punctuation");
+        cursor += 2;
+        continue;
+      }
+      if (tagSource[cursor] === ">") {
+        output += token(">", "tag-punctuation");
+        cursor += 1;
+        continue;
+      }
+      if (/\s/.test(tagSource[cursor])) {
+        const whitespace = tagSource.slice(cursor).match(/^\s+/)[0];
+        output += escapeHtml(whitespace);
+        cursor += whitespace.length;
+        continue;
+      }
+      const attrName = tagSource.slice(cursor).match(/^[A-Za-z_:][A-Za-z0-9:_.-]*/)?.[0];
+      if (attrName) {
+        output += token(attrName, "attr");
+        cursor += attrName.length;
+        continue;
+      }
+      if (tagSource[cursor] === "=") {
+        output += token("=", "operator");
+        cursor += 1;
+        continue;
+      }
+      if (tagSource[cursor] === '"' || tagSource[cursor] === "'") {
+        const quote = tagSource[cursor];
+        const start = cursor++;
+        while (cursor < tagSource.length) {
+          if (tagSource[cursor] === "\\") cursor += 2;
+          else if (tagSource[cursor++] === quote) break;
+          else cursor += 0;
+        }
+        output += token(tagSource.slice(start, cursor), "string");
+        continue;
+      }
+      const unquoted = tagSource.slice(cursor).match(/^[^\s>]+/)?.[0] || tagSource[cursor];
+      output += token(unquoted, "string");
+      cursor += unquoted.length;
+    }
+    return output;
+  };
+
+  while ((match = tagRegex.exec(code)) !== null) {
+    result += highlightText(code.slice(index, match.index));
+    result += highlightTag(match[0]);
+    index = match.index + match[0].length;
+  }
+  result += highlightText(code.slice(index));
+  return result || " ";
 }
 
 function highlightHtml(code) {
@@ -7274,8 +7465,14 @@ function highlightCss(code, sourceOffset = 0) {
           end: index,
         });
       } else {
-        append(code.slice(start, index));
+        append(code.slice(start, index), "identifier");
       }
+      continue;
+    }
+
+    if ("+-/*%=!&|".includes(char)) {
+      append(char, "operator");
+      index += 1;
       continue;
     }
 
@@ -7298,11 +7495,11 @@ function highlightJs(code) {
   let previousSignificant = "";
 
   const keywords = new Set(
-    "as async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while with yield".split(" "),
+    "as async await break case catch class const continue debugger default delete do else enum export extends finally for from function get if implements import in instanceof interface let namespace new of package private protected public readonly return set static super switch this throw try type typeof var void while with yield satisfies declare abstract override keyof infer unknown never any".split(" "),
   );
   const literals = new Set("true false null undefined NaN Infinity".split(" "));
   const builtins = new Set(
-    "Array ArrayBuffer BigInt Boolean Date Error EvalError Function Intl JSON Map Math Number Object Promise Proxy RangeError ReferenceError Reflect RegExp Set String Symbol SyntaxError TypeError URIError WeakMap WeakSet console document window globalThis fetch localStorage sessionStorage navigator location history URL URLSearchParams setTimeout clearTimeout setInterval clearInterval requestAnimationFrame parseInt parseFloat isNaN isFinite encodeURI decodeURI encodeURIComponent decodeURIComponent".split(" "),
+    "Array ArrayBuffer Atomics BigInt BigInt64Array BigUint64Array Boolean DataView Date Error EvalError FinalizationRegistry Float32Array Float64Array Function Int8Array Int16Array Int32Array Intl JSON Map Math Number Object Promise Proxy RangeError ReferenceError Reflect RegExp Set SharedArrayBuffer String Symbol SyntaxError TypeError Uint8Array Uint8ClampedArray Uint16Array Uint32Array URIError WeakMap WeakRef WeakSet WebAssembly console document window globalThis fetch localStorage sessionStorage navigator location history URL URLSearchParams URLPattern Headers Request Response FormData Blob File ReadableStream WritableStream TransformStream TextEncoder TextDecoder AbortController AbortSignal EventTarget Event setTimeout clearTimeout setInterval clearInterval setImmediate clearImmediate queueMicrotask structuredClone requestAnimationFrame cancelAnimationFrame parseInt parseFloat isNaN isFinite encodeURI decodeURI encodeURIComponent decodeURIComponent process Buffer require module exports __dirname __filename global performance crypto".split(" "),
   );
 
   const append = (text, className = "") => {
@@ -7431,9 +7628,14 @@ function highlightJs(code) {
       if (keywords.has(word)) append(word, "keyword");
       else if (literals.has(word)) append(word, "constant");
       else if (builtins.has(word)) append(word, "builtin");
-      else if (/^\s*\(/.test(afterWord) && beforeWord !== ".") append(word, "function");
+      else if (beforeWord === "." && /^\s*\(/.test(afterWord)) append(word, "method");
+      else if (beforeWord === ".") append(word, "property-access");
+      else if (["class", "extends", "implements", "new"].includes(previousSignificant)) append(word, "class-name");
+      else if (["const", "let", "var", "import", "catch"].includes(previousSignificant)) append(word, "declaration");
+      else if (/^\s*:/.test(afterWord)) append(word, "property");
+      else if (/^\s*\(/.test(afterWord)) append(word, "function");
       else if (/^[A-Z][A-Za-z0-9_$]*$/.test(word)) append(word, "class-name");
-      else append(word);
+      else append(word, "identifier");
       previousSignificant = word;
       continue;
     }
@@ -7457,6 +7659,29 @@ function highlightJs(code) {
   return result || " ";
 }
 
+function highlightJson(code) {
+  return wrapTokens(code, [
+    { className: "json-key", regex: /"(?:\\.|[^"\\])*"(?=\s*:)/g },
+    { className: "string", regex: /"(?:\\.|[^"\\])*"/g },
+    { className: "number", regex: /-?\b(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g },
+    { className: "constant", regex: /\b(?:true|false|null)\b/g },
+    { className: "operator", regex: /:/g },
+    { className: "punctuation", regex: /[{}[\],]/g },
+  ]);
+}
+
+function highlightEnv(code) {
+  return String(code || "").split("\n").map((line) => {
+    if (/^\s*#/.test(line)) return `<span class="token comment">${escapeHtml(line)}</span>`;
+    const match = line.match(/^(\s*)(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(.*)$/);
+    if (!match) return /\S/.test(line) ? `<span class="token identifier">${escapeHtml(line)}</span>` : escapeHtml(line);
+    const exportKeyword = /^\s*export\s+/.test(line) ? '<span class="token keyword">export</span> ' : "";
+    const value = match[4];
+    const valueClass = /^(?:true|false|null)$/i.test(value.trim()) ? "constant" : /^-?\d+(?:\.\d+)?$/.test(value.trim()) ? "number" : "string";
+    return `${escapeHtml(match[1])}${exportKeyword}<span class="token env-key">${escapeHtml(match[2])}</span><span class="token operator">${escapeHtml(match[3])}</span><span class="token ${valueClass}">${escapeHtml(value)}</span>`;
+  }).join("\n") || " ";
+}
+
 function highlightPlainText(code) {
   return escapeHtml(code) || " ";
 }
@@ -7466,9 +7691,13 @@ function renderSyntaxHighlight(textarea) {
   const code = textarea.value || "";
   let highlighted = "";
 
-  if (activeFile.type === "html") highlighted = highlightHtml(code);
-  else if (activeFile.type === "css") highlighted = highlightCss(code);
-  else if (activeFile.type === "js") highlighted = highlightJs(code);
+  const extensionType = getFileType(activeFile.name || "");
+  const fileType = String(extensionType || activeFile.type || "").toLowerCase();
+  if (["html", "htm", "svg", "xml"].includes(fileType)) highlighted = highlightHtml(code);
+  else if (["css", "scss", "sass", "less"].includes(fileType)) highlighted = highlightCss(code);
+  else if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) highlighted = highlightJs(code);
+  else if (["json", "jsonc"].includes(fileType)) highlighted = highlightJson(code);
+  else if (fileType === "env" || /^\.env(?:\.|$)/i.test(activeFile.name || "")) highlighted = highlightEnv(code);
   else highlighted = highlightPlainText(code);
 
   if (code.endsWith("\n")) highlighted += " ";
@@ -8907,6 +9136,7 @@ function getFileIcon(fileName) {
   if (ext === "html") return "HTML";
   if (ext === "css") return "CSS";
   if (ext === "js" || ext === "mjs") return "JS";
+  if (ext === "json") return "JSON";
   if (ext === "env") return "ENV";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "IMG";
   if (["mp3", "wav", "ogg", "mp4", "webm", "m4a"].includes(ext)) return "MED";
@@ -8920,9 +9150,10 @@ function createFileExtensionIcon(fileName) {
     css: "fa-brands fa-css3-alt",
     js: "fa-brands fa-js",
     mjs: "fa-brands fa-js",
+    json: "fa-solid fa-code",
     env: "fa-solid fa-key",
   };
-  const safeExt = ["html", "css", "js", "mjs", "env"].includes(ext) ? ext : "file";
+  const safeExt = ["html", "css", "js", "mjs", "json", "env"].includes(ext) ? ext : "file";
   const icon = document.createElement("span");
   icon.className = `file-extension-icon file-extension-icon-${safeExt}`;
   icon.title = `${getFileIcon(fileName)} file`;
@@ -10973,8 +11204,10 @@ function loadImportedProjectFiles(importedFiles, successMessage) {
 
   projectFiles = importedFiles.map((file, index) => ({
     ...file,
+    name: normalizeProjectFileName(file?.name, `file-${index + 1}.txt`),
     active: index === 0,
   }));
+  normalizeProjectFileNamesInPlace(projectFiles);
   activeFile = projectFiles[0];
   const editor = document.getElementById("activeEditor");
   if (editor && activeFile) {
@@ -10995,7 +11228,8 @@ function readDroppedTextFile(file, relativePath = file.name) {
     const normalizedPath = String(relativePath || file.name || "")
       .replace(/\\/g, "/")
       .replace(/^\/+/, "");
-    const ext = normalizedPath.split(".").pop().toLowerCase();
+    const safePath = normalizeProjectFileName(normalizedPath);
+    const ext = safePath.split(".").pop().toLowerCase();
     if (!editableTextExtensions.includes(ext)) {
       resolve(null);
       return;
@@ -11004,13 +11238,13 @@ function readDroppedTextFile(file, relativePath = file.name) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       resolve({
-        name: normalizedPath,
+        name: safePath,
         type: ext,
         content: ev.target.result,
         active: false,
       });
     };
-    reader.onerror = () => reject(reader.error || new Error(`Failed to read ${normalizedPath}`));
+    reader.onerror = () => reject(reader.error || new Error(`Failed to read ${safePath}`));
     reader.readAsText(file);
   });
 }
@@ -11191,12 +11425,13 @@ async function importProjectFromZipFile(file) {
 
     zip.forEach((path, entry) => {
       const normalizedPath = String(path || "").replace(/\\/g, "/");
-      const ext = normalizedPath.split(".").pop().toLowerCase();
+      const safePath = normalizeProjectFileName(normalizedPath);
+      const ext = safePath.split(".").pop().toLowerCase();
       if (editableTextExtensions.includes(ext) && !entry.dir) {
-        foundFiles.push(normalizedPath);
+        foundFiles.push(safePath);
         importTasks.push(
           entry.async("string").then((content) => ({
-            name: normalizedPath,
+            name: safePath,
             type: ext,
             content,
             active: false,
@@ -13652,9 +13887,10 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
   if (!Array.isArray(files) || !files.length) return;
   isApplyingRemoteState = true;
   try {
-    const requestedActiveName = String(activeFileName || "").trim();
-    const currentActiveName = activeFile ? activeFile.name : null;
+    const requestedActiveName = normalizeProjectFileName(activeFileName || "");
+    const currentActiveName = activeFile ? normalizeProjectFileName(activeFile.name) : null;
     projectFiles = files;
+    normalizeProjectFileNamesInPlace(projectFiles);
     const nextActive =
       (preferRemoteActive ? projectFiles.find((f) => f.name === requestedActiveName) : null) ||
       projectFiles.find((f) => f.name === currentActiveName) ||
@@ -14860,7 +15096,7 @@ mediaInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const base64 = ev.target.result;
-      const name = file.name;
+      const name = normalizeProjectFileName(file.name);
       const ext = name.split(".").pop().toLowerCase();
       const type = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext)
         ? "img"

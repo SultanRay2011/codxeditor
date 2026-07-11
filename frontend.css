@@ -16,6 +16,14 @@
   --syntax-selector: #f2cc60;
   --syntax-operator: #ff9bce;
   --syntax-punctuation: #c9d1d9;
+  --syntax-variable: #ffa657;
+  --syntax-identifier: #c4a7e7;
+  --syntax-parameter: #ffb86c;
+  --syntax-method: #d2a8ff;
+  --syntax-module: #f2cc60;
+  --syntax-json-key: #7ee787;
+  --syntax-html-text: #f0f6fc;
+  --syntax-env-key: #7ee787;
   --bg-primary: #0d1117;
   --bg-secondary: #161b22;
   --bg-tertiary: #21262d;
@@ -68,6 +76,14 @@ body.light {
   --syntax-selector: #7a4e00;
   --syntax-operator: #8250df;
   --syntax-punctuation: #24292f;
+  --syntax-variable: #953800;
+  --syntax-identifier: #6639ba;
+  --syntax-parameter: #9a6700;
+  --syntax-method: #8250df;
+  --syntax-module: #7a4e00;
+  --syntax-json-key: #116329;
+  --syntax-html-text: #24292f;
+  --syntax-env-key: #116329;
 }
 
 * {
@@ -367,6 +383,10 @@ body.zen-mode #zenExitBtn {
   color: #f7df1e;
 }
 
+.file-extension-icon-json {
+  color: #f5c451;
+}
+
 .file-extension-icon-env {
   color: var(--warning-color);
 }
@@ -603,6 +623,7 @@ body.zen-mode #zenExitBtn {
   font-feature-settings: "liga" 0, "calt" 0;
   white-space: pre;
   tab-size: 4;
+  color: var(--syntax-identifier);
 }
 
 #errorHighlightLayer {
@@ -649,7 +670,7 @@ body.light .error-token-highlight {
 }
 
 #highlightLayer .token {
-  color: var(--text-primary);
+  color: var(--syntax-identifier);
 }
 
 #highlightLayer .token.comment {
@@ -674,6 +695,11 @@ body.light .error-token-highlight {
 
 #highlightLayer .token.tag {
   color: var(--syntax-tag);
+}
+
+#highlightLayer .token.tag-punctuation {
+  color: var(--syntax-tag);
+  font-weight: 700;
 }
 
 #highlightLayer .token.attr {
@@ -757,6 +783,41 @@ body.light .error-token-highlight {
 
 #highlightLayer .token.punctuation {
   color: var(--syntax-punctuation);
+}
+
+#highlightLayer .token.variable,
+#highlightLayer .token.declaration {
+  color: var(--syntax-variable);
+}
+
+#highlightLayer .token.identifier {
+  color: var(--syntax-identifier);
+}
+
+#highlightLayer .token.parameter {
+  color: var(--syntax-parameter);
+  font-style: italic;
+}
+
+#highlightLayer .token.method,
+#highlightLayer .token.property-access {
+  color: var(--syntax-method);
+}
+
+#highlightLayer .token.module {
+  color: var(--syntax-module);
+}
+
+#highlightLayer .token.json-key {
+  color: var(--syntax-json-key);
+}
+
+#highlightLayer .token.html-text {
+  color: var(--syntax-html-text);
+}
+
+#highlightLayer .token.env-key {
+  color: var(--syntax-env-key);
 }
 
 #settingsPreview {
@@ -1740,6 +1801,85 @@ iframe {
 
 .console-container.show {
   display: block;
+}
+
+.preview.node-runtime-active #output,
+.preview.node-runtime-active .preview-zoom-modal {
+  display: none !important;
+}
+
+.preview.node-runtime-active .console-container {
+  display: flex !important;
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  flex-direction: column;
+  border-top: 0;
+}
+
+.preview.node-runtime-active #consoleOutput {
+  display: none;
+}
+
+.node-terminal[hidden] {
+  display: none;
+}
+
+.preview.node-runtime-active .node-terminal {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: #080c12;
+}
+
+.node-terminal-output {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  color: #d6deeb;
+  font: 12px/1.55 var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.node-terminal-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-color);
+  color: var(--accent-color);
+  background: var(--bg-secondary);
+  font-family: var(--font-code);
+}
+
+.node-terminal-form input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.node-terminal-server-link {
+  color: #7ee787;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.node-terminal-server-link:hover {
+  color: #aff5b4;
+}
+
+#enableNodeRuntimeBtn.node-runtime-enabled {
+  border-color: #68a063;
+  color: #9be394;
 }
 
 .console-output {

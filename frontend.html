@@ -218,6 +218,16 @@
           <div class="header-more-section">
             <div class="header-more-section-title">Editor Extras</div>
             <button
+              id="enableNodeRuntimeBtn"
+              class="run-button header-more-action"
+              title="Enable the browser-isolated Node.js runtime"
+              aria-label="Enable Node.js runtime"
+              type="button"
+            >
+              <i class="fa-brands fa-node-js"></i>
+              <strong id="enableNodeRuntimeBtnLabel">ENABLE NODE.JS</strong>
+            </button>
+            <button
               id="fontPickerBtn"
               class="run-button header-more-action"
               title="Browse and copy fonts"
@@ -521,6 +531,13 @@
             role="log"
             aria-live="polite"
           ></div>
+          <div id="nodeTerminal" class="node-terminal" hidden>
+            <div id="nodeTerminalOutput" class="node-terminal-output" role="log" aria-live="polite"></div>
+            <form id="nodeTerminalForm" class="node-terminal-form" autocomplete="off">
+              <span aria-hidden="true">$</span>
+              <input id="nodeTerminalInput" type="text" spellcheck="false" aria-label="Node.js terminal command" placeholder="npm install express">
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -1540,5 +1557,6 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/frontend.js"></script>
+    <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>
