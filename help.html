@@ -542,6 +542,8 @@
             <span class="pill"><i class="fa-solid fa-eye"></i> Live preview</span>
             <span class="pill"><i class="fa-solid fa-share-nodes"></i> Publishing</span>
             <span class="pill"><i class="fa-solid fa-users"></i> Collaboration</span>
+            <span class="pill"><i class="fa-brands fa-github"></i> GitHub</span>
+            <span class="pill"><i class="fa-brands fa-node-js"></i> Node.js</span>
             <span class="pill"><i class="fa-solid fa-keyboard"></i> Shortcuts</span>
           </div>
         </div>
@@ -556,6 +558,8 @@
             <li><a href="#workspace">Workspace Layout</a></li>
             <li><a href="#editing">Editing Tools</a></li>
             <li><a href="#projects">Projects & Files</a></li>
+            <li><a href="#github">GitHub Repositories</a></li>
+            <li><a href="#nodejs">Node.js Runtime</a></li>
             <li><a href="#preview">Preview & Console</a></li>
             <li><a href="#publish">Publishing</a></li>
             <li><a href="#settings">Settings & Fonts</a></li>
@@ -575,9 +579,10 @@
             <ul class="simple-list">
               <li><strong>Auto-Run:</strong> keeps the preview in sync while you type.</li>
               <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
+              <li><strong>GitHub:</strong> signs in through GitHub OAuth, lists repositories, and lets you create, edit, upload, and commit repository files.</li>
               <li><strong>Help:</strong> opens this guide whenever you need a quick reminder.</li>
-              <li><strong>More:</strong> opens project tools such as saving, templates, publishing, fonts, Zen Mode, and the homepage link.</li>
-              <li><strong>Guided tour:</strong> explains the main editor controls step by step and can be restarted later.</li>
+              <li><strong>More:</strong> opens saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
+              <li><strong>Guided tour:</strong> explains the main editor controls step by step with Back, Next, Finish, and Close actions.</li>
             </ul>
           </section>
 
@@ -589,6 +594,7 @@
                 <ul>
                   <li>Use Auto-Run and Console toggles from the top bar.</li>
                   <li>Open collaboration, fullscreen preview, settings, media upload, and help from the main header.</li>
+                  <li>Use the preview code icon to inspect rendered HTML and the magnifying-glass icon to zoom in, zoom out, or reset preview scale.</li>
                   <li>The More menu keeps extra project actions in one place so the editor stays cleaner.</li>
                   <li>The Homepage option returns you to the main site from inside the editor.</li>
                 </ul>
@@ -607,13 +613,23 @@
                 <ul>
                   <li>Open the preview in fullscreen to check layouts with more space.</li>
                   <li>Exit fullscreen from the browser fullscreen control or the same editor button.</li>
+                  <li>Settings can choose whether the complete preview panel and its tools remain visible in fullscreen.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-laptop-code"></i> Zen Mode</h3>
                 <ul>
                   <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
+                  <li>The Show files in Zen Mode setting controls whether the file explorer remains visible.</li>
                   <li>Use the exit button or press <kbd>Esc</kbd> to leave Zen Mode.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
+                <ul>
+                  <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
+                  <li>Editor Extras contains Enable Node.js, Fonts, Zen Mode, and Homepage.</li>
+                  <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
                 </ul>
               </article>
             </div>
@@ -625,9 +641,9 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-code"></i> Code Editor</h3>
                 <ul>
-                  <li>Write HTML, CSS, JavaScript, and environment-style text files.</li>
+                  <li>Write HTML, CSS, JavaScript, JSON, environment files, and Node backend files such as <code>.mjs</code>, <code>.cjs</code>, and TypeScript-family files.</li>
                   <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
-                  <li>CSS and JavaScript inside HTML blocks receive their own highlighting.</li>
+                  <li>CSS and JavaScript inside HTML blocks receive their own highlighting, while JSON keys, Node globals, and environment keys use dedicated colors.</li>
                   <li>Tabs insert four spaces for tidy indentation.</li>
                   <li>Remote cursors and typing indicators appear in the editor during collaboration.</li>
                 </ul>
@@ -671,7 +687,7 @@
                 <h3><i class="fa-solid fa-graduation-cap"></i> Guided Tour</h3>
                 <ul>
                   <li>The built-in tour explains the main controls step by step.</li>
-                  <li>You can restart the tour from the settings area if you want a walkthrough again.</li>
+                  <li>Use Back, Next, Finish, or Close to move through the available steps.</li>
                 </ul>
               </article>
             </div>
@@ -687,6 +703,8 @@
                   <li>Switch between files from the explorer.</li>
                   <li>Rename or delete files when your project structure changes.</li>
                   <li>Duplicate file names are blocked where the editor needs unique names.</li>
+                  <li>File names cannot contain spaces. Spaces are automatically replaced with dashes; dashes and underscores are supported.</li>
+                  <li>Older saved, imported, or collaborative projects are migrated to the same filename rule and matching project references are updated.</li>
                   <li>The file list can show file-level error status and team focus indicators.</li>
                 </ul>
               </article>
@@ -705,6 +723,7 @@
                   <li>Choose from built-in starters for landing pages, portfolios, and contact forms.</li>
                   <li>Templates include matching markup, styling, and scripts so you can begin faster.</li>
                   <li>If you have unsaved work, the editor asks before replacing your current project.</li>
+                  <li>Apply a template when you want to replace the current project with a coordinated frontend starter.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -733,6 +752,98 @@
             </div>
           </section>
 
+          <section class="section-card" id="github">
+            <h2>GitHub Repositories</h2>
+            <p class="section-copy">
+              Connect with GitHub OAuth from More. CodX Editor keeps the access token on the server in an HTTP-only session and opens a repository workspace after you sign in.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-brands fa-github"></i> Connect & Browse</h3>
+                <ul>
+                  <li>Choose Connect to GitHub and complete the normal GitHub account authorization screen.</li>
+                  <li>After connecting, click the GitHub button again to search repositories you can access.</li>
+                  <li>Public/private status, default branch, write access, and repository descriptions are shown on repository cards.</li>
+                  <li>The connection survives page refreshes. Use Disconnect when you want to remove the CodX Editor session.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-folder-tree"></i> Repository Files</h3>
+                <ul>
+                  <li>Choose Update files to load the selected branch's existing file tree.</li>
+                  <li>Use the refresh icon to reload the current branch without closing the repository window.</li>
+                  <li>Click an existing text file to load and edit its contents.</li>
+                  <li>Binary files can be replaced through Upload file but are not opened in the text editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-file-circle-plus"></i> Create & Upload</h3>
+                <ul>
+                  <li>Create file adds a new path and text content to the pending changes list.</li>
+                  <li>Upload file supports one or more local files.</li>
+                  <li>Created, edited, and uploaded files can be reviewed or removed before committing.</li>
+                  <li>Spaces in newly created or uploaded names are converted to dashes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-code-commit"></i> Commit Changes</h3>
+                <ul>
+                  <li>Choose the target branch and stage at least one created, edited, or uploaded file.</li>
+                  <li>The commit message and longer description are optional.</li>
+                  <li>When the message is blank, CodX Editor uses <code>Update files from CodX Editor</code>.</li>
+                  <li>After success, use the commit link to inspect the result on GitHub.</li>
+                  <li>Avoid uploading secrets such as <code>.env</code> files.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="nodejs">
+            <h2>Node.js Runtime</h2>
+            <p class="section-copy">
+              Enable Node.js from More to start a browser-isolated Node workspace. Node processes and npm packages run inside a WebContainer in your browser, not inside the CodX Editor or Railway server.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-brands fa-node-js"></i> Enable Node.js</h3>
+                <ul>
+                  <li>Enable Node.js hides the normal webpage preview and expands the console into a command terminal.</li>
+                  <li>If missing, CodX Editor creates <code>package.json</code> with project name <code>project</code> and a starter <code>server.js</code>.</li>
+                  <li>Disable Node.js restores the normal preview while leaving the browser runtime available for the current tab.</li>
+                  <li>Use a current Chrome or Edge browser and hard-refresh if the isolation-header message appears.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-terminal"></i> Commands</h3>
+                <ul>
+                  <li>Type commands in the Node console and press <kbd>Enter</kbd>.</li>
+                  <li>Install dependencies with commands such as <code>npm install express</code>.</li>
+                  <li>Start the generated project with <code>npm start</code>.</li>
+                  <li>Terminal output removes spinner/control codes so npm output stays readable.</li>
+                  <li>Dependency changes sync <code>package.json</code> and <code>package-lock.json</code> back into the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-server"></i> Server Preview</h3>
+                <ul>
+                  <li>The default runtime port is <code>8000</code>.</li>
+                  <li>When a server becomes ready, the console shows a clickable <code>http://localhost:8000</code> label.</li>
+                  <li>The link opens a CodX Editor Node.js preview tab that securely embeds the browser runtime server.</li>
+                  <li>The underlying WebContainer proxy address is handled automatically.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-shield-halved"></i> Runtime Notes</h3>
+                <ul>
+                  <li>Project files are copied into the in-browser runtime before commands run.</li>
+                  <li>Native Node addons may not work; prefer JavaScript or WebAssembly-compatible packages.</li>
+                  <li>Node mode does not expose Railway environment variables or GitHub OAuth secrets to project code.</li>
+                  <li>Closing or refreshing the browser tab ends that temporary Node runtime.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
           <section class="section-card" id="preview">
             <h2>Preview & Console</h2>
             <div class="feature-grid">
@@ -744,6 +855,8 @@
                   <li>The preview can also show a favicon when your project provides one.</li>
                   <li>Internal links can move between pages inside your project.</li>
                   <li>Missing project pages show a friendly fallback instead of breaking the editor.</li>
+                  <li>Use the inspect icon, then hover a preview element to see its highlighted HTML structure above that element.</li>
+                  <li>Use the magnifying-glass icon to open zoom controls with plus, minus, percentage, and reset actions.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -752,6 +865,7 @@
                   <li>Toggle the console panel from the header.</li>
                   <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
                   <li>Use Clear to remove old console messages.</li>
+                  <li>When Node.js is enabled, this area becomes an interactive command terminal and the normal preview closes.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -842,6 +956,8 @@
                   <li>Adjust editor text size.</li>
                   <li>Preview settings before applying them.</li>
                   <li>Reset settings back to defaults when needed.</li>
+                  <li>Use toggle controls for Show files in Zen Mode and Preview panel in fullscreen.</li>
+                  <li>Background and theme color fields use the same interactive color picker as CSS color values.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -861,6 +977,15 @@
                   <li>This requires internet access because the font is loaded from Google.</li>
                 </ul>
               </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-language"></i> Automatic Language</h3>
+                <ul>
+                  <li>CodX Editor detects the visitor’s country and translates visible interface controls into a local language.</li>
+                  <li>Local development falls back to the browser language when a public country cannot be detected.</li>
+                  <li>Code, filenames, preview content, terminal output, console output, and collaboration messages are never translated.</li>
+                  <li>Translations are cached to make later visits faster and reduce API usage.</li>
+                </ul>
+              </article>
             </div>
           </section>
 
@@ -874,9 +999,11 @@
                 <h3><i class="fa-solid fa-users"></i> Sessions</h3>
                 <ul>
                   <li>Create a session and share the invite link.</li>
-                  <li>Join with a display name and personal color.</li>
+                  <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
+                  <li>Join with a display name, personal color, and a collaboration cursor icon.</li>
                   <li>Invalid session links show a friendly not-found page.</li>
                   <li>If approval is enabled, guests wait until the host accepts them.</li>
+                  <li>If the connection drops, offline notices are throttled to about once per minute and a reconnect message appears once the session is restored.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -892,6 +1019,7 @@
                 <h3><i class="fa-solid fa-arrow-pointer"></i> Presence</h3>
                 <ul>
                   <li>See where collaborators are typing.</li>
+                  <li>Choose a pointer, hand, mouse, crosshair, pen, or text cursor for other collaborators to see.</li>
                   <li>See live cursors in participant colors.</li>
                   <li>Follow a participant to stay on their file and cursor location.</li>
                   <li>Team focus and pinned file indicators help guide the group.</li>
@@ -967,7 +1095,7 @@
                 <ul>
                   <li>The tutorial highlights core controls such as Auto-Run, Console, Collaboration, More, Files, Run, ZIP tools, and Preview.</li>
                   <li>Use Back, Next, Finish, or Close to move through it at your pace.</li>
-                  <li>Restart the tutorial from editor settings whenever you want a refresher.</li>
+                  <li>The tutorial remains available during its guided flow; the removed reset-tutorial control is not part of settings.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1005,6 +1133,7 @@
                   <li>Open the console and check for script errors.</li>
                   <li>Check file badges for syntax issues.</li>
                   <li>Make sure linked project paths match files in the explorer.</li>
+                  <li>Remember that spaces in filenames are converted to dashes.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1013,6 +1142,7 @@
                   <li>Save the project in the browser for quick local access.</li>
                   <li>Export a ZIP archive when you want a portable copy.</li>
                   <li>Publish only when you are ready to share a browser link.</li>
+                  <li>Use GitHub commits when you want version history in a repository.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1026,9 +1156,9 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-compass"></i> If You Feel Lost</h3>
                 <ul>
-                  <li>Restart the guided tour from settings.</li>
                   <li>Use the More menu as the main place for project-level actions.</li>
                   <li>Keep the console open while learning JavaScript; it is your best little truth-teller.</li>
+                  <li>For Node projects, enable Node.js and run commands from the expanded terminal.</li>
                 </ul>
               </article>
             </div>
