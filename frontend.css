@@ -3680,3 +3680,397 @@ iframe {
 .github-status.success { border-color: #22c55e; color: #22c55e; }
 .github-empty { padding: 40px 12px; text-align: center; color: var(--text-secondary); }
 @media (max-width: 650px) { .github-repo-modal { padding: 8px; } .github-repo-dialog { width: 100%; max-height: 96vh; } .github-repo-body { padding: 15px; } .github-form-grid { grid-template-columns: 1fr; } }
+
+/* Unified modal surfaces */
+:is(
+  #settingsModal,
+  #collabModal,
+  #announcementPopup,
+  #appDialog,
+  #developerConsoleModal,
+  #projectLibraryModal,
+  #fontPickerModal,
+  #githubRepoModal,
+  #fontAwesomeIconModal
+) {
+  padding: clamp(10px, 2.4vw, 28px) !important;
+  background: rgba(4, 8, 13, 0.76) !important;
+  backdrop-filter: blur(9px) saturate(115%);
+  -webkit-backdrop-filter: blur(9px) saturate(115%);
+}
+
+:is(
+  #settingsModal > div,
+  #collabModal > div,
+  #announcementPopup > div,
+  #appDialog > div,
+  #developerConsoleModal > div,
+  #projectLibraryModal > div,
+  #fontPickerModal > div,
+  .github-repo-dialog,
+  .icon-catalog-dialog,
+  .preview-zoom-dialog,
+  #tutorialCard
+) {
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, var(--accent-color) 28%) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--bg-secondary) 96%, #ffffff 4%), var(--bg-secondary)) !important;
+  color: var(--text-primary);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.56),
+    0 0 0 1px rgba(255, 255, 255, 0.025) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset !important;
+}
+
+@keyframes modalCardEnter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+:is(
+  #settingsModal,
+  #collabModal,
+  #announcementPopup,
+  #appDialog,
+  #developerConsoleModal,
+  #projectLibraryModal,
+  #fontPickerModal
+)[style*="display: flex"] > div,
+#githubRepoModal:not([hidden]) .github-repo-dialog,
+#fontAwesomeIconModal:not([hidden]) .icon-catalog-dialog {
+  animation: modalCardEnter 0.2s ease-out;
+}
+
+:is(
+  #settingsModal,
+  #collabModal,
+  #appDialog,
+  #developerConsoleModal,
+  #projectLibraryModal,
+  #fontPickerModal,
+  #githubRepoModal,
+  #fontAwesomeIconModal
+) :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 82%, #ffffff);
+  outline-offset: 2px;
+}
+
+/* Collaboration modal: spacious shell, stable header/actions, scrolling body */
+#collabModal {
+  overflow: hidden;
+}
+
+#collabModal > div {
+  width: min(860px, 96vw) !important;
+  max-width: 860px !important;
+  max-height: min(900px, 92vh) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  text-align: left !important;
+}
+
+#modalTitle {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  margin: 0 !important;
+  padding: 20px 70px 18px !important;
+  border-bottom: 1px solid var(--border-color);
+  background:
+    radial-gradient(circle at 18% 0, color-mix(in srgb, var(--accent-color) 18%, transparent), transparent 44%),
+    color-mix(in srgb, var(--bg-tertiary) 70%, transparent);
+  color: var(--text-primary);
+  font-size: clamp(16px, 2vw, 20px);
+  letter-spacing: 0.055em;
+}
+
+#modalTitle::before {
+  content: "";
+  width: 4px;
+  height: 24px;
+  margin-right: 11px;
+  border-radius: 999px;
+  background: var(--accent-color);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-color) 55%, transparent);
+}
+
+#collabModal #closeModalBtn {
+  top: 16px !important;
+  right: 18px !important;
+  z-index: 4;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-primary) !important;
+  font-size: 28px !important;
+}
+
+#collabModal #closeModalBtn[style*="display: none"] {
+  display: none !important;
+}
+
+#modalBody {
+  min-height: 0;
+  margin: 0 !important;
+  padding: clamp(16px, 2.5vw, 26px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+#errorMsg {
+  margin: 0 22px 16px !important;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #ef4444 62%, var(--border-color));
+  border-radius: 10px;
+  background: color-mix(in srgb, #ef4444 11%, var(--bg-primary));
+  color: #ff8d8d !important;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#modalActions {
+  flex-wrap: wrap;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-primary) 74%, transparent);
+}
+
+#modalActions .run-button {
+  flex: 0 1 auto !important;
+  min-width: 132px;
+  min-height: 42px;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 72%, #ffffff 12%);
+  border-radius: 10px;
+}
+
+#modalDoneBtn {
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-color)) !important;
+  color: #ffffff !important;
+}
+
+.collab-back-button {
+  top: 19px;
+  left: 20px;
+  z-index: 4;
+  width: 38px;
+  height: 34px;
+  border-radius: 10px;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.collab-back-button:hover {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 13%, var(--bg-tertiary));
+  transform: translateX(-2px);
+}
+
+.collab-section-card {
+  margin-bottom: 16px;
+  padding: clamp(15px, 2vw, 20px);
+  border-color: color-mix(in srgb, var(--border-color) 80%, var(--accent-color) 20%);
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-color) 5%, transparent), transparent 48%),
+    color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.collab-section-card:last-child { margin-bottom: 0; }
+.collab-section-title { font-size: 12px; letter-spacing: .075em; }
+.collab-section-note { max-width: 74ch; font-size: 12px; line-height: 1.6; }
+
+.collab-choice-grid { gap: 16px; }
+.collab-choice-card {
+  position: relative;
+  min-height: 160px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--accent-color) 11%, transparent), transparent 58%),
+    var(--bg-primary);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+.collab-choice-card i {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--bg-tertiary));
+  font-size: 22px;
+}
+
+.collab-choice-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.2);
+}
+
+.collab-form-field input[type="text"],
+.collab-pin-box {
+  border-radius: 11px;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.collab-form-field input[type="text"]:focus,
+.collab-pin-box:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 4%, var(--bg-primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.collab-waiting-room-row,
+.collab-meta-item,
+.collab-participant-row,
+.collab-pending-row,
+.collab-bulk-participant-option,
+.collab-pin-card {
+  border-radius: 13px;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.collab-participant-row:hover,
+.collab-pending-row:hover,
+.collab-bulk-participant-option:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 58%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 6%, var(--bg-primary));
+}
+
+.collab-control-grid { gap: 12px; }
+.collab-control-btn {
+  min-height: 84px;
+  border-radius: 13px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .14);
+}
+
+.collab-control-btn:hover { transform: translateY(-2px); filter: brightness(1.05); }
+.collab-timeline-list, .collab-bulk-participant-list { scrollbar-gutter: stable; }
+
+/* Settings, fonts, projects, alerts, and utility dialogs */
+#settingsModal > div {
+  width: min(720px, 96vw) !important;
+  max-width: 720px !important;
+  max-height: 92vh !important;
+  padding: clamp(20px, 3vw, 30px) !important;
+}
+
+#settingsTitle,
+#fontPickerTitle,
+#projectLibraryTitle {
+  padding-right: 52px;
+  font-size: clamp(20px, 2.5vw, 26px);
+  letter-spacing: -.02em;
+}
+
+:is(#closeSettingsBtn, #closeProjectLibraryBtn, #closeFontPickerBtn) {
+  top: 14px !important;
+  right: 16px !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-primary) !important;
+  font-size: 28px !important;
+}
+
+#settingsModal > div > div:not(:last-child) {
+  padding: 15px !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 13px !important;
+  background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent) !important;
+}
+
+#settingsModal :is(input[type="text"], select) {
+  min-height: 44px;
+  border-radius: 9px !important;
+}
+
+#settingsModal input[type="color"] {
+  width: 54px !important;
+  height: 44px !important;
+  padding: 3px;
+  border-radius: 10px !important;
+  background: var(--bg-primary);
+}
+
+#settingsPreview { border-radius: 11px !important; }
+
+#fontPickerModal > div {
+  width: min(1040px, 96vw) !important;
+  max-width: 1040px !important;
+  max-height: 92vh !important;
+  padding: clamp(18px, 2.6vw, 28px) !important;
+}
+
+#fontPickerModal .font-card {
+  border-radius: 13px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .12);
+}
+
+#projectLibraryModal > div { padding: clamp(20px, 3vw, 30px) !important; }
+#projectLibraryBody { min-height: 90px; }
+
+#announcementPopup > div,
+#appDialog > div {
+  width: min(500px, 94vw) !important;
+  padding: clamp(22px, 4vw, 30px) !important;
+}
+
+#announcementPopupOkBtn { min-width: 120px; min-height: 42px; justify-content: center; margin: 0 auto; }
+#appDialogInput { min-height: 44px; border-radius: 10px !important; }
+#appDialogActions .run-button { min-width: 110px; min-height: 40px; justify-content: center; border-radius: 10px; }
+
+#developerConsoleModal > div { border-radius: 18px !important; }
+.github-repo-dialog, .icon-catalog-dialog { border-radius: 18px !important; }
+.github-repo-header, .icon-catalog-header { background: color-mix(in srgb, var(--bg-tertiary) 68%, transparent); }
+
+.preview-zoom-dialog {
+  padding: 16px !important;
+  border-radius: 15px !important;
+  background: var(--bg-secondary) !important;
+}
+
+#tutorialCard {
+  border-width: 1px !important;
+  border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color)) !important;
+}
+
+@media (max-width: 680px) {
+  :is(
+    #settingsModal,
+    #collabModal,
+    #announcementPopup,
+    #appDialog,
+    #developerConsoleModal,
+    #projectLibraryModal,
+    #fontPickerModal,
+    #githubRepoModal,
+    #fontAwesomeIconModal
+  ) { padding: 7px !important; }
+
+  #collabModal > div {
+    width: 100% !important;
+    max-height: 96vh !important;
+    border-radius: 14px !important;
+  }
+
+  #modalTitle {
+    min-height: 62px;
+    padding: 17px 58px !important;
+    font-size: 15px;
+  }
+
+  #modalTitle::before { display: none; }
+  #collabModal #closeModalBtn { top: 11px !important; right: 11px !important; }
+  .collab-back-button { top: 14px; left: 12px; }
+  #modalBody { padding: 14px; }
+  #modalActions { padding: 12px 14px; }
+  #modalActions .run-button { flex: 1 1 120px !important; }
+  .collab-choice-card { min-height: 126px; }
+  .collab-pin-box-grid { gap: 5px; }
+  .collab-pin-box { min-height: 46px; font-size: 19px; }
+  .collab-cursor-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #settingsModal > div, #fontPickerModal > div, #projectLibraryModal > div { width: 100% !important; max-height: 96vh !important; }
+}
