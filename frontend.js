@@ -5080,20 +5080,24 @@ async function tryRestoreAutosaveDraft() {
           minute: "2-digit",
         })
       : "a recent session";
+    const matchedProjectName =
+      String(autosaveMeta.savedProjectName || "").trim() ||
+      findSavedProjectNameForSnapshot(snapshot);
+    const restoreProjectName = matchedProjectName || "Unsaved project";
+    const restoreFileName =
+      String(autosaveMeta.activeFileName || snapshot.activeFileName || "").trim() ||
+      String(snapshot.files[0]?.name || "Unknown file");
 
     const dialog = await showAppConfirm(
       "RESTORE AUTOSAVED DRAFT",
-      `Restore the autosaved draft from ${savedLabel}?`,
+      `Restore the autosaved draft from ${savedLabel}?\n\nProject: ${restoreProjectName}\nFile: ${restoreFileName}`,
       "RESTORE",
       "SKIP",
     );
     if (!dialog?.ok) return false;
 
     applyProjectState(snapshot, "autosave");
-    activeSavedProjectName = String(autosaveMeta.savedProjectName || "").trim() || null;
-    if (!activeSavedProjectName) {
-      activeSavedProjectName = findSavedProjectNameForSnapshot(snapshot);
-    }
+    activeSavedProjectName = matchedProjectName || null;
     updateProjectStatusUI();
     showNotification("Restored autosaved project draft.", "info");
     return true;
