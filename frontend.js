@@ -1070,9 +1070,9 @@ htmlTagMetaMap.set("lorem", {
     insertText: '<a href="" target="_blank" rel="noopener noreferrer"></a>',
   },
   {
-    tag: "a:link",
-    desc: "Anchor link with an HTTP URL",
-    insertText: '<a href="http://"></a>',
+    tag: "a:href",
+    desc: "Anchor link with a placeholder href",
+    insertText: '<a href="#"></a>',
   },
   {
     tag: "a:mail",
