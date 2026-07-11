@@ -269,8 +269,9 @@ async function renderGitHubCommitView(repo) {
     githubRepoModalBody.innerHTML = `
     <div class="github-commit-actions"><button type="button" class="github-secondary-button" data-github-action="repos"><i class="fa-solid fa-arrow-left"></i> Repositories</button><a class="github-secondary-button" href="${escapeHtmlAttributeValue(repo.htmlUrl)}" target="_blank" rel="noopener">Open on GitHub</a></div>
     <div class="github-repo-file-toolbar">
-      <strong>Files in ${escapeHtml(String(repo.defaultBranch || "main"))}</strong>
+      <strong>Files in <span id="githubFilesBranchLabel">${escapeHtml(String(repo.defaultBranch || "main"))}</span></strong>
       <div class="github-repo-file-actions">
+        <button id="githubRefreshFilesBtn" type="button" class="github-icon-button" aria-label="Refresh repository files" title="Refresh repository files"><i class="fa-solid fa-rotate"></i></button>
         <button id="githubCreateFileBtn" type="button" class="github-secondary-button"><i class="fa-solid fa-file-circle-plus"></i> Create file</button>
         <button id="githubUploadFileBtn" type="button" class="github-secondary-button"><i class="fa-solid fa-upload"></i> Upload file</button>
         <input id="githubUploadFileInput" type="file" multiple hidden>
@@ -292,6 +293,7 @@ async function renderGitHubCommitView(repo) {
     <div id="githubCommitStatus"></div>
     <div class="github-commit-actions"><span></span><button id="githubCommitBtn" type="button" class="github-primary-button"><i class="fa-solid fa-code-commit"></i> Commit selected files</button></div>`;
     document.getElementById("githubCommitBtn")?.addEventListener("click", () => commitProjectFilesToGitHub(repo));
+    document.getElementById("githubRefreshFilesBtn")?.addEventListener("click", () => refreshGitHubRepositoryFiles(repo));
     document.getElementById("githubCreateFileBtn")?.addEventListener("click", () => { renderGitHubFileEditorControls(); openGitHubFileEditor(); });
     document.getElementById("githubUploadFileBtn")?.addEventListener("click", () => document.getElementById("githubUploadFileInput")?.click());
     document.getElementById("githubUploadFileInput")?.addEventListener("change", handleGitHubFileUpload);
@@ -308,8 +310,12 @@ async function renderGitHubCommitView(repo) {
 async function loadExistingGitHubFiles(repo) {
   const container = document.getElementById("githubExistingFileList");
   if (!container) return;
+  const branch = document.getElementById("githubCommitBranch")?.value.trim() || repo.defaultBranch;
+  const branchLabel = document.getElementById("githubFilesBranchLabel");
+  if (branchLabel) branchLabel.textContent = branch;
+  container.innerHTML = '<div class="github-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading repository files…</div>';
   try {
-    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/files?branch=${encodeURIComponent(repo.defaultBranch)}`, {
+    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/files?branch=${encodeURIComponent(branch)}`, {
       credentials: "same-origin", headers: { Accept: "application/json" },
     });
     const data = await response.json();
@@ -324,6 +330,16 @@ async function loadExistingGitHubFiles(repo) {
   } catch (error) {
     container.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
   }
+}
+
+async function refreshGitHubRepositoryFiles(repo) {
+  const button = document.getElementById("githubRefreshFilesBtn");
+  const icon = button?.querySelector("i");
+  if (button) button.disabled = true;
+  if (icon) icon.classList.add("fa-spin");
+  await loadExistingGitHubFiles(repo);
+  if (icon) icon.classList.remove("fa-spin");
+  if (button) button.disabled = false;
 }
 
 function openGitHubFileEditor(path = "", content = "", lockPath = false) {
