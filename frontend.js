@@ -3745,11 +3745,13 @@ function renderErrorHighlights(textarea) {
       location.col || 1,
     );
     const coords = getCaretCoordinates(textarea, caretIndex);
-    const tokenLength = getErrorTokenLength(
-      content,
-      Number(location.line || 1),
-      Number(location.col || 1),
-    );
+    const tokenLength = Number(location.length) > 0
+      ? Number(location.length)
+      : getErrorTokenLength(
+          content,
+          Number(location.line || 1),
+          Number(location.col || 1),
+        );
     const endIndex = Math.min(content.length, caretIndex + tokenLength);
     const endCoords = getCaretCoordinates(textarea, endIndex);
 
@@ -6061,7 +6063,9 @@ function applyDiagnosticEntriesToFileErrors(entries) {
   const locations = {};
   (entries || []).forEach((entry) => {
     if (!entry || entry.type !== "error") return;
-    const location = extractErrorLocationFromConsoleMessage(entry.message);
+    const location = entry.location?.fileName
+      ? { ...entry.location }
+      : extractErrorLocationFromConsoleMessage(entry.message);
     if (!location || !location.fileName) return;
     next[location.fileName] = (next[location.fileName] || 0) + 1;
     if (!locations[location.fileName]) {
@@ -6076,10 +6080,272 @@ function applyDiagnosticEntriesToFileErrors(entries) {
   if (editor) renderErrorHighlights(editor);
 }
 
+const HTML_VOID_ELEMENTS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+  "param", "source", "track", "wbr",
+]);
+const HTML_OPTIONAL_END_ELEMENTS = new Set([
+  "html", "head", "body", "li", "dt", "dd", "p", "rt", "rp", "optgroup",
+  "option", "colgroup", "thead", "tbody", "tfoot", "tr", "td", "th",
+]);
+const HTML_P_IMPLICIT_CLOSE_STARTERS = new Set([
+  "address", "article", "aside", "blockquote", "details", "dialog", "div", "dl",
+  "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
+  "h5", "h6", "header", "hgroup", "hr", "main", "menu", "nav", "ol", "p", "pre",
+  "search", "section", "table", "ul",
+]);
+
+function shouldImplicitlyCloseHtmlTag(openTag, nextTag) {
+  if (openTag === "li" && nextTag === "li") return true;
+  if ((openTag === "dt" || openTag === "dd") && (nextTag === "dt" || nextTag === "dd")) return true;
+  if (openTag === "p" && HTML_P_IMPLICIT_CLOSE_STARTERS.has(nextTag)) return true;
+  if (openTag === "option" && (nextTag === "option" || nextTag === "optgroup")) return true;
+  if (openTag === "optgroup" && nextTag === "optgroup") return true;
+  if ((openTag === "thead" || openTag === "tbody" || openTag === "tfoot") &&
+      (nextTag === "tbody" || nextTag === "tfoot")) return true;
+  if (openTag === "tr" && nextTag === "tr") return true;
+  return (openTag === "td" || openTag === "th") && (nextTag === "td" || nextTag === "th");
+}
+
+function createHtmlDiagnosticLocation(fileName, htmlText, index, length = 1) {
+  const position = getLineAndColumnFromIndex(htmlText, index);
+  return {
+    fileName,
+    line: position.line,
+    col: position.col,
+    length: Math.max(1, Number(length) || 1),
+  };
+}
+
+function scanHtmlTagTokens(htmlText, reportMalformed) {
+  const source = String(htmlText || "");
+  const lowerSource = source.toLowerCase();
+  const tokens = [];
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const start = source.indexOf("<", cursor);
+    if (start === -1) break;
+
+    if (source.startsWith("<!--", start)) {
+      const commentEnd = source.indexOf("-->", start + 4);
+      if (commentEnd === -1) {
+        reportMalformed("Unclosed HTML comment.", start, 4, "Close the comment with -->.");
+        break;
+      }
+      cursor = commentEnd + 3;
+      continue;
+    }
+
+    if (source.startsWith("<!", start) || source.startsWith("<?", start)) {
+      const declarationEnd = source.indexOf(">", start + 2);
+      if (declarationEnd === -1) {
+        reportMalformed("Unclosed HTML declaration.", start, 2, "Add the missing > character.");
+        break;
+      }
+      cursor = declarationEnd + 1;
+      continue;
+    }
+
+    let quote = "";
+    let end = -1;
+    for (let index = start + 1; index < source.length; index++) {
+      const char = source[index];
+      if (quote) {
+        if (char === quote) quote = "";
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === ">") {
+        end = index;
+        break;
+      }
+    }
+
+    if (end === -1) {
+      const lineEnd = source.indexOf("\n", start);
+      reportMalformed(
+        quote ? "Unclosed quote inside an HTML tag." : "HTML tag is missing its closing > character.",
+        start,
+        Math.max(1, (lineEnd === -1 ? source.length : lineEnd) - start),
+        quote ? `Add the matching ${quote} quote and close the tag.` : "Add > to finish the tag.",
+      );
+      break;
+    }
+
+    const raw = source.slice(start, end + 1);
+    const tagMatch = raw.match(/^<\s*(\/?)\s*([A-Za-z][A-Za-z0-9:-]*)/);
+    if (!tagMatch) {
+      if (/^<\s*\//.test(raw) || /^<\s*\d+[A-Za-z]/.test(raw)) {
+        reportMalformed("Malformed HTML tag.", start, raw.length, "Use a valid tag name after < or </.");
+      }
+      cursor = start + 1;
+      continue;
+    }
+
+    const name = tagMatch[2].toLowerCase();
+    const nameStartOffset = tagMatch[0].lastIndexOf(tagMatch[2]);
+    const nameStart = start + nameStartOffset;
+    const nameEnd = nameStart + tagMatch[2].length;
+    const isClosing = Boolean(tagMatch[1]);
+    const selfClosing = /\/\s*>$/.test(raw);
+    const token = { raw, name, start, end: end + 1, nameStart, nameEnd, isClosing, selfClosing };
+
+    if (raw.slice(nameEnd - start, -1).includes("<")) {
+      const nestedStart = start + raw.indexOf("<", 1);
+      reportMalformed("A new tag starts before the previous tag was closed.", nestedStart, 1, "Add > before starting the next tag.");
+    }
+    tokens.push(token);
+    cursor = end + 1;
+
+    if (!isClosing && !selfClosing && ["script", "style", "textarea", "title"].includes(name)) {
+      const rawClose = lowerSource.indexOf(`</${name}`, cursor);
+      cursor = rawClose === -1 ? source.length : rawClose;
+    }
+  }
+  return tokens;
+}
+
+function reportDuplicateHtmlAttributes(token, htmlText, fileName, emitDiagnostic) {
+  if (token.isClosing) return;
+  const nameEndOffset = token.nameEnd - token.start;
+  const attributesText = token.raw.slice(nameEndOffset, -1).replace(/\/\s*$/, "");
+  const attributeRegex = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
+  const seen = new Set();
+  let match;
+  while ((match = attributeRegex.exec(attributesText)) !== null) {
+    const attributeName = String(match[1] || "").toLowerCase();
+    if (!attributeName) continue;
+    const attributeIndex = token.nameEnd + match.index;
+    if (seen.has(attributeName)) {
+      const location = createHtmlDiagnosticLocation(fileName, htmlText, attributeIndex, match[1].length);
+      emitDiagnostic(
+        "error",
+        `[${fileName}] HTML issue at line ${location.line}:${location.col}: duplicate "${attributeName}" attribute on <${token.name}>. Fix: Remove the repeated attribute.`,
+        location,
+      );
+    }
+    seen.add(attributeName);
+  }
+}
+
+function analyzeHtmlTagStructure(htmlText, fileName, emitDiagnostic) {
+  const source = String(htmlText || "");
+  const reportMalformed = (problem, index, length, fix) => {
+    const location = createHtmlDiagnosticLocation(fileName, source, index, length);
+    emitDiagnostic(
+      "error",
+      `[${fileName}] HTML issue at line ${location.line}:${location.col}: ${problem} Fix: ${fix}`,
+      location,
+    );
+  };
+  const tokens = scanHtmlTagTokens(source, reportMalformed);
+  const stack = [];
+
+  tokens.forEach((token) => {
+    const location = createHtmlDiagnosticLocation(
+      fileName,
+      source,
+      token.nameStart,
+      token.nameEnd - token.nameStart,
+    );
+    const isCustomElement = token.name.includes("-");
+    const expectedTop = stack[stack.length - 1];
+    if (
+      token.isClosing &&
+      !isCustomElement &&
+      !knownHtmlTags.has(token.name) &&
+      expectedTop &&
+      getLevenshteinDistance(token.name, expectedTop.name) <= 2
+    ) {
+      emitDiagnostic(
+        "error",
+        `[${fileName}] HTML issue at line ${location.line}:${location.col}: mismatched closing tag </${token.name}>. Fix: Use </${expectedTop.name}> to close <${expectedTop.name}>.`,
+        location,
+      );
+      stack.pop();
+      return;
+    }
+    if (!isCustomElement && !knownHtmlTags.has(token.name)) {
+      emitDiagnostic(
+        "error",
+        `[${fileName}] HTML issue at line ${location.line}:${location.col}: unknown tag <${token.name}>. Fix: ${getErrorHint(token.name, { kind: "html-tag", tagName: token.name })}`,
+        location,
+      );
+      return;
+    }
+
+    if (token.isClosing) {
+      if (HTML_VOID_ELEMENTS.has(token.name)) {
+        emitDiagnostic(
+          "error",
+          `[${fileName}] HTML issue at line ${location.line}:${location.col}: void element <${token.name}> must not have a closing tag. Fix: Remove </${token.name}>.`,
+          location,
+        );
+        return;
+      }
+
+      const matchingIndex = stack.map((entry) => entry.name).lastIndexOf(token.name);
+      if (matchingIndex === -1) {
+        const expected = stack[stack.length - 1];
+        const likelyTypo = expected && getLevenshteinDistance(token.name, expected.name) <= 2;
+        emitDiagnostic(
+          "error",
+          `[${fileName}] HTML issue at line ${location.line}:${location.col}: ${likelyTypo ? `mismatched closing tag </${token.name}>` : `unexpected closing tag </${token.name}>`}. Fix: ${likelyTypo ? `Use </${expected.name}> to close <${expected.name}>.` : `Remove </${token.name}> or add its opening tag.`}`,
+          location,
+        );
+        if (likelyTypo) stack.pop();
+        return;
+      }
+
+      const intervening = stack.slice(matchingIndex + 1);
+      intervening.forEach((entry) => {
+        if (HTML_OPTIONAL_END_ELEMENTS.has(entry.name)) return;
+        const openLocation = createHtmlDiagnosticLocation(
+          fileName,
+          source,
+          entry.token.nameStart,
+          entry.token.nameEnd - entry.token.nameStart,
+        );
+        emitDiagnostic(
+          "error",
+          `[${fileName}] HTML issue at line ${openLocation.line}:${openLocation.col}: <${entry.name}> is not closed before </${token.name}>. Fix: Add </${entry.name}> before </${token.name}>.`,
+          openLocation,
+        );
+      });
+      stack.splice(matchingIndex);
+      return;
+    }
+
+    reportDuplicateHtmlAttributes(token, source, fileName, emitDiagnostic);
+    if (HTML_VOID_ELEMENTS.has(token.name) || token.selfClosing) return;
+    while (stack.length && shouldImplicitlyCloseHtmlTag(stack[stack.length - 1].name, token.name)) {
+      stack.pop();
+    }
+    stack.push({ name: token.name, token });
+  });
+
+  stack.forEach((entry) => {
+    if (HTML_OPTIONAL_END_ELEMENTS.has(entry.name)) return;
+    const location = createHtmlDiagnosticLocation(
+      fileName,
+      source,
+      entry.token.nameStart,
+      entry.token.nameEnd - entry.token.nameStart,
+    );
+    emitDiagnostic(
+      "error",
+      `[${fileName}] HTML issue at line ${location.line}:${location.col}: unclosed <${entry.name}> tag. Fix: Add a closing </${entry.name}> tag.`,
+      location,
+    );
+  });
+}
+
 function runPreflightDiagnostics(targetEntries = null) {
-  const emitDiagnostic = (type, message) => {
+  const emitDiagnostic = (type, message, location = null) => {
     if (Array.isArray(targetEntries)) {
-      targetEntries.push({ type, message });
+      targetEntries.push({ type, message, location });
       return;
     }
     appendConsoleMessage(type, message);
@@ -6156,24 +6422,7 @@ function runPreflightDiagnostics(targetEntries = null) {
       }
     });
 
-  // Basic HTML checks for every HTML file in the project.
-  const selfClosing = new Set([
-    "area",
-    "base",
-    "br",
-    "col",
-    "embed",
-    "hr",
-    "img",
-    "input",
-    "link",
-    "meta",
-    "param",
-    "source",
-    "track",
-    "wbr",
-  ]);
-
+  // Position-aware HTML checks for every HTML file in the project.
   projectFiles
     .filter((f) => f.type === "html")
     .forEach((htmlFile) => {
@@ -6212,47 +6461,7 @@ function runPreflightDiagnostics(targetEntries = null) {
         }
       }
 
-      const stack = [];
-      const re = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g;
-      let match;
-      while ((match = re.exec(htmlText)) !== null) {
-        const full = match[0];
-        const tag = match[1].toLowerCase();
-        if (selfClosing.has(tag) || full.endsWith("/>")) continue;
-        const location = getLineAndColumnFromIndex(htmlText, match.index);
-        const line = location.line;
-        const col = location.col;
-        const isCustomElement = tag.includes("-");
-
-        if (!isCustomElement && !knownHtmlTags.has(tag)) {
-          emitDiagnostic(
-            "error",
-            `[${htmlFile.name}] HTML issue at line ${line}:${col}: unknown tag <${tag}>. Fix: ${getErrorHint(tag, { kind: "html-tag", tagName: tag })}`,
-          );
-          continue;
-        }
-
-        if (full.startsWith("</")) {
-          const last = stack.pop();
-          if (!last || last.tag !== tag) {
-            emitDiagnostic(
-              "error",
-              `[${htmlFile.name}] HTML issue at line ${line}:${col}: mismatched closing tag </${tag}>. Fix: ${getErrorHint(tag, { kind: "html-mismatch", tagName: tag, expectedTag: last?.tag || "" })}`,
-            );
-            break;
-          }
-        } else {
-          stack.push({ tag, line, col });
-        }
-      }
-
-      if (stack.length) {
-        const unclosed = stack[stack.length - 1];
-        emitDiagnostic(
-          "error",
-          `[${htmlFile.name}] HTML issue at line ${unclosed.line}:${unclosed.col}: unclosed <${unclosed.tag}> tag. Fix: ${getErrorHint(unclosed.tag, { kind: "html-unclosed", tagName: unclosed.tag })}`,
-        );
-      }
+      analyzeHtmlTagStructure(htmlText, htmlFile.name, emitDiagnostic);
     });
 }
 
@@ -15507,6 +15716,157 @@ window.addEventListener("resize", () => {
   }
 });
 
+const UI_TRANSLATION_EXCLUDED_SELECTOR = [
+  "script", "style", "textarea", "input", "select", "option", "pre", "code", "iframe",
+  '[contenteditable="true"]', '[translate="no"]', "[data-no-translate]",
+  "#activeEditor", "#syntaxHighlightLayer", "#remoteCursorLayer", "#fileList",
+  "#suggestionPopup", "#consoleOutput", "#developerConsoleOutput", "#nodeTerminal",
+  "#githubRepoModalBody", "#collabChatMessages", ".codx-notification",
+].join(",");
+let activeUiLanguage = "en";
+let activeUiCountryCode = "";
+let uiTranslationObserver = null;
+let uiTranslationScanTimer = null;
+const translatedUiNodes = new WeakMap();
+
+function isSafeUiTranslationText(value) {
+  const text = String(value || "").trim();
+  if (text.length < 2 || text.length > 240 || !/[A-Za-z]/.test(text)) return false;
+  if (/https?:\/\/|[{}<>]|^[./\\]|\b(?:npm|localhost|node_modules)\b/i.test(text)) return false;
+  return true;
+}
+
+function collectUiTranslationNodes(root = document.body) {
+  const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+    if (!parent || parent.closest(UI_TRANSLATION_EXCLUDED_SELECTOR)) continue;
+    if (!isSafeUiTranslationText(node.data)) continue;
+    if (!parent.getClientRects().length) continue;
+    const previous = translatedUiNodes.get(node);
+    if (previous && (node.data === previous.translated || node.data === previous.pending)) continue;
+    nodes.push(node);
+    if (nodes.length >= 40) break;
+  }
+  return nodes;
+}
+
+function getUiTranslationCache(language) {
+  try {
+    return JSON.parse(localStorage.getItem(`codxUiTranslations:${language}`) || "{}") || {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function saveUiTranslationCache(language, cache) {
+  try {
+    const entries = Object.entries(cache).slice(-600);
+    localStorage.setItem(`codxUiTranslations:${language}`, JSON.stringify(Object.fromEntries(entries)));
+  } catch (_error) {}
+}
+
+async function translateVisibleInterface() {
+  if (activeUiLanguage === "en") return;
+  const nodes = collectUiTranslationNodes();
+  if (!nodes.length) return;
+  const cache = getUiTranslationCache(activeUiLanguage);
+  const sourceGroups = new Map();
+
+  nodes.forEach((node) => {
+    const raw = node.data;
+    const source = raw.trim();
+    const leading = raw.slice(0, raw.indexOf(source));
+    const trailing = raw.slice(raw.indexOf(source) + source.length);
+    if (cache[source]) {
+      node.data = `${leading}${cache[source]}${trailing}`;
+      translatedUiNodes.set(node, { source, translated: node.data });
+      return;
+    }
+    if (!sourceGroups.has(source)) sourceGroups.set(source, []);
+    sourceGroups.get(source).push({ node, leading, trailing });
+    translatedUiNodes.set(node, { source, pending: raw });
+  });
+
+  const sources = Array.from(sourceGroups.keys());
+  if (!sources.length) return;
+  try {
+    const response = await fetch("/api/localization/translate", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        texts: sources,
+        browserLanguage: navigator.language || "en",
+        countryCode: activeUiCountryCode,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data?.ok || !Array.isArray(data.translations)) throw new Error("Translation failed");
+    sources.forEach((source, index) => {
+      const translated = String(data.translations[index] || source).trim() || source;
+      cache[source] = translated;
+      sourceGroups.get(source).forEach(({ node, leading, trailing }) => {
+        const current = translatedUiNodes.get(node);
+        if (!current || current.source !== source) return;
+        node.data = `${leading}${translated}${trailing}`;
+        translatedUiNodes.set(node, { source, translated: node.data });
+      });
+    });
+    saveUiTranslationCache(activeUiLanguage, cache);
+  } catch (_error) {
+    nodes.forEach((node) => translatedUiNodes.delete(node));
+  }
+}
+
+function scheduleUiTranslationScan() {
+  clearTimeout(uiTranslationScanTimer);
+  uiTranslationScanTimer = setTimeout(() => translateVisibleInterface(), 120);
+}
+
+async function detectClientCountryCode() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch("https://ipwho.is/?fields=success,country_code", {
+      mode: "cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const location = await response.json();
+    const countryCode = String(location?.country_code || "").trim().toUpperCase();
+    return response.ok && location?.success !== false && /^[A-Z]{2}$/.test(countryCode)
+      ? countryCode
+      : "";
+  } catch (_error) {
+    return "";
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function initializeAutomaticLocalization() {
+  try {
+    activeUiCountryCode = await detectClientCountryCode();
+    const response = await fetch(
+      `/api/localization/profile?browserLanguage=${encodeURIComponent(navigator.language || "en")}&countryCode=${encodeURIComponent(activeUiCountryCode)}`,
+      { credentials: "same-origin", headers: { Accept: "application/json" } },
+    );
+    const profile = await response.json();
+    if (!response.ok || !profile?.ok || !profile.enabled || !profile.language) return;
+    activeUiLanguage = String(profile.language);
+    document.documentElement.lang = activeUiLanguage;
+    document.documentElement.dir = /^(ar|fa|he|ur)(?:-|$)/i.test(activeUiLanguage) ? "rtl" : "ltr";
+    await translateVisibleInterface();
+    uiTranslationObserver = new MutationObserver(scheduleUiTranslationScan);
+    uiTranslationObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    document.addEventListener("click", scheduleUiTranslationScan, true);
+    scheduleUiTranslationScan();
+  } catch (_error) {}
+}
+
 // PART 15 - APPLICATION INITIALIZATION
 window.addEventListener("load", () => {
   initializeEditorPresence();
@@ -15514,6 +15874,7 @@ window.addEventListener("load", () => {
   loadSettings();
   renderFileList();
   initializeEditor();
+  initializeAutomaticLocalization();
   Promise.resolve()
     .then(() => (sessionFlowStarted ? false : tryRestoreAutosaveDraft()))
     .then(() => {
