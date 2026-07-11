@@ -16954,6 +16954,7 @@ const tutorialSteps = [
 
 let currentStep = 0;
 let tutorialActive = false;
+let tutorialOpenedMoreMenu = false;
 
 // Create tutorial modal HTML
 const tutorialModalHTML = `
@@ -17023,6 +17024,10 @@ const tutorialModalHTML = `
       transition: all 0.3s ease;
       z-index: 9999;
     "></div>
+    <div id="tutorialToolPointer" class="tutorial-tool-pointer" aria-hidden="true">
+      <i id="tutorialToolPointerIcon" class="fa-solid fa-arrow-pointer"></i>
+      <span></span>
+    </div>
   </div>
 `;
 
@@ -17057,6 +17062,8 @@ const tutorialCard = document.getElementById("tutorialCard");
 const tutorialIcon = document.getElementById("tutorialIcon");
 const tutorialTitle = document.getElementById("tutorialTitle");
 const tutorialDescription = document.getElementById("tutorialDescription");
+const tutorialToolPointer = document.getElementById("tutorialToolPointer");
+const tutorialToolPointerIcon = document.getElementById("tutorialToolPointerIcon");
 const tutorialProgress = document.getElementById("tutorialProgress");
 const tutorialHighlight = document.getElementById("tutorialHighlight");
 const tutorialNextBtn = document.getElementById("tutorialNextBtn");
@@ -17084,6 +17091,54 @@ function startTutorial() {
   }
 }
 
+function playTutorialToolPointer(target, step) {
+  if (!tutorialToolPointer || !target) return;
+  const rect = target.getBoundingClientRect();
+  const endX = Math.max(8, Math.min(window.innerWidth - 34, rect.left + rect.width * 0.58));
+  const endY = Math.max(8, Math.min(window.innerHeight - 40, rect.top + rect.height * 0.52));
+  const startsFromRight = String(step?.position || "").includes("left");
+  const startX = endX + (startsFromRight ? 76 : -76);
+  const startY = Math.max(8, Math.min(window.innerHeight - 40, endY + 54));
+  const pointerKind = step?.target === "#activeEditor"
+    ? "text"
+    : step?.target === "#output"
+      ? "inspect"
+      : "pointer";
+
+  tutorialToolPointer.dataset.kind = pointerKind;
+  if (tutorialToolPointerIcon) {
+    tutorialToolPointerIcon.className = pointerKind === "text"
+      ? "fa-solid fa-i-cursor"
+      : pointerKind === "inspect"
+        ? "fa-solid fa-crosshairs"
+        : "fa-solid fa-arrow-pointer";
+  }
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-start-x", `${startX}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-start-y", `${startY}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-end-x", `${endX}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-end-y", `${endY}px`);
+  tutorialToolPointer.classList.remove("is-playing");
+  void tutorialToolPointer.offsetWidth;
+  tutorialToolPointer.classList.add("is-playing");
+}
+
+function prepareTutorialTarget(step, targetElement) {
+  if (!headerMorePanel || !headerMoreBtn) return;
+  const needsMoreMenu =
+    step?.target === "#headerMoreBtn" || Boolean(targetElement?.closest?.("#headerMorePanel"));
+
+  if (needsMoreMenu && headerMorePanel.hidden) {
+    setHeaderMoreMenuOpen(true);
+    tutorialOpenedMoreMenu = true;
+    return;
+  }
+
+  if (!needsMoreMenu && tutorialOpenedMoreMenu) {
+    setHeaderMoreMenuOpen(false);
+    tutorialOpenedMoreMenu = false;
+  }
+}
+
 // Show specific tutorial step
 function showTutorialStep(stepIndex) {
   if (stepIndex < 0 || stepIndex >= tutorialSteps.length) return false;
@@ -17095,6 +17150,8 @@ function showTutorialStep(stepIndex) {
     console.warn(`Tutorial target not found: ${step.target}`);
     return false;
   }
+
+  prepareTutorialTarget(step, targetElement);
 
   // Update content
   tutorialIcon.className = step.icon;
@@ -17125,7 +17182,7 @@ function showTutorialStep(stepIndex) {
   }
 
   // Position highlight and card
-  positionTutorialElements(targetElement, step.position);
+  positionTutorialElements(targetElement, step.position, step);
   return true;
 }
 
@@ -17210,7 +17267,7 @@ function getTutorialCardPlacement(targetRect, cardRect, position) {
 }
 
 // Position tutorial card and highlight
-function positionTutorialElements(target, position) {
+function positionTutorialElements(target, position, step = null) {
   const rect = target.getBoundingClientRect();
   const cardRect = tutorialCard.getBoundingClientRect();
 
@@ -17225,6 +17282,7 @@ function positionTutorialElements(target, position) {
   // Apply positions
   tutorialCard.style.left = placement.left + "px";
   tutorialCard.style.top = placement.top + "px";
+  playTutorialToolPointer(target, step);
 }
 
 // Tutorial navigation
@@ -17265,6 +17323,11 @@ closeTutorialBtn.addEventListener("click", async () => {
 function completeTutorial() {
   tutorialActive = false;
   tutorialModal.style.display = "none";
+  tutorialToolPointer?.classList.remove("is-playing");
+  if (tutorialOpenedMoreMenu) {
+    setHeaderMoreMenuOpen(false);
+    tutorialOpenedMoreMenu = false;
+  }
   safeLocalStorage("set", "tutorialCompleted", "true");
   showNotification("Tutorial completed! Welcome to CodX Editor", "success");
 }
