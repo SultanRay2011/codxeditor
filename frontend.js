@@ -2291,6 +2291,8 @@ let remoteTypingState = {};
 let lastCursorEmitAt = 0;
 let fileErrorCounts = {};
 let fileErrorLocations = {};
+let collabOfflineNoticeLastAt = 0;
+let collabOfflineNoticeActive = false;
 const defaultCollabPermissions = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -13638,6 +13640,19 @@ function resumeCollabSession(successMessage) {
   );
 }
 
+function resetCollabOfflineNoticeState() {
+  collabOfflineNoticeLastAt = 0;
+  collabOfflineNoticeActive = false;
+}
+
+function maybeShowCollabOfflineNotice() {
+  const now = Date.now();
+  if (collabOfflineNoticeActive && now - collabOfflineNoticeLastAt < 60000) return;
+  collabOfflineNoticeActive = true;
+  collabOfflineNoticeLastAt = now;
+  showNotification("Unable to connect to collaboration server", "error");
+}
+
 function ensureCollabSocket() {
   if (collabSocket && collabSocket.connected) return true;
   if (typeof io !== "function") {
@@ -13646,17 +13661,22 @@ function ensureCollabSocket() {
   }
 
   collabSocket = io();
+  collabSocket.on("connect", () => {
+    resetCollabOfflineNoticeState();
+  });
   collabSocket.on("connect_error", () => {
-    showNotification("Unable to connect to collaboration server", "error");
+    maybeShowCollabOfflineNotice();
   });
   collabSocket.on("disconnect", () => {
     clearOwnSessionCursorBroadcast();
     resetTransientCollabUiState();
+    resetCollabOfflineNoticeState();
     if (activeSessionId) {
       showNotification("Collaboration connection lost.", "warn");
     }
   });
   collabSocket.on("reconnect", () => {
+    resetCollabOfflineNoticeState();
     resumeCollabSession("Collaboration reconnected.");
   });
 
