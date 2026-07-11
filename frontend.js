@@ -76,6 +76,12 @@ const newProjectBtn = document.getElementById("newProjectBtn");
 const openSavedProjectsBtn = document.getElementById("openSavedProjectsBtn");
 const templatesBtn = document.getElementById("templatesBtn");
 const publishProjectBtn = document.getElementById("publishProjectBtn");
+const connectGitHubBtn = document.getElementById("connectGitHubBtn");
+const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
+const githubRepoModal = document.getElementById("githubRepoModal");
+const githubRepoModalTitle = document.getElementById("githubRepoModalTitle");
+const githubRepoModalBody = document.getElementById("githubRepoModalBody");
+const closeGitHubRepoModalBtn = document.getElementById("closeGitHubRepoModalBtn");
 const projectLibraryModal = document.getElementById("projectLibraryModal");
 const closeProjectLibraryBtn = document.getElementById("closeProjectLibraryBtn");
 const projectLibraryBody = document.getElementById("projectLibraryBody");
@@ -123,6 +129,335 @@ if (headerMoreBtn && headerMorePanel) {
     });
   });
 }
+
+let githubConnectionState = {
+  configured: true,
+  connected: false,
+  user: null,
+  scope: "",
+};
+let githubRepoFileState = { repo: null, staged: new Map() };
+
+function updateGitHubConnectButton() {
+  if (!connectGitHubBtn || !connectGitHubBtnLabel) return;
+  const login = String(githubConnectionState.user?.login || "").trim();
+  connectGitHubBtn.classList.toggle("github-connected", githubConnectionState.connected);
+  connectGitHubBtnLabel.textContent = githubConnectionState.connected && login
+    ? `GITHUB: @${login}`
+    : "CONNECT TO GITHUB";
+  connectGitHubBtn.title = !githubConnectionState.configured
+    ? "GitHub OAuth is not configured on this server"
+    : githubConnectionState.connected
+      ? `Connected as @${login}. Click to open your repositories.`
+      : "Sign in with your GitHub account";
+}
+
+async function refreshGitHubConnectionStatus() {
+  if (!connectGitHubBtn) return;
+  try {
+    const response = await fetch("/api/github/status", {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to check GitHub connection");
+    githubConnectionState = {
+      configured: Boolean(data.configured),
+      connected: Boolean(data.connected),
+      user: data.user || null,
+      scope: data.scope || "",
+    };
+    updateGitHubConnectButton();
+  } catch (_err) {
+    githubConnectionState = { configured: true, connected: false, user: null, scope: "" };
+    updateGitHubConnectButton();
+  }
+}
+
+function handleGitHubOAuthResult() {
+  const url = new URL(window.location.href);
+  const result = url.searchParams.get("github");
+  if (!result) return;
+  url.searchParams.delete("github");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  const messages = {
+    connected: ["GitHub account connected successfully.", "success"],
+    access_denied: ["GitHub connection was cancelled.", "warn"],
+    not_configured: ["GitHub OAuth is not configured on this server.", "error"],
+    invalid_state: ["GitHub login expired or failed its security check. Please try again.", "error"],
+    missing_code: ["GitHub did not return an authorization code.", "error"],
+    failed: ["GitHub connection failed. Please try again.", "error"],
+  };
+  const [message, type] = messages[result] || ["GitHub connection could not be completed.", "error"];
+  setTimeout(() => showNotification(message, type), 0);
+}
+
+if (connectGitHubBtn) {
+  connectGitHubBtn.addEventListener("click", () => {
+    if (!githubConnectionState.configured) {
+      showNotification("Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET on the server first.", "error");
+      return;
+    }
+    if (githubConnectionState.connected) {
+      openGitHubRepositoryModal();
+      return;
+    }
+    beginGitHubOAuth();
+  });
+  handleGitHubOAuthResult();
+  refreshGitHubConnectionStatus();
+}
+
+function beginGitHubOAuth() {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.assign(`/auth/github?returnTo=${encodeURIComponent(returnTo)}`);
+}
+
+function closeGitHubRepositoryModal() {
+  if (githubRepoModal) githubRepoModal.hidden = true;
+}
+
+async function openGitHubRepositoryModal() {
+  if (!githubRepoModal || !githubRepoModalBody) return;
+  githubRepoModal.hidden = false;
+  githubRepoModal.querySelector(".github-repo-dialog")?.focus();
+  githubRepoModalTitle.textContent = "Repositories";
+  githubRepoModalBody.innerHTML = '<div class="github-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading repositories…</div>';
+  try {
+    const response = await fetch("/api/github/repos", { credentials: "same-origin", headers: { Accept: "application/json" } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load repositories.");
+    renderGitHubRepositories(data.repos || [], data.scope || githubConnectionState.scope);
+  } catch (error) {
+    githubRepoModalBody.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderGitHubRepositories(repositories, scope = "") {
+  const hasRepoScope = String(scope).split(/[ ,]+/).includes("repo");
+  githubRepoModalBody.innerHTML = `
+    ${hasRepoScope ? "" : '<div class="github-file-warning">Reconnect to grant repository access if private repositories are missing. <button type="button" class="github-secondary-button" data-github-action="reconnect">Reconnect</button></div>'}
+    <div class="github-repo-toolbar">
+      <input id="githubRepoSearch" class="github-repo-search" type="search" placeholder="Search repositories…" aria-label="Search repositories">
+      <button type="button" class="github-secondary-button" data-github-action="disconnect"><i class="fa-solid fa-right-from-bracket"></i> Disconnect</button>
+    </div>
+    <div id="githubRepoGrid" class="github-repo-grid"></div>`;
+  const grid = document.getElementById("githubRepoGrid");
+  const draw = (query = "") => {
+    const filtered = repositories.filter((repo) => `${repo.fullName} ${repo.description}`.toLowerCase().includes(query.toLowerCase()));
+    grid.innerHTML = filtered.length ? filtered.map((repo, index) => `
+      <article class="github-repo-card">
+        <h3><i class="fa-solid fa-code-branch"></i> ${escapeHtml(repo.fullName)}</h3>
+        <div class="github-repo-meta"><span class="github-badge">${repo.private ? "Private" : "Public"}</span><span>${escapeHtml(repo.defaultBranch)}</span></div>
+        <p>${escapeHtml(repo.description || "No description")}</p>
+        <button type="button" class="github-primary-button" data-github-repo-index="${index}" ${repo.canPush ? "" : "disabled"}>${repo.canPush ? "Update files" : "Read only"}</button>
+      </article>`).join("") : '<div class="github-empty">No matching repositories found.</div>';
+    grid.querySelectorAll("[data-github-repo-index]").forEach((button) => {
+      button.addEventListener("click", () => renderGitHubCommitView(filtered[Number(button.dataset.githubRepoIndex)]));
+    });
+  };
+  draw();
+  document.getElementById("githubRepoSearch")?.addEventListener("input", (event) => draw(event.target.value));
+}
+
+async function renderGitHubCommitView(repo) {
+  if (!repo) return;
+  githubRepoModalTitle.textContent = String(repo.fullName || repo.name || "Repository");
+  githubRepoModalBody.innerHTML = '<div class="github-empty"><i class="fa-solid fa-spinner fa-spin"></i> Preparing files…</div>';
+  try {
+    githubRepoFileState = { repo, staged: new Map() };
+    githubRepoModalBody.innerHTML = `
+    <div class="github-commit-actions"><button type="button" class="github-secondary-button" data-github-action="repos"><i class="fa-solid fa-arrow-left"></i> Repositories</button><a class="github-secondary-button" href="${escapeHtmlAttributeValue(repo.htmlUrl)}" target="_blank" rel="noopener">Open on GitHub</a></div>
+    <div class="github-repo-file-toolbar">
+      <strong>Files in ${escapeHtml(String(repo.defaultBranch || "main"))}</strong>
+      <div class="github-repo-file-actions">
+        <button id="githubCreateFileBtn" type="button" class="github-secondary-button"><i class="fa-solid fa-file-circle-plus"></i> Create file</button>
+        <button id="githubUploadFileBtn" type="button" class="github-secondary-button"><i class="fa-solid fa-upload"></i> Upload file</button>
+        <input id="githubUploadFileInput" type="file" multiple hidden>
+      </div>
+    </div>
+    <div id="githubExistingFileList" class="github-file-list"><div class="github-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading repository files…</div></div>
+    <section id="githubFileEditor" class="github-file-editor" hidden>
+      <div class="github-form-field"><label for="githubFilePath">File path</label><input id="githubFilePath" class="github-form-control" placeholder="folder/file.html"></div>
+      <div class="github-form-field"><label for="githubFileContent">File content</label><textarea id="githubFileContent" class="github-form-control" spellcheck="false"></textarea></div>
+      <div class="github-commit-actions"><button id="githubCancelFileBtn" type="button" class="github-secondary-button">Cancel</button><button id="githubStageFileBtn" type="button" class="github-primary-button">Save change</button></div>
+    </section>
+    <div class="github-form-grid">
+      <div class="github-form-field"><label for="githubCommitMessage">Commit message (optional)</label><input id="githubCommitMessage" class="github-form-control" maxlength="250" placeholder="Update files from CodX Editor"></div>
+      <div class="github-form-field"><label for="githubCommitBranch">Branch</label><input id="githubCommitBranch" class="github-form-control" value="${escapeHtmlAttributeValue(repo.defaultBranch)}"></div>
+    </div>
+    <div class="github-form-field"><label for="githubCommitDescription">Description (optional)</label><textarea id="githubCommitDescription" class="github-form-control" placeholder="Add more details about this update"></textarea></div>
+    <div class="github-form-field"><label>Created, edited, or uploaded files</label><div id="githubStagedFileList" class="github-file-list"><div class="github-empty">No repository file changes yet.</div></div></div>
+    <div class="github-file-warning"><i class="fa-solid fa-shield-halved"></i> Review created, edited, and uploaded files before committing. Avoid uploading secrets such as .env files.</div>
+    <div id="githubCommitStatus"></div>
+    <div class="github-commit-actions"><span></span><button id="githubCommitBtn" type="button" class="github-primary-button"><i class="fa-solid fa-code-commit"></i> Commit selected files</button></div>`;
+    document.getElementById("githubCommitBtn")?.addEventListener("click", () => commitProjectFilesToGitHub(repo));
+    document.getElementById("githubCreateFileBtn")?.addEventListener("click", () => { renderGitHubFileEditorControls(); openGitHubFileEditor(); });
+    document.getElementById("githubUploadFileBtn")?.addEventListener("click", () => document.getElementById("githubUploadFileInput")?.click());
+    document.getElementById("githubUploadFileInput")?.addEventListener("change", handleGitHubFileUpload);
+    document.getElementById("githubCancelFileBtn")?.addEventListener("click", closeGitHubFileEditor);
+    document.getElementById("githubStageFileBtn")?.addEventListener("click", stageGitHubEditedFile);
+    document.getElementById("githubCommitMessage")?.focus();
+    await loadExistingGitHubFiles(repo);
+  } catch (error) {
+    console.error("Unable to render GitHub files:", error);
+    githubRepoModalBody.innerHTML = `<div class="github-status error"><strong>Files could not be displayed.</strong><br>${escapeHtml(String(error?.message || error || "Unknown error"))}</div><button type="button" class="github-secondary-button" data-github-action="repos">Back to repositories</button>`;
+  }
+}
+
+async function loadExistingGitHubFiles(repo) {
+  const container = document.getElementById("githubExistingFileList");
+  if (!container) return;
+  try {
+    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/files?branch=${encodeURIComponent(repo.defaultBranch)}`, {
+      credentials: "same-origin", headers: { Accept: "application/json" },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load repository files.");
+    container.innerHTML = data.files.length ? data.files.map((file) => {
+      return `<button type="button" class="github-file-row github-file-row-button" data-github-existing-path="${escapeHtmlAttributeValue(file.path)}"><i class="fa-regular fa-file-code" aria-hidden="true"></i><span>${escapeHtml(file.path)}</span></button>`;
+    }).join("") : '<div class="github-empty">This branch has no files yet.</div>';
+    if (data.truncated) container.insertAdjacentHTML("beforeend", '<div class="github-file-warning">GitHub returned a shortened file list for this large repository.</div>');
+    container.querySelectorAll("[data-github-existing-path]").forEach((button) => {
+      button.addEventListener("click", () => editExistingGitHubFile(repo, button.dataset.githubExistingPath));
+    });
+  } catch (error) {
+    container.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function openGitHubFileEditor(path = "", content = "", lockPath = false) {
+  const panel = document.getElementById("githubFileEditor");
+  const pathInput = document.getElementById("githubFilePath");
+  const contentInput = document.getElementById("githubFileContent");
+  if (!panel || !pathInput || !contentInput) return;
+  panel.hidden = false;
+  pathInput.value = String(path || "");
+  pathInput.readOnly = Boolean(lockPath);
+  contentInput.value = String(content || "");
+  (lockPath ? contentInput : pathInput).focus();
+}
+
+function closeGitHubFileEditor() {
+  const panel = document.getElementById("githubFileEditor");
+  if (panel) panel.hidden = true;
+}
+
+async function editExistingGitHubFile(repo, path) {
+  const panel = document.getElementById("githubFileEditor");
+  if (panel) {
+    panel.hidden = false;
+    panel.innerHTML = '<div class="github-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading file…</div>';
+  }
+  try {
+    const branch = document.getElementById("githubCommitBranch")?.value.trim() || repo.defaultBranch;
+    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/file?branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(path)}`, { credentials: "same-origin", headers: { Accept: "application/json" } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load this file.");
+    if (data.file.binary) throw new Error("Binary files can be replaced with Upload file, but cannot be edited as text.");
+    renderGitHubFileEditorControls();
+    openGitHubFileEditor(data.file.path, data.file.content, true);
+  } catch (error) {
+    if (panel) panel.innerHTML = `<div class="github-status error">${escapeHtml(String(error.message || error))}</div><button type="button" class="github-secondary-button" onclick="this.closest('.github-file-editor').hidden=true">Close</button>`;
+  }
+}
+
+function renderGitHubFileEditorControls() {
+  const panel = document.getElementById("githubFileEditor");
+  if (!panel) return;
+  panel.innerHTML = `<div class="github-form-field"><label for="githubFilePath">File path</label><input id="githubFilePath" class="github-form-control" placeholder="folder/file.html"></div><div class="github-form-field"><label for="githubFileContent">File content</label><textarea id="githubFileContent" class="github-form-control" spellcheck="false"></textarea></div><div class="github-commit-actions"><button id="githubCancelFileBtn" type="button" class="github-secondary-button">Cancel</button><button id="githubStageFileBtn" type="button" class="github-primary-button">Save change</button></div>`;
+  document.getElementById("githubCancelFileBtn")?.addEventListener("click", closeGitHubFileEditor);
+  document.getElementById("githubStageFileBtn")?.addEventListener("click", stageGitHubEditedFile);
+}
+
+function stageGitHubEditedFile() {
+  const path = document.getElementById("githubFilePath")?.value.trim().replace(/\\/g, "/");
+  const content = document.getElementById("githubFileContent")?.value || "";
+  if (!path || path.split("/").some((part) => !part || part === "." || part === "..")) {
+    showNotification("Enter a valid repository file path.", "error");
+    return;
+  }
+  githubRepoFileState.staged.set(path, { path, content, encoding: "utf-8" });
+  renderGitHubStagedFiles();
+  closeGitHubFileEditor();
+}
+
+async function handleGitHubFileUpload(event) {
+  const files = [...(event.target.files || [])];
+  for (const file of files) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Unable to read upload."));
+      reader.readAsDataURL(file);
+    });
+    githubRepoFileState.staged.set(file.name, { path: file.name, content: dataUrl.split(",")[1] || "", encoding: "base64" });
+  }
+  event.target.value = "";
+  renderGitHubStagedFiles();
+}
+
+function renderGitHubStagedFiles() {
+  const container = document.getElementById("githubStagedFileList");
+  if (!container) return;
+  const files = [...githubRepoFileState.staged.values()];
+  container.innerHTML = files.length ? files.map((file) => `<div class="github-file-row"><i class="fa-solid fa-code-commit"></i><span>${escapeHtml(file.path)}</span><button type="button" class="github-icon-button" data-github-remove-staged="${escapeHtmlAttributeValue(file.path)}" aria-label="Remove ${escapeHtmlAttributeValue(file.path)}"><i class="fa-solid fa-xmark"></i></button></div>`).join("") : '<div class="github-empty">No repository file changes yet.</div>';
+  container.querySelectorAll("[data-github-remove-staged]").forEach((button) => button.addEventListener("click", () => {
+    githubRepoFileState.staged.delete(button.dataset.githubRemoveStaged);
+    renderGitHubStagedFiles();
+  }));
+}
+
+async function commitProjectFilesToGitHub(repo) {
+  const button = document.getElementById("githubCommitBtn");
+  const status = document.getElementById("githubCommitStatus");
+  const message = document.getElementById("githubCommitMessage")?.value.trim();
+  const description = document.getElementById("githubCommitDescription")?.value.trim();
+  const branch = document.getElementById("githubCommitBranch")?.value.trim();
+  const stagedFiles = [...githubRepoFileState.staged.values()];
+  if (!branch || !stagedFiles.length) {
+    status.innerHTML = '<div class="github-status error">Enter a branch and create, edit, or upload at least one file.</div>';
+    return;
+  }
+  const files = stagedFiles;
+  button.disabled = true;
+  status.innerHTML = '<div class="github-status"><i class="fa-solid fa-spinner fa-spin"></i> Creating commit…</div>';
+  try {
+    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/commit`, {
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ branch, message, description, files }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "The commit failed.");
+    status.innerHTML = `<div class="github-status success">Committed ${data.commit.files} file(s) as <a href="${escapeHtmlAttributeValue(data.commit.htmlUrl)}" target="_blank" rel="noopener">${escapeHtml(data.commit.shortSha)}</a>.</div>`;
+    showNotification("GitHub commit created successfully.", "success");
+  } catch (error) {
+    status.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+closeGitHubRepoModalBtn?.addEventListener("click", closeGitHubRepositoryModal);
+githubRepoModal?.addEventListener("click", (event) => { if (event.target === githubRepoModal) closeGitHubRepositoryModal(); });
+githubRepoModal?.addEventListener("keydown", (event) => {
+  event.stopPropagation();
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeGitHubRepositoryModal();
+  }
+}, true);
+githubRepoModalBody?.addEventListener("click", async (event) => {
+  const action = event.target.closest("[data-github-action]")?.dataset.githubAction;
+  if (action === "repos") openGitHubRepositoryModal();
+  if (action === "reconnect") beginGitHubOAuth();
+  if (action === "disconnect") {
+    await fetch("/api/github/logout", { method: "POST", credentials: "same-origin" });
+    closeGitHubRepositoryModal();
+    await refreshGitHubConnectionStatus();
+    showNotification("GitHub account disconnected.", "info");
+  }
+});
 
 if (announcementPopupOkBtn) {
   announcementPopupOkBtn.onclick = closeAnnouncementPopup;
@@ -5212,18 +5547,7 @@ function bindSettingsColorPicker(colorInput, title) {
       title,
     );
   };
-  colorInput.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openPicker();
-  });
   colorInput.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.detail === 0) openPicker();
-  });
-  colorInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
     openPicker();
@@ -8856,7 +9180,8 @@ function openCssColorPicker(anchor, initialValue, onSelect = null, pickerTitle =
       <button class="css-color-apply" type="button">Apply</button>
     </div>
   `;
-  document.body.appendChild(picker);
+  const pickerHost = anchor.closest?.("[role='dialog']") || document.body;
+  pickerHost.appendChild(picker);
   activeCssColorPicker = picker;
 
   const nativeInput = picker.querySelector(".css-native-color-input");
@@ -8874,32 +9199,58 @@ function openCssColorPicker(anchor, initialValue, onSelect = null, pickerTitle =
     blueInput.value = rgb.blue;
   };
   const setFieldsFromRgb = () => setFieldsFromHex(cssRgbToHex(redInput.value, greenInput.value, blueInput.value));
-  const applyColor = (color) => {
+  const applyColor = (color, closeAfterApply = false) => {
     const normalized = cssColorToHex(color);
     if (typeof onSelect === "function") {
       onSelect(normalized);
-      closeCssColorPicker();
+      if (closeAfterApply) closeCssColorPicker();
       return;
     }
     selectCssSuggestion(normalized);
   };
   setFieldsFromHex(initialHex);
 
-  nativeInput.addEventListener("input", () => setFieldsFromHex(nativeInput.value));
-  nativeInput.addEventListener("change", () => applyColor(nativeInput.value));
+  nativeInput.addEventListener("input", () => {
+    setFieldsFromHex(nativeInput.value);
+    if (typeof onSelect === "function") onSelect(nativeInput.value);
+  });
+  nativeInput.addEventListener("change", () => {
+    if (typeof onSelect === "function") {
+      setFieldsFromHex(nativeInput.value);
+      onSelect(nativeInput.value);
+    } else {
+      applyColor(nativeInput.value);
+    }
+  });
   hexInput.addEventListener("input", () => {
-    if (/^#[\da-f]{6}$/i.test(hexInput.value.trim())) setFieldsFromHex(hexInput.value.trim());
+    if (/^#[\da-f]{6}$/i.test(hexInput.value.trim())) {
+      setFieldsFromHex(hexInput.value.trim());
+      if (typeof onSelect === "function") onSelect(hexInput.value.trim());
+    }
   });
   hexInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") applyColor(hexInput.value);
   });
-  [redInput, greenInput, blueInput].forEach((input) => input.addEventListener("input", setFieldsFromRgb));
+  [redInput, greenInput, blueInput].forEach((input) => input.addEventListener("input", () => {
+    setFieldsFromRgb();
+    if (typeof onSelect === "function") onSelect(hexInput.value);
+  }));
   picker.querySelectorAll(".css-color-preset").forEach((button) => {
-    button.addEventListener("click", () => applyColor(button.dataset.color));
+    button.addEventListener("click", () => {
+      if (typeof onSelect === "function") {
+        setFieldsFromHex(button.dataset.color);
+        onSelect(button.dataset.color);
+      } else {
+        applyColor(button.dataset.color);
+      }
+    });
   });
   picker.querySelector(".css-color-picker-close").addEventListener("click", closeCssColorPicker);
-  picker.querySelector(".css-color-cancel").addEventListener("click", closeCssColorPicker);
-  picker.querySelector(".css-color-apply").addEventListener("click", () => applyColor(hexInput.value));
+  picker.querySelector(".css-color-cancel").addEventListener("click", () => {
+    if (typeof onSelect === "function") onSelect(initialHex);
+    closeCssColorPicker();
+  });
+  picker.querySelector(".css-color-apply").addEventListener("click", () => applyColor(hexInput.value, true));
   picker.addEventListener("pointerdown", (event) => event.stopPropagation());
 
   const anchorRect = anchor.getBoundingClientRect();
@@ -8911,7 +9262,8 @@ function openCssColorPicker(anchor, initialValue, onSelect = null, pickerTitle =
     : Math.max(10, anchorRect.top - pickerRect.height - 8);
   picker.style.left = `${left}px`;
   picker.style.top = `${top}px`;
-  nativeInput.focus();
+  hexInput.focus();
+  hexInput.select();
 }
 
 document.addEventListener("pointerdown", (event) => {

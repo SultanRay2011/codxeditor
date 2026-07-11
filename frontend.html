@@ -204,6 +204,16 @@
               <i class="fa-solid fa-share-nodes"></i>
               <strong>PUBLISH / SHARE</strong>
             </button>
+            <button
+              id="connectGitHubBtn"
+              class="run-button header-more-action"
+              aria-label="Connect to GitHub"
+              title="Sign in with your GitHub account"
+              type="button"
+            >
+              <i class="fa-brands fa-github"></i>
+              <strong id="connectGitHubBtnLabel">CONNECT TO GITHUB</strong>
+            </button>
           </div>
           <div class="header-more-section">
             <div class="header-more-section-title">Editor Extras</div>
@@ -513,6 +523,21 @@
           ></div>
         </div>
       </div>
+    </div>
+
+    <div id="githubRepoModal" class="github-repo-modal" role="dialog" aria-modal="true" aria-labelledby="githubRepoModalTitle" hidden>
+      <section class="github-repo-dialog" tabindex="-1">
+        <header class="github-repo-header">
+          <div>
+            <span class="github-repo-kicker"><i class="fa-brands fa-github" aria-hidden="true"></i> GITHUB</span>
+            <h2 id="githubRepoModalTitle">Repositories</h2>
+          </div>
+          <button id="closeGitHubRepoModalBtn" class="github-icon-button" type="button" aria-label="Close GitHub repositories">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div id="githubRepoModalBody" class="github-repo-body"></div>
+      </section>
     </div>
 
     <!-- Settings Modal -->

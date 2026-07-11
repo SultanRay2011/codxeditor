@@ -24,6 +24,16 @@ const PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
 const ADMIN_COOKIE = "codx_admin_session";
+const GITHUB_OAUTH_COOKIE = "codx_github_session";
+const GITHUB_OAUTH_STATE_COOKIE = "codx_github_oauth_state";
+const GITHUB_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "").trim();
+const GITHUB_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
+const GITHUB_OAUTH_CALLBACK_URL = String(process.env.GITHUB_OAUTH_CALLBACK_URL || "").trim();
+const GITHUB_OAUTH_SCOPE = String(process.env.GITHUB_OAUTH_SCOPE || "repo read:user").trim();
+const GITHUB_SESSIONS_FILE = path.join(__dirname, ".codx-github-sessions.enc");
+const githubOAuthFlows = new Map();
+const githubSessions = new Map();
+loadGitHubSessions();
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
 const LEGACY_SESSION_ID_RE = /^\d{10,}$/;
@@ -84,9 +94,346 @@ function loadEnvFile() {
   }
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "25mb" }));
 app.use(express.static(path.join(__dirname)));
 loadPublishedProjects();
+
+app.get("/api/github/status", (req, res) => {
+  const session = getGitHubSession(req);
+  res.json({
+    ok: true,
+    configured: Boolean(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET),
+    connected: Boolean(session),
+    scope: session?.scope || "",
+    user: session
+      ? {
+          login: session.user.login,
+          name: session.user.name,
+          avatarUrl: session.user.avatarUrl,
+          profileUrl: session.user.profileUrl,
+        }
+      : null,
+  });
+});
+
+app.get("/auth/github", (req, res) => {
+  const returnTo = normalizeGitHubReturnTo(req.query.returnTo);
+  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+    res.redirect(buildGitHubResultRedirect(returnTo, "not_configured"));
+    return;
+  }
+
+  pruneGitHubAuthState();
+  const state = crypto.randomBytes(32).toString("base64url");
+  const codeVerifier = crypto.randomBytes(48).toString("base64url");
+  const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+  const redirectUri = getGitHubCallbackUrl(req);
+  githubOAuthFlows.set(state, {
+    codeVerifier,
+    redirectUri,
+    returnTo,
+    createdAt: Date.now(),
+  });
+
+  res.setHeader(
+    "Set-Cookie",
+    buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, state, req, 600),
+  );
+  const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+  authorizeUrl.searchParams.set("client_id", GITHUB_CLIENT_ID);
+  authorizeUrl.searchParams.set("redirect_uri", redirectUri);
+  authorizeUrl.searchParams.set("state", state);
+  authorizeUrl.searchParams.set("code_challenge", codeChallenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+  authorizeUrl.searchParams.set("prompt", "select_account");
+  if (GITHUB_OAUTH_SCOPE) authorizeUrl.searchParams.set("scope", GITHUB_OAUTH_SCOPE);
+  res.redirect(authorizeUrl.toString());
+});
+
+app.get("/auth/github/callback", async (req, res) => {
+  const state = String(req.query.state || "");
+  const stateCookie = String(parseCookies(req)[GITHUB_OAUTH_STATE_COOKIE] || "");
+  const flow = githubOAuthFlows.get(state);
+  const fallbackReturnTo = normalizeGitHubReturnTo(req.query.returnTo);
+  const returnTo = flow?.returnTo || fallbackReturnTo;
+  const clearStateCookie = buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, "", req, 0);
+
+  if (!flow || !safeStringEqual(state, stateCookie) || Date.now() - flow.createdAt > 10 * 60 * 1000) {
+    if (state) githubOAuthFlows.delete(state);
+    res.setHeader("Set-Cookie", clearStateCookie);
+    res.redirect(buildGitHubResultRedirect(returnTo, "invalid_state"));
+    return;
+  }
+  githubOAuthFlows.delete(state);
+
+  if (req.query.error) {
+    res.setHeader("Set-Cookie", clearStateCookie);
+    res.redirect(buildGitHubResultRedirect(returnTo, String(req.query.error)));
+    return;
+  }
+
+  const code = String(req.query.code || "");
+  if (!code) {
+    res.setHeader("Set-Cookie", clearStateCookie);
+    res.redirect(buildGitHubResultRedirect(returnTo, "missing_code"));
+    return;
+  }
+
+  try {
+    const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "CodX-Editor",
+      },
+      body: new URLSearchParams({
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: flow.redirectUri,
+        code_verifier: flow.codeVerifier,
+      }),
+    });
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      throw new Error(tokenData.error_description || tokenData.error || "GitHub token exchange failed");
+    }
+
+    const userResponse = await fetch("https://api.github.com/user", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${tokenData.access_token}`,
+        "User-Agent": "CodX-Editor",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    const userData = await userResponse.json();
+    if (!userResponse.ok || !userData.login) {
+      throw new Error(userData.message || "Unable to load the GitHub account");
+    }
+
+    const sessionId = crypto.randomBytes(32).toString("base64url");
+    githubSessions.set(sessionId, {
+      accessToken: tokenData.access_token,
+      scope: String(tokenData.scope || ""),
+      createdAt: Date.now(),
+      user: {
+        id: userData.id,
+        login: String(userData.login),
+        name: String(userData.name || ""),
+        avatarUrl: String(userData.avatar_url || ""),
+        profileUrl: String(userData.html_url || ""),
+      },
+    });
+    saveGitHubSessions();
+    res.setHeader("Set-Cookie", [
+      clearStateCookie,
+      buildOAuthCookie(GITHUB_OAUTH_COOKIE, sessionId, req, 7 * 24 * 60 * 60),
+    ]);
+    res.redirect(buildGitHubResultRedirect(returnTo, "connected"));
+  } catch (error) {
+    console.error("GitHub OAuth callback failed:", error.message);
+    res.setHeader("Set-Cookie", clearStateCookie);
+    res.redirect(buildGitHubResultRedirect(returnTo, "failed"));
+  }
+});
+
+app.post("/api/github/logout", (req, res) => {
+  const sessionId = String(parseCookies(req)[GITHUB_OAUTH_COOKIE] || "");
+  if (sessionId && githubSessions.delete(sessionId)) saveGitHubSessions();
+  res.setHeader("Set-Cookie", buildOAuthCookie(GITHUB_OAUTH_COOKIE, "", req, 0));
+  res.json({ ok: true });
+});
+
+app.get("/api/github/repos", async (req, res) => {
+  const session = getGitHubSession(req);
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Connect a GitHub account first." });
+    return;
+  }
+  try {
+    const repos = await githubApiRequest(
+      session,
+      "/user/repos?per_page=100&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member",
+    );
+    res.json({
+      ok: true,
+      repos: (Array.isArray(repos) ? repos : []).map((repo) => ({
+        id: repo.id,
+        name: repo.name,
+        fullName: repo.full_name,
+        owner: repo.owner?.login || "",
+        private: Boolean(repo.private),
+        description: repo.description || "",
+        defaultBranch: repo.default_branch || "main",
+        htmlUrl: repo.html_url || "",
+        updatedAt: repo.updated_at || "",
+        canPush: Boolean(repo.permissions?.push || repo.permissions?.admin || repo.permissions?.maintain),
+      })),
+      scope: session.scope,
+    });
+  } catch (error) {
+    res.status(error.status || 502).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/github/repos/:owner/:repo/files", async (req, res) => {
+  const session = getGitHubSession(req);
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Connect a GitHub account first." });
+    return;
+  }
+  const owner = String(req.params.owner || "").trim();
+  const repo = String(req.params.repo || "").trim();
+  const branch = String(req.query.branch || "").trim();
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo) || !branch) {
+    res.status(400).json({ ok: false, error: "Invalid GitHub repository or branch." });
+    return;
+  }
+  try {
+    const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const encodedBranch = branch.split("/").map(encodeURIComponent).join("/");
+    const tree = await githubApiRequest(session, `${repoPath}/git/trees/${encodedBranch}?recursive=1`);
+    res.json({
+      ok: true,
+      truncated: Boolean(tree?.truncated),
+      files: (Array.isArray(tree?.tree) ? tree.tree : [])
+        .filter((item) => item?.type === "blob" && item?.path)
+        .map((item) => ({ path: item.path, size: Number(item.size) || 0, sha: item.sha || "" })),
+    });
+  } catch (error) {
+    res.status(error.status || 502).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/github/repos/:owner/:repo/file", async (req, res) => {
+  const session = getGitHubSession(req);
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Connect a GitHub account first." });
+    return;
+  }
+  const owner = String(req.params.owner || "").trim();
+  const repo = String(req.params.repo || "").trim();
+  const branch = String(req.query.branch || "").trim();
+  const filePath = normalizeGitHubFilePath(req.query.path);
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo) || !branch || !filePath) {
+    res.status(400).json({ ok: false, error: "Invalid repository file request." });
+    return;
+  }
+  try {
+    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+    const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const file = await githubApiRequest(session, `${repoPath}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`);
+    if (Array.isArray(file) || file?.type !== "file" || file?.encoding !== "base64") {
+      throw createGitHubApiError(400, "This repository item is not an editable file.");
+    }
+    if (Number(file.size) > 10 * 1024 * 1024) throw createGitHubApiError(413, "This file is too large to edit here.");
+    const buffer = Buffer.from(String(file.content || "").replace(/\s/g, ""), "base64");
+    const binary = buffer.includes(0);
+    res.json({ ok: true, file: { path: filePath, size: Number(file.size) || buffer.length, binary, content: binary ? "" : buffer.toString("utf8") } });
+  } catch (error) {
+    res.status(error.status || 502).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/github/repos/:owner/:repo/commit", async (req, res) => {
+  const session = getGitHubSession(req);
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Connect a GitHub account first." });
+    return;
+  }
+  const owner = String(req.params.owner || "").trim();
+  const repo = String(req.params.repo || "").trim();
+  const branch = String(req.body?.branch || "").trim();
+  const message = String(req.body?.message || "").trim() || "Update files from CodX Editor";
+  const description = String(req.body?.description || "").trim();
+  const files = Array.isArray(req.body?.files) ? req.body.files : [];
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
+    res.status(400).json({ ok: false, error: "Invalid GitHub repository." });
+    return;
+  }
+  if (!branch || branch.length > 255 || /[\s~^:?*\[\\]/.test(branch) || branch.includes("..")) {
+    res.status(400).json({ ok: false, error: "Enter a valid branch name." });
+    return;
+  }
+  if (message.length > 250) {
+    res.status(400).json({ ok: false, error: "The commit message must be no more than 250 characters." });
+    return;
+  }
+  if (!files.length || files.length > 500) {
+    res.status(400).json({ ok: false, error: "Select between 1 and 500 files to commit." });
+    return;
+  }
+
+  let totalBytes = 0;
+  const normalizedFiles = [];
+  for (const file of files) {
+    const filePath = normalizeGitHubFilePath(file?.path);
+    const encoding = file?.encoding === "base64" ? "base64" : "utf-8";
+    const content = String(file?.content || "");
+    if (!filePath) {
+      res.status(400).json({ ok: false, error: "A selected file has an invalid path." });
+      return;
+    }
+    const byteLength = encoding === "base64"
+      ? Buffer.byteLength(content, "base64")
+      : Buffer.byteLength(content, "utf8");
+    totalBytes += byteLength;
+    if (byteLength > 10 * 1024 * 1024 || totalBytes > 20 * 1024 * 1024) {
+      res.status(413).json({ ok: false, error: "The selected files exceed the 20 MB commit limit." });
+      return;
+    }
+    normalizedFiles.push({ path: filePath, encoding, content });
+  }
+
+  try {
+    const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const encodedBranch = branch.split("/").map(encodeURIComponent).join("/");
+    const reference = await githubApiRequest(session, `${repoPath}/git/ref/heads/${encodedBranch}`);
+    const parentSha = reference?.object?.sha;
+    if (!parentSha) throw createGitHubApiError(404, "The selected branch was not found.");
+    const parentCommit = await githubApiRequest(session, `${repoPath}/git/commits/${parentSha}`);
+    const baseTreeSha = parentCommit?.tree?.sha;
+    if (!baseTreeSha) throw createGitHubApiError(502, "GitHub did not return the branch tree.");
+
+    const tree = [];
+    for (const file of normalizedFiles) {
+      const blob = await githubApiRequest(session, `${repoPath}/git/blobs`, {
+        method: "POST",
+        body: {
+          content: file.content,
+          encoding: file.encoding,
+        },
+      });
+      tree.push({ path: file.path, mode: "100644", type: "blob", sha: blob.sha });
+    }
+    const createdTree = await githubApiRequest(session, `${repoPath}/git/trees`, {
+      method: "POST",
+      body: { base_tree: baseTreeSha, tree },
+    });
+    const fullMessage = description ? `${message}\n\n${description}` : message;
+    const commit = await githubApiRequest(session, `${repoPath}/git/commits`, {
+      method: "POST",
+      body: { message: fullMessage, tree: createdTree.sha, parents: [parentSha] },
+    });
+    await githubApiRequest(session, `${repoPath}/git/refs/heads/${encodedBranch}`, {
+      method: "PATCH",
+      body: { sha: commit.sha, force: false },
+    });
+    res.json({
+      ok: true,
+      commit: {
+        sha: commit.sha,
+        shortSha: String(commit.sha || "").slice(0, 7),
+        htmlUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commit/${commit.sha}`,
+        files: normalizedFiles.length,
+      },
+    });
+  } catch (error) {
+    res.status(error.status || 502).json({ ok: false, error: error.message });
+  }
+});
 
 app.get("/404-for-preview.html", (_req, res) => {
   res.status(404).sendFile(path.join(__dirname, "404-for-preview.html"));
@@ -441,6 +788,178 @@ function savePublishedProjects() {
   } catch (error) {
     console.error("Failed to save published projects:", error);
   }
+}
+
+function isSecureRequest(req) {
+  const forwardedProtocol = String(req.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  return Boolean(req.secure || forwardedProtocol === "https");
+}
+
+function buildOAuthCookie(name, value, req, maxAgeSeconds) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "HttpOnly",
+    "SameSite=Lax",
+    "Path=/",
+    `Max-Age=${Math.max(0, Number(maxAgeSeconds) || 0)}`,
+  ];
+  if (isSecureRequest(req)) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function normalizeGitHubReturnTo(value) {
+  const target = String(value || "/frontend.html").trim();
+  if (!target.startsWith("/") || target.startsWith("//") || /[\r\n]/.test(target)) {
+    return "/frontend.html";
+  }
+  return target;
+}
+
+function buildGitHubResultRedirect(returnTo, result) {
+  const url = new URL(normalizeGitHubReturnTo(returnTo), "http://codx.local");
+  url.searchParams.set("github", String(result || "failed"));
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function getGitHubCallbackUrl(req) {
+  if (GITHUB_OAUTH_CALLBACK_URL) return GITHUB_OAUTH_CALLBACK_URL;
+  const protocol = isSecureRequest(req) ? "https" : "http";
+  return `${protocol}://${req.get("host")}/auth/github/callback`;
+}
+
+function safeStringEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    leftBuffer.length > 0 &&
+    crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function getGitHubSessionEncryptionKey() {
+  if (!GITHUB_CLIENT_SECRET) return null;
+  return crypto.createHash("sha256").update(`codx-github-sessions:${GITHUB_CLIENT_SECRET}`).digest();
+}
+
+function loadGitHubSessions() {
+  const key = getGitHubSessionEncryptionKey();
+  if (!key || !fs.existsSync(GITHUB_SESSIONS_FILE)) return;
+  try {
+    const payload = JSON.parse(fs.readFileSync(GITHUB_SESSIONS_FILE, "utf8"));
+    const iv = Buffer.from(String(payload.iv || ""), "base64");
+    const authTag = Buffer.from(String(payload.authTag || ""), "base64");
+    const encrypted = Buffer.from(String(payload.data || ""), "base64");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    const plainText = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+    const storedSessions = JSON.parse(plainText);
+    const expiresAfter = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    for (const [sessionId, session] of Array.isArray(storedSessions) ? storedSessions : []) {
+      if (
+        typeof sessionId === "string" &&
+        session?.accessToken &&
+        session?.user?.login &&
+        now - Number(session.createdAt || 0) <= expiresAfter
+      ) {
+        githubSessions.set(sessionId, session);
+      }
+    }
+  } catch (error) {
+    console.warn("Unable to restore GitHub sessions; users will need to reconnect:", error.message);
+  }
+}
+
+function saveGitHubSessions() {
+  const key = getGitHubSessionEncryptionKey();
+  if (!key) return;
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(JSON.stringify([...githubSessions.entries()]), "utf8"),
+      cipher.final(),
+    ]);
+    const payload = JSON.stringify({
+      version: 1,
+      iv: iv.toString("base64"),
+      authTag: cipher.getAuthTag().toString("base64"),
+      data: encrypted.toString("base64"),
+    });
+    const temporaryFile = `${GITHUB_SESSIONS_FILE}.tmp`;
+    fs.writeFileSync(temporaryFile, payload, { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temporaryFile, GITHUB_SESSIONS_FILE);
+  } catch (error) {
+    console.warn("Unable to persist GitHub sessions:", error.message);
+  }
+}
+
+function pruneGitHubAuthState() {
+  const now = Date.now();
+  for (const [state, flow] of githubOAuthFlows.entries()) {
+    if (now - Number(flow?.createdAt || 0) > 10 * 60 * 1000) githubOAuthFlows.delete(state);
+  }
+  let removedSession = false;
+  for (const [sessionId, session] of githubSessions.entries()) {
+    if (now - Number(session?.createdAt || 0) > 7 * 24 * 60 * 60 * 1000) {
+      githubSessions.delete(sessionId);
+      removedSession = true;
+    }
+  }
+  if (removedSession) saveGitHubSessions();
+}
+
+function getGitHubSession(req) {
+  pruneGitHubAuthState();
+  const sessionId = String(parseCookies(req)[GITHUB_OAUTH_COOKIE] || "");
+  return sessionId ? githubSessions.get(sessionId) || null : null;
+}
+
+function createGitHubApiError(status, message) {
+  const error = new Error(String(message || "GitHub request failed."));
+  error.status = Number(status) || 502;
+  return error;
+}
+
+async function githubApiRequest(session, apiPath, options = {}) {
+  if (!session?.accessToken) throw createGitHubApiError(401, "Connect a GitHub account first.");
+  const response = await fetch(`https://api.github.com${apiPath}`, {
+    method: options.method || "GET",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${session.accessToken}`,
+      "User-Agent": "CodX-Editor",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const responseText = await response.text();
+  let data = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch (_error) {
+    data = responseText;
+  }
+  if (!response.ok) {
+    const message = typeof data === "object" && data?.message
+      ? data.message
+      : `GitHub request failed (${response.status}).`;
+    throw createGitHubApiError(response.status, message);
+  }
+  return data;
+}
+
+function normalizeGitHubFilePath(value) {
+  const pathValue = String(value || "").replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+  if (!pathValue || pathValue.length > 1024 || /[\0-\x1f\x7f]/.test(pathValue)) return "";
+  const segments = pathValue.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment === ".git")) return "";
+  return segments.join("/");
 }
 
 function parseCookies(req) {
