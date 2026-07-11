@@ -39,6 +39,27 @@ const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
 const LEGACY_SESSION_ID_RE = /^\d{10,}$/;
 const SESSION_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const COLLAB_CURSOR_STYLES = new Set(["pointer", "hand", "mouse", "crosshair", "pen", "text"]);
+const COUNTRY_LANGUAGE_MAP = {
+  AD: "ca", AE: "ar", AF: "fa", AL: "sq", AM: "hy", AO: "pt", AR: "es", AT: "de", AU: "en", AZ: "az",
+  BA: "bs", BD: "bn", BE: "nl", BF: "fr", BG: "bg", BH: "ar", BI: "fr", BJ: "fr", BO: "es", BR: "pt",
+  BS: "en", BT: "dz", BW: "en", BY: "be", BZ: "en", CA: "en", CD: "fr", CF: "fr", CG: "fr", CH: "de",
+  CI: "fr", CL: "es", CM: "fr", CN: "zh-CN", CO: "es", CR: "es", CU: "es", CV: "pt", CY: "el", CZ: "cs",
+  DE: "de", DJ: "fr", DK: "da", DO: "es", DZ: "ar", EC: "es", EE: "et", EG: "ar", ER: "ti", ES: "es",
+  ET: "am", FI: "fi", FJ: "en", FR: "fr", GA: "fr", GB: "en", GE: "ka", GH: "en", GM: "en", GN: "fr",
+  GQ: "es", GR: "el", GT: "es", GW: "pt", GY: "en", HN: "es", HR: "hr", HT: "fr", HU: "hu", ID: "id",
+  IE: "en", IL: "he", IN: "hi", IQ: "ar", IR: "fa", IS: "is", IT: "it", JM: "en", JO: "ar", JP: "ja",
+  KE: "sw", KG: "ky", KH: "km", KR: "ko", KW: "ar", KZ: "kk", LA: "lo", LB: "ar", LK: "si", LR: "en",
+  LS: "st", LT: "lt", LU: "fr", LV: "lv", LY: "ar", MA: "ar", MD: "ro", ME: "sr", MG: "mg", MK: "mk",
+  ML: "fr", MM: "my", MN: "mn", MR: "ar", MT: "mt", MU: "en", MV: "dv", MW: "en", MX: "es", MY: "ms",
+  MZ: "pt", NA: "en", NE: "fr", NG: "en", NI: "es", NL: "nl", NO: "no", NP: "ne", NZ: "en", OM: "ar",
+  PA: "es", PE: "es", PG: "en", PH: "tl", PK: "ur", PL: "pl", PR: "es", PS: "ar", PT: "pt", PY: "es",
+  QA: "ar", RO: "ro", RS: "sr", RU: "ru", RW: "rw", SA: "ar", SD: "ar", SE: "sv", SG: "en", SI: "sl",
+  SK: "sk", SL: "en", SN: "fr", SO: "so", SR: "nl", SS: "en", SV: "es", SY: "ar", SZ: "en", TD: "fr",
+  TG: "fr", TH: "th", TJ: "tg", TL: "pt", TN: "ar", TR: "tr", TT: "en", TW: "zh-TW", TZ: "sw", UA: "uk",
+  UG: "en", US: "en", UY: "es", UZ: "uz", VA: "it", VE: "es", VN: "vi", YE: "ar", ZA: "en", ZM: "en", ZW: "en",
+};
+const localizationProfileCache = new Map();
+const uiTranslationCache = new Map();
 const DEFAULT_PERMISSIONS = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -95,6 +116,109 @@ function loadEnvFile() {
   }
 }
 
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return String(forwarded || req.socket?.remoteAddress || "").replace(/^::ffff:/, "").trim();
+}
+
+function isPublicClientIp(ip) {
+  if (!ip || ip === "::1" || ip === "127.0.0.1" || ip === "0.0.0.0") return false;
+  if (/^10\./.test(ip) || /^192\.168\./.test(ip) || /^169\.254\./.test(ip)) return false;
+  const private172 = ip.match(/^172\.(\d+)\./);
+  return !(private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31);
+}
+
+function normalizeBrowserLanguage(value) {
+  const match = String(value || "").trim().match(/^[a-z]{2,3}/i);
+  return match ? match[0].toLowerCase() : "en";
+}
+
+function getCountryName(countryCode) {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(countryCode) || countryCode;
+  } catch (_error) {
+    return countryCode;
+  }
+}
+
+async function resolveLocalizationProfile(req, browserLanguage = "") {
+  const headerCountry = String(
+    req.headers["cf-ipcountry"] ||
+    req.headers["x-vercel-ip-country"] ||
+    req.headers["x-country-code"] ||
+    "",
+  ).trim().toUpperCase();
+  const clientIp = getClientIp(req);
+  const cacheKey = headerCountry || clientIp || `browser:${browserLanguage}`;
+  const cached = localizationProfileCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < 6 * 60 * 60 * 1000) return cached.profile;
+
+  let countryCode = /^[A-Z]{2}$/.test(headerCountry) ? headerCountry : "";
+  let country = countryCode ? getCountryName(countryCode) : "";
+  if (!countryCode && isPublicClientIp(clientIp)) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+      const response = await fetch(
+        `https://ipwho.is/${encodeURIComponent(clientIp)}?fields=success,country,country_code`,
+        { signal: controller.signal },
+      );
+      clearTimeout(timeout);
+      const location = await response.json();
+      if (response.ok && location?.success !== false) {
+        countryCode = String(location.country_code || "").toUpperCase();
+        country = String(location.country || "");
+      }
+    } catch (_error) {}
+  }
+
+  const browserFallback = normalizeBrowserLanguage(browserLanguage || req.headers["accept-language"]);
+  const language = COUNTRY_LANGUAGE_MAP[countryCode] || browserFallback || "en";
+  const profile = { countryCode, country, language };
+  localizationProfileCache.set(cacheKey, { cachedAt: Date.now(), profile });
+  return profile;
+}
+
+function decodeTranslationEntities(value) {
+  return String(value || "")
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+async function translateUiText(text, targetLanguage, clientIp) {
+  const source = String(text || "").trim();
+  if (!source || !/[A-Za-z]/.test(source) || Buffer.byteLength(source, "utf8") > 500) return text;
+  const cacheKey = `${targetLanguage}\u0000${source}`;
+  if (uiTranslationCache.has(cacheKey)) return uiTranslationCache.get(cacheKey);
+
+  const url = new URL("https://api.mymemory.translated.net/get");
+  url.searchParams.set("q", source);
+  url.searchParams.set("langpair", `en|${targetLanguage}`);
+  url.searchParams.set("mt", "1");
+  if (isPublicClientIp(clientIp)) url.searchParams.set("ip", clientIp);
+  if (process.env.MYMEMORY_API_KEY) url.searchParams.set("key", process.env.MYMEMORY_API_KEY);
+  if (process.env.MYMEMORY_EMAIL) url.searchParams.set("de", process.env.MYMEMORY_EMAIL);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    const data = await response.json();
+    const translated = decodeTranslationEntities(data?.responseData?.translatedText).trim();
+    if (!response.ok || !translated || /MYMEMORY WARNING/i.test(translated)) return text;
+    uiTranslationCache.set(cacheKey, translated);
+    if (uiTranslationCache.size > 5000) uiTranslationCache.delete(uiTranslationCache.keys().next().value);
+    return translated;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 app.use(express.json({ limit: "25mb" }));
 app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
@@ -107,6 +231,38 @@ app.use(
 );
 app.use(express.static(path.join(__dirname)));
 loadPublishedProjects();
+
+app.get("/api/localization/profile", async (req, res) => {
+  try {
+    const profile = await resolveLocalizationProfile(req, req.query?.browserLanguage);
+    res.json({ ok: true, ...profile, enabled: profile.language !== "en" });
+  } catch (_error) {
+    res.json({ ok: true, countryCode: "", country: "", language: "en", enabled: false });
+  }
+});
+
+app.post("/api/localization/translate", async (req, res) => {
+  try {
+    const profile = await resolveLocalizationProfile(req, req.body?.browserLanguage);
+    const texts = Array.isArray(req.body?.texts) ? req.body.texts.slice(0, 40) : [];
+    if (profile.language === "en" || !texts.length) {
+      res.json({ ok: true, language: profile.language, translations: texts.map((text) => String(text || "")) });
+      return;
+    }
+    const translations = [];
+    for (let index = 0; index < texts.length; index += 5) {
+      const group = texts.slice(index, index + 5);
+      translations.push(
+        ...(await Promise.all(
+          group.map((text) => translateUiText(String(text || ""), profile.language, getClientIp(req))),
+        )),
+      );
+    }
+    res.json({ ok: true, language: profile.language, translations });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message || "Translation service unavailable." });
+  }
+});
 
 app.get("/api/github/status", (req, res) => {
   const session = getGitHubSession(req);

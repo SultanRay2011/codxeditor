@@ -940,6 +940,17 @@ textarea.active {
   display: block;
 }
 
+#activeEditor,
+#syntaxHighlightLayer,
+#consoleOutput,
+#developerConsoleOutput,
+#nodeTerminal,
+#fileList,
+#suggestionPopup {
+  direction: ltr;
+  text-align: left;
+}
+
 textarea::-webkit-scrollbar {
   width: 10px;
   height: 10px;
