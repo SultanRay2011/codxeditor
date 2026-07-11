@@ -140,6 +140,10 @@ let githubConnectionState = {
 };
 let githubRepoFileState = { repo: null, staged: new Map() };
 
+function hasGitHubSessionCookie() {
+  return document.cookie.split(";").some((part) => part.trim().startsWith("codx_github_session="));
+}
+
 function updateGitHubConnectButton() {
   if (!connectGitHubBtn || !connectGitHubBtnLabel) return;
   const login = String(githubConnectionState.user?.login || "").trim();
@@ -156,6 +160,7 @@ function updateGitHubConnectButton() {
 
 async function refreshGitHubConnectionStatus() {
   if (!connectGitHubBtn) return;
+  const previousState = githubConnectionState;
   try {
     const response = await fetch("/api/github/status", {
       headers: { Accept: "application/json" },
@@ -171,7 +176,15 @@ async function refreshGitHubConnectionStatus() {
     };
     updateGitHubConnectButton();
   } catch (_err) {
-    githubConnectionState = { configured: true, connected: false, user: null, scope: "" };
+    if (previousState.connected || hasGitHubSessionCookie()) {
+      githubConnectionState = {
+        ...previousState,
+        connected: true,
+        configured: previousState.configured !== false,
+      };
+    } else {
+      githubConnectionState = { configured: true, connected: false, user: null, scope: "" };
+    }
     updateGitHubConnectButton();
   }
 }
