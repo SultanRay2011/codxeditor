@@ -297,7 +297,27 @@ async function renderGitHubCommitView(repo) {
     document.getElementById("githubCommitBtn")?.addEventListener("click", () => commitProjectFilesToGitHub(repo));
     document.getElementById("githubRefreshFilesBtn")?.addEventListener("click", () => refreshGitHubRepositoryFiles(repo));
     document.getElementById("githubCreateFileBtn")?.addEventListener("click", () => { renderGitHubFileEditorControls(); openGitHubFileEditor(); });
-    document.getElementById("githubUploadFileBtn")?.addEventListener("click", () => document.getElementById("githubUploadFileInput")?.click());
+    document.getElementById("githubUploadFileBtn")?.addEventListener("click", async () => {
+      const choice = await showGitHubUploadSourcePicker();
+      if (!choice?.ok) return;
+      if (choice.source === "project") {
+        const uploadedFiles = Array.isArray(projectFiles) ? projectFiles : [];
+        const stagedCount = uploadedFiles.reduce((count, file) => {
+          const fileName = normalizeProjectFileName(file?.name || "");
+          if (!fileName) return count;
+          githubRepoFileState.staged.set(fileName, { path: fileName, content: String(file?.content || ""), encoding: "utf-8" });
+          return count + 1;
+        }, 0);
+        if (!stagedCount) {
+          showNotification("There are no files in the current CodX Editor project to upload.", "warn");
+          return;
+        }
+        renderGitHubStagedFiles();
+        showNotification(`Added ${stagedCount} file(s) from the current CodX Editor project.`, "success");
+        return;
+      }
+      document.getElementById("githubUploadFileInput")?.click();
+    });
     document.getElementById("githubUploadFileInput")?.addEventListener("change", handleGitHubFileUpload);
     document.getElementById("githubCancelFileBtn")?.addEventListener("click", closeGitHubFileEditor);
     document.getElementById("githubStageFileBtn")?.addEventListener("click", stageGitHubEditedFile);
@@ -3405,6 +3425,33 @@ function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "cre
       };
     });
     setTimeout(() => document.getElementById("appDialogDoneBtn")?.focus(), 0);
+  });
+}
+
+function showGitHubUploadSourcePicker() {
+  return new Promise((resolve) => {
+    activeDialogResolver = (result) => resolve(result);
+    if (appDialogTitle) appDialogTitle.textContent = "Upload files";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = '<div style="display:grid;gap:10px;text-align:left"><div><strong>Choose where to upload from:</strong></div><div>Use your current CodX Editor project files, or pick files from your computer.</div></div>';
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="githubUploadFromProjectBtn" class="run-button" style="background:var(--accent-color);"><strong>FROM CURRENT PROJECT</strong></button>
+        <button type="button" id="githubUploadFromLocalBtn" class="run-button" style="background:#2563eb;"><strong>FROM FILE EXPLORER</strong></button>
+        <button type="button" id="githubUploadFromCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("githubUploadFromProjectBtn")?.addEventListener("click", () => closeAppDialog({ ok: true, source: "project" }));
+    document.getElementById("githubUploadFromLocalBtn")?.addEventListener("click", () => closeAppDialog({ ok: true, source: "local" }));
+    document.getElementById("githubUploadFromCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false, source: null }));
+    setTimeout(() => document.getElementById("githubUploadFromProjectBtn")?.focus(), 0);
   });
 }
 
