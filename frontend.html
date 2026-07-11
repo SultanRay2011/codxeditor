@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css" />
+    <link rel="stylesheet" href="/frontend.css?v=20260711-font-catalog7" />
   </head>
   <body>
     <a
@@ -240,6 +240,17 @@
                 />
               </svg>
               <strong>FONTS</strong>
+            </button>
+
+            <button
+              id="getIconsBtn"
+              class="run-button header-more-action"
+              title="Browse and copy Font Awesome icons"
+              aria-label="Get Font Awesome icons"
+              type="button"
+            >
+              <i class="fa-solid fa-icons"></i>
+              <strong>GET ICONS</strong>
             </button>
 
             <button
@@ -1406,8 +1417,8 @@
         >
           <p style="margin: 0; color: var(--text-primary); font-size: 14px">
             <strong>Instructions:</strong> Click any font to copy its CSS.
-            Search any Google Font name to create a custom font card if it is
-            not already listed.
+            Browse the complete free Fontsource catalog, or type a Google Font
+            name to create a custom card if it is not listed.
           </p>
         </div>
 
@@ -1416,9 +1427,13 @@
           <input
             id="fontSearchInput"
             type="text"
-            placeholder="Search or type any Google Font name..."
+            placeholder="Search every free font by name or category..."
             aria-label="Search fonts"
           />
+        </div>
+
+        <div id="fontCatalogStatus" class="font-catalog-status" role="status">
+          System fonts are ready. Loading the free font catalog...
         </div>
 
         <div
@@ -1431,6 +1446,44 @@
         >
           <!-- Fonts will be inserted here -->
         </div>
+      </div>
+    </div>
+
+    <!-- Font Awesome Icon Catalog -->
+    <div id="fontAwesomeIconModal" class="icon-catalog-modal" role="dialog" aria-modal="true" aria-labelledby="fontAwesomeIconTitle" hidden>
+      <div class="icon-catalog-dialog">
+        <div class="icon-catalog-header">
+          <div>
+            <span class="icon-catalog-eyebrow">FONT AWESOME FREE</span>
+            <h2 id="fontAwesomeIconTitle">Get Icons</h2>
+          </div>
+          <button id="closeFontAwesomeIconBtn" class="icon-catalog-close" type="button" aria-label="Close icon catalog"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <section class="icon-cdn-card">
+          <div>
+            <strong>Paste this cdnjs Cloudflare link inside your HTML &lt;head&gt;</strong>
+            <small>Required for the copied icon code to display.</small>
+          </div>
+          <div class="icon-copy-row">
+            <code id="fontAwesomeCdnCode">Loading CDN code…</code>
+            <button id="copyFontAwesomeCdnBtn" type="button"><i class="fa-regular fa-copy"></i> COPY CDN</button>
+          </div>
+        </section>
+        <div class="icon-catalog-toolbar">
+          <label class="icon-catalog-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="fontAwesomeIconSearch" type="search" placeholder="Search every icon by name, label, or alias…" autocomplete="off">
+          </label>
+          <select id="fontAwesomeStyleFilter" aria-label="Filter icon style">
+            <option value="all">All styles</option>
+            <option value="fa-solid">Solid</option>
+            <option value="fa-regular">Regular</option>
+            <option value="fa-brands">Brands</option>
+          </select>
+        </div>
+        <div class="icon-catalog-summary"><span id="fontAwesomeIconCount">Loading icons…</span><span>Click an icon card to copy its HTML.</span></div>
+        <div id="fontAwesomeIconStatus" class="icon-catalog-status"><i class="fa-solid fa-spinner fa-spin"></i> Loading the complete free icon library…</div>
+        <div id="fontAwesomeIconGrid" class="icon-catalog-grid" aria-live="polite"></div>
       </div>
     </div>
 
@@ -1571,7 +1624,8 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/frontend.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
+    <script src="/frontend.js?v=20260711-font-catalog7"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>

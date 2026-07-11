@@ -80,6 +80,16 @@ const connectGitHubBtn = document.getElementById("connectGitHubBtn");
 const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
 const enableNodeRuntimeBtn = document.getElementById("enableNodeRuntimeBtn");
 const enableNodeRuntimeBtnLabel = document.getElementById("enableNodeRuntimeBtnLabel");
+const getIconsBtn = document.getElementById("getIconsBtn");
+const fontAwesomeIconModal = document.getElementById("fontAwesomeIconModal");
+const closeFontAwesomeIconBtn = document.getElementById("closeFontAwesomeIconBtn");
+const fontAwesomeIconSearch = document.getElementById("fontAwesomeIconSearch");
+const fontAwesomeStyleFilter = document.getElementById("fontAwesomeStyleFilter");
+const fontAwesomeIconGrid = document.getElementById("fontAwesomeIconGrid");
+const fontAwesomeIconStatus = document.getElementById("fontAwesomeIconStatus");
+const fontAwesomeIconCount = document.getElementById("fontAwesomeIconCount");
+const fontAwesomeCdnCode = document.getElementById("fontAwesomeCdnCode");
+const copyFontAwesomeCdnBtn = document.getElementById("copyFontAwesomeCdnBtn");
 const githubRepoModal = document.getElementById("githubRepoModal");
 const githubRepoModalTitle = document.getElementById("githubRepoModalTitle");
 const githubRepoModalBody = document.getElementById("githubRepoModalBody");
@@ -6048,9 +6058,7 @@ function getErrorHint(message, context = {}) {
 
 function getFunctionSyntaxErrorLocation(error) {
   const stack = String(error && error.stack ? error.stack : "");
-  const match =
-    stack.match(/<anonymous>:(\d+):(\d+)/) ||
-    stack.match(/\b[A-Za-z0-9_.-]+\.(?:js|mjs|html):(\d+):(\d+)/);
+  const match = stack.match(/<anonymous>:(\d+):(\d+)/);
   if (!match) return null;
   return {
     line: Math.max(1, Number(match[1] || 1) - 2),
@@ -6342,6 +6350,255 @@ function analyzeHtmlTagStructure(htmlText, fileName, emitDiagnostic) {
   });
 }
 
+function maskJavaScriptForDiagnostics(code) {
+  const source = String(code || "");
+  const chars = source.split("");
+  let state = "code";
+  let quote = "";
+  let regexCharacterClass = false;
+  for (let index = 0; index < chars.length; index++) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (state === "line-comment") {
+      if (char === "\n") state = "code";
+      else chars[index] = " ";
+      continue;
+    }
+    if (state === "block-comment") {
+      chars[index] = char === "\n" ? "\n" : " ";
+      if (char === "*" && next === "/") {
+        chars[index + 1] = " ";
+        index++;
+        state = "code";
+      }
+      continue;
+    }
+    if (state === "string") {
+      chars[index] = char === "\n" ? "\n" : " ";
+      if (char === "\\") {
+        if (index + 1 < chars.length) {
+          chars[index + 1] = source[index + 1] === "\n" ? "\n" : " ";
+          index++;
+        }
+      } else if (char === quote) {
+        state = "code";
+      }
+      continue;
+    }
+    if (state === "regex") {
+      chars[index] = char === "\n" ? "\n" : " ";
+      if (char === "\\") {
+        if (index + 1 < chars.length) {
+          chars[index + 1] = source[index + 1] === "\n" ? "\n" : " ";
+          index++;
+        }
+      } else if (char === "[") {
+        regexCharacterClass = true;
+      } else if (char === "]") {
+        regexCharacterClass = false;
+      } else if (char === "/" && !regexCharacterClass) {
+        while (/[a-z]/i.test(source[index + 1] || "")) {
+          chars[index + 1] = " ";
+          index++;
+        }
+        state = "code";
+      }
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      chars[index] = chars[index + 1] = " ";
+      index++;
+      state = "line-comment";
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      chars[index] = chars[index + 1] = " ";
+      index++;
+      state = "block-comment";
+      continue;
+    }
+    if (char === "/") {
+      const prefix = source.slice(0, index).trimEnd();
+      const previous = prefix.slice(-1);
+      const previousWord = prefix.match(/([A-Za-z_$][\w$]*)$/)?.[1] || "";
+      const canStartRegex =
+        !prefix ||
+        /[=(,:;!&|?{}\[]/.test(previous) ||
+        ["return", "case", "throw", "delete", "typeof", "void", "yield", "await"].includes(previousWord);
+      if (canStartRegex) {
+        chars[index] = " ";
+        regexCharacterClass = false;
+        state = "regex";
+        continue;
+      }
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      chars[index] = " ";
+      state = "string";
+    }
+  }
+  return chars.join("");
+}
+
+function analyzeJavaScriptSource(code, fileName, emitDiagnostic, options = {}) {
+  const source = String(code || "");
+  const masked = maskJavaScriptForDiagnostics(source);
+  const lineOffset = Math.max(0, Number(options.lineOffset || 0));
+  const firstLineColumnOffset = Math.max(0, Number(options.firstLineColumnOffset || 0));
+  let issueCount = 0;
+  const emitted = new Set();
+
+  const report = (index, length, problem, fix) => {
+    const local = getLineAndColumnFromIndex(source, index);
+    const line = local.line + lineOffset;
+    const col = local.col + (local.line === 1 ? firstLineColumnOffset : 0);
+    const key = `${index}:${problem}`;
+    if (emitted.has(key)) return;
+    emitted.add(key);
+    issueCount++;
+    const location = { fileName, line, col, length: Math.max(1, Number(length) || 1) };
+    emitDiagnostic(
+      "error",
+      `[${fileName}] JavaScript issue at line ${line}:${col}: ${problem} Fix: ${fix}`,
+      location,
+    );
+  };
+
+  const controlRegex = /\b(if|while|for|switch|catch|with)\s*\(/g;
+  let controlMatch;
+  while ((controlMatch = controlRegex.exec(masked)) !== null) {
+    const headerStart = controlMatch.index;
+    const blockStart = masked.indexOf("{", controlRegex.lastIndex);
+    const semicolon = masked.indexOf(";", controlRegex.lastIndex);
+    const searchEnd = blockStart !== -1 && (semicolon === -1 || blockStart < semicolon)
+      ? blockStart
+      : Math.min(masked.length, controlRegex.lastIndex + 500);
+    const header = masked.slice(headerStart, searchEnd);
+    const reversedRegex = /\b[A-Za-z_$][\w$]*(=>)(?=(?:\d|true\b|false\b|null\b|["']))/g;
+    let reversed;
+    while ((reversed = reversedRegex.exec(header)) !== null) {
+      const operatorIndex = headerStart + reversed.index + reversed[0].indexOf("=>");
+      report(
+        operatorIndex,
+        2,
+        'reversed comparison operator "=>".',
+        'Use ">=" for greater-than-or-equal comparisons.',
+      );
+    }
+  }
+
+  const tokenRegex = /===|!==|=>|==|!=|<=|>=|&&|\|\||\+\+|--|\*\*|[A-Za-z_$][\w$]*|(?:\d+\.?\d*|\.\d+)|[^\s]/g;
+  const tokens = [];
+  let tokenMatch;
+  while ((tokenMatch = tokenRegex.exec(masked)) !== null) {
+    tokens.push({ value: tokenMatch[0], index: tokenMatch.index });
+  }
+  const binaryOperators = new Set([
+    "+", "-", "*", "/", "%", "**", "<", ">", "<=", ">=", "==", "===", "!=", "!==", "&", "|", "^",
+  ]);
+  const invalidFollowers = new Set(["&&", "||", ")", "]", "}", ";", ","]);
+  tokens.forEach((token, index) => {
+    if (!binaryOperators.has(token.value)) return;
+    const nextToken = tokens[index + 1];
+    if (!nextToken || invalidFollowers.has(nextToken.value)) {
+      const previous = tokens[index - 1]?.value || "the previous value";
+      const before = nextToken ? ` before "${nextToken.value}"` : " at the end of the file";
+      report(
+        token.index,
+        token.value.length,
+        `operator "${token.value}" after "${previous}" has no right-hand value${before}.`,
+        `Remove "${token.value}" or add a value after it.`,
+      );
+    }
+  });
+
+  const delimiterStack = [];
+  const openerFor = { ")": "(", "]": "[", "}": "{" };
+  const closerFor = { "(": ")", "[": "]", "{": "}" };
+  for (let index = 0; index < masked.length; index++) {
+    const char = masked[index];
+    if (char === "(" || char === "[" || char === "{") {
+      let control = "";
+      if (char === "(") {
+        const prefix = masked.slice(0, index).match(/\b(if|while|for|switch|catch|with)\s*$/);
+        control = prefix ? prefix[1] : "";
+      }
+      if (char === "{") {
+        const unclosedControlIndex = delimiterStack.map((entry) => Boolean(entry.control)).lastIndexOf(true);
+        if (unclosedControlIndex !== -1) {
+          const unclosed = delimiterStack[unclosedControlIndex];
+          const openedAt = getLineAndColumnFromIndex(source, unclosed.index);
+          report(
+            index,
+            1,
+            `missing ")" before "{"; the ${unclosed.control} condition opened at line ${openedAt.line + lineOffset} is not closed.`,
+            'Add another closing parenthesis ")" immediately before "{".',
+          );
+          delimiterStack.splice(unclosedControlIndex, 1);
+        }
+      }
+      delimiterStack.push({ char, index, control });
+      continue;
+    }
+    if (!(char in openerFor)) continue;
+    const expectedOpen = openerFor[char];
+    const top = delimiterStack[delimiterStack.length - 1];
+    if (!top || top.char !== expectedOpen) {
+      report(
+        index,
+        1,
+        `unexpected closing "${char}"${top ? `; "${closerFor[top.char]}" is required first` : ""}.`,
+        top ? `Add "${closerFor[top.char]}" before "${char}".` : `Remove the extra "${char}".`,
+      );
+      continue;
+    }
+    delimiterStack.pop();
+  }
+  delimiterStack.forEach((entry) => {
+    report(
+      entry.index,
+      1,
+      `unclosed "${entry.char}".`,
+      `Add the matching "${closerFor[entry.char]}".`,
+    );
+  });
+
+  return issueCount;
+}
+
+function getAcornJavaScriptSyntaxError(code) {
+  if (!window.acorn || typeof window.acorn.parse !== "function") return null;
+  const source = String(code || "");
+  const parseOptions = {
+    ecmaVersion: "latest",
+    locations: true,
+    allowHashBang: true,
+    allowAwaitOutsideFunction: true,
+    allowReturnOutsideFunction: true,
+  };
+  try {
+    window.acorn.parse(source, { ...parseOptions, sourceType: "script" });
+    return null;
+  } catch (scriptError) {
+    try {
+      window.acorn.parse(source, { ...parseOptions, sourceType: "module" });
+      return null;
+    } catch (moduleError) {
+      const selected = Number(moduleError?.pos || 0) >= Number(scriptError?.pos || 0)
+        ? moduleError
+        : scriptError;
+      return {
+        message: String(selected?.message || "Invalid JavaScript syntax").replace(/\s*\(\d+:\d+\)\s*$/, ""),
+        line: Math.max(1, Number(selected?.loc?.line || 1)),
+        col: Math.max(1, Number(selected?.loc?.column || 0) + 1),
+        pos: Math.max(0, Number(selected?.pos || 0)),
+        length: Math.max(1, Number(selected?.raisedAt || 0) - Number(selected?.pos || 0)),
+      };
+    }
+  }
+}
+
 function runPreflightDiagnostics(targetEntries = null) {
   const emitDiagnostic = (type, message, location = null) => {
     if (Array.isArray(targetEntries)) {
@@ -6354,17 +6611,37 @@ function runPreflightDiagnostics(targetEntries = null) {
   projectFiles
     .filter((f) => f.type === "js")
     .forEach((file) => {
+      const smartIssueCount = analyzeJavaScriptSource(file.content, file.name, emitDiagnostic);
+      const parserError = smartIssueCount === 0 ? getAcornJavaScriptSyntaxError(file.content) : null;
+      if (parserError) {
+        emitDiagnostic(
+          "error",
+          `[${file.name}] JavaScript SyntaxError at line ${parserError.line}:${parserError.col}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
+          {
+            fileName: file.name,
+            line: parserError.line,
+            col: parserError.col,
+            length: parserError.length,
+          },
+        );
+        return;
+      }
       try {
         // Parse-only check
         new Function(`${file.content}\n//# sourceURL=${file.name}`);
       } catch (err) {
+        if (smartIssueCount > 0) return;
         const location = getFunctionSyntaxErrorLocation(err);
         const lineInfo = location
           ? `line ${location.line}, col ${location.col}`
           : "line unknown";
+        const diagnosticLocation = location
+          ? { fileName: file.name, line: location.line, col: location.col, length: 1 }
+          : null;
         emitDiagnostic(
           "error",
           `[${file.name}] SyntaxError (${lineInfo}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
+          diagnosticLocation,
         );
       }
     });
@@ -6438,9 +6715,32 @@ function runPreflightDiagnostics(targetEntries = null) {
           htmlText,
           scriptContentStartIndex,
         );
+        const smartIssueCount = analyzeJavaScriptSource(
+          scriptCode,
+          htmlFile.name,
+          emitDiagnostic,
+          {
+            lineOffset: scriptContentStart.line - 1,
+            firstLineColumnOffset: scriptContentStart.col - 1,
+          },
+        );
+        const parserError = smartIssueCount === 0 ? getAcornJavaScriptSyntaxError(scriptCode) : null;
+        if (parserError) {
+          const absLine = scriptContentStart.line + parserError.line - 1;
+          const absCol = parserError.line === 1
+            ? scriptContentStart.col + parserError.col - 1
+            : parserError.col;
+          emitDiagnostic(
+            "error",
+            `[${htmlFile.name}] Inline JavaScript SyntaxError at line ${absLine}:${absCol}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
+            { fileName: htmlFile.name, line: absLine, col: absCol, length: parserError.length },
+          );
+          continue;
+        }
         try {
           new Function(`${scriptCode}\n//# sourceURL=${htmlFile.name}`);
         } catch (err) {
+          if (smartIssueCount > 0) continue;
           const location = getFunctionSyntaxErrorLocation(err);
           if (location) {
             const absLine = scriptContentStart.line + Math.max(0, location.line - 1);
@@ -6451,6 +6751,7 @@ function runPreflightDiagnostics(targetEntries = null) {
             emitDiagnostic(
               "error",
               `[${htmlFile.name}] Inline JS SyntaxError (line ${absLine}, col ${absCol}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
+              { fileName: htmlFile.name, line: absLine, col: absCol, length: 1 },
             );
           } else {
             emitDiagnostic(
@@ -7129,6 +7430,24 @@ function renderDiagnosticConsoleEntries(entries) {
     } else {
       line.textContent = entry.message || "";
     }
+    if (entry.location?.fileName && Number(entry.location.line) > 0) {
+      line.classList.add("has-location");
+      line.tabIndex = 0;
+      line.setAttribute("role", "button");
+      line.title = `Open ${entry.location.fileName} at line ${entry.location.line}, column ${entry.location.col || 1}`;
+      const openLocation = () => jumpToEditorLocation(
+        entry.location.fileName,
+        entry.location.line,
+        entry.location.col || 1,
+      );
+      line.addEventListener("click", openLocation);
+      line.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openLocation();
+        }
+      });
+    }
     consoleOutput.appendChild(line);
   });
   if (entries && entries.length) {
@@ -7563,21 +7882,13 @@ function highlightCss(code, sourceOffset = 0) {
   let expectingProperty = false;
   let afterPropertyColon = false;
 
-  const append = (text, className = "", options = {}) => {
+  const append = (text, className = "", _options = {}) => {
     if (!text) return;
     if (!className) {
       result += escapeHtml(text);
       return;
     }
-    const swatch = options.swatch || "";
-    const swatchClass = swatch ? " css-color-value" : "";
-    const swatchStyle = swatch
-      ? ` style="--css-color-swatch:${escapeHtmlAttributeValue(swatch)}"`
-      : "";
-    const swatchData = swatch && Number.isFinite(options.start) && Number.isFinite(options.end)
-      ? ` data-css-color-start="${sourceOffset + options.start}" data-css-color-end="${sourceOffset + options.end}"`
-      : "";
-    result += `<span class="token ${className}${swatchClass}"${swatchStyle}${swatchData}>${escapeHtml(text)}</span>`;
+    result += `<span class="token ${className}">${escapeHtml(text)}</span>`;
   };
   const isIdentifierStart = (char) => /[a-zA-Z_-]/.test(char || "");
   const isIdentifierPart = (char) => /[a-zA-Z0-9_-]/.test(char || "");
@@ -8086,7 +8397,6 @@ function initializeEditor() {
 
   // MODIFIED: Replaced Tab logic with comprehensive keydown handler
   editor.addEventListener("keydown", handleEditorKeyDown);
-  editor.addEventListener("pointerdown", handleInlineCssColorSwatchPointerDown);
   editor.addEventListener("click", () => {
     if (
       activeInlineHtmlCorrection &&
@@ -9658,44 +9968,6 @@ function closeCssColorPicker() {
   activeCssColorPicker = null;
 }
 
-function getInlineCssColorTokenAtPoint(clientX, clientY) {
-  const tokens = highlightLayer?.querySelectorAll(".css-color-value[data-css-color-start]") || [];
-  for (const token of tokens) {
-    const rect = token.getBoundingClientRect();
-    const fontSize = Number.parseFloat(window.getComputedStyle(token).fontSize) || 13;
-    const swatchLeft = rect.left - 1;
-    const swatchRight = rect.left + fontSize * 0.9 + 2;
-    if (
-      clientX >= swatchLeft &&
-      clientX <= swatchRight &&
-      clientY >= rect.top - 2 &&
-      clientY <= rect.bottom + 2
-    ) {
-      return token;
-    }
-  }
-  return null;
-}
-
-function handleInlineCssColorSwatchPointerDown(event) {
-  if (event.button !== 0 || !["css", "html"].includes(activeFile?.type)) return;
-  const token = getInlineCssColorTokenAtPoint(event.clientX, event.clientY);
-  if (!token) return;
-  const replaceStart = Number(token.dataset.cssColorStart);
-  const replaceEnd = Number(token.dataset.cssColorEnd);
-  if (!Number.isInteger(replaceStart) || !Number.isInteger(replaceEnd) || replaceEnd <= replaceStart) return;
-  event.preventDefault();
-  event.stopPropagation();
-  currentSuggestionContext = {
-    mode: "css-value",
-    propertyName: "color",
-    prefix: token.textContent || "",
-    replaceStart,
-    replaceEnd,
-  };
-  openCssColorPicker(token, token.textContent || "#000000");
-}
-
 function openCssColorPicker(anchor, initialValue, onSelect = null, pickerTitle = "Choose color") {
   closeCssColorPicker();
   const initialHex = cssColorToHex(initialValue);
@@ -9849,13 +10121,10 @@ function showCssSuggestions(editor, suggestions, mode) {
   suggestions.forEach((entry) => {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
-    const preview = entry.swatch
-      ? `<button class="suggestion-color-preview" type="button" style="background:${escapeHtml(entry.swatch)}" aria-label="Choose a color for ${escapeHtml(entry.value)}"></button>`
-      : "";
     suggestionItem.innerHTML = `
-      ${preview ? "" : '<span class="suggestion-icon">CSS</span>'}
+      <span class="suggestion-icon">CSS</span>
       <span class="suggestion-content">
-        <div class="suggestion-tag${preview ? " suggestion-tag-color" : ""}">${preview}<span>${escapeHtml(entry.value)}</span></div>
+        <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "CSS suggestion")}</div>
       </span>
     `;
@@ -9864,18 +10133,6 @@ function showCssSuggestions(editor, suggestions, mode) {
       e.preventDefault();
       selectSuggestion(entry.value);
     });
-    const colorButton = suggestionItem.querySelector(".suggestion-color-preview");
-    if (colorButton) {
-      colorButton.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      });
-      colorButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        openCssColorPicker(colorButton, entry.value);
-      });
-    }
     suggestionPopup.appendChild(suggestionItem);
   });
 
@@ -12422,25 +12679,130 @@ async function endSessionForEveryone() {
   });
 }
 
-function approveJoinRequest(socketId) {
-  if (!collabSocket || !activeSessionId || !isHost()) return;
-  collabSocket.emit("collab:approve-join", { sessionId: activeSessionId, socketId }, (res) => {
-    if (!res?.ok) {
-      showNotification((res && res.error) || "Failed to approve join request", "error");
-      return;
-    }
-    showNotification("Join request approved.", "success");
+function approveJoinRequest(socketId, options = {}) {
+  if (!collabSocket || !activeSessionId || !isHost()) return Promise.resolve({ ok: false, error: "Host access required." });
+  return new Promise((resolve) => {
+    collabSocket.emit("collab:approve-join", { sessionId: activeSessionId, socketId }, (res) => {
+      if (!res?.ok) {
+        if (!options.silent) showNotification((res && res.error) || "Failed to approve join request", "error");
+        resolve(res || { ok: false, error: "Failed to approve join request" });
+        return;
+      }
+      if (!options.silent) showNotification("Join request approved.", "success");
+      resolve(res);
+    });
   });
 }
 
-function rejectJoinRequest(socketId) {
-  if (!collabSocket || !activeSessionId || !isHost()) return;
-  collabSocket.emit("collab:reject-join", { sessionId: activeSessionId, socketId }, (res) => {
-    if (!res?.ok) {
-      showNotification((res && res.error) || "Failed to reject join request", "error");
-      return;
+function rejectJoinRequest(socketId, options = {}) {
+  if (!collabSocket || !activeSessionId || !isHost()) return Promise.resolve({ ok: false, error: "Host access required." });
+  return new Promise((resolve) => {
+    collabSocket.emit("collab:reject-join", { sessionId: activeSessionId, socketId }, (res) => {
+      if (!res?.ok) {
+        if (!options.silent) showNotification((res && res.error) || "Failed to reject join request", "error");
+        resolve(res || { ok: false, error: "Failed to reject join request" });
+        return;
+      }
+      if (!options.silent) showNotification("Join request rejected.", "success");
+      resolve(res);
+    });
+  });
+}
+
+function getSafeWaitingRoomColor(value) {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : "#4CAF50";
+}
+
+let waitingRoomBulkAdmissionInProgress = false;
+
+function removeWaitingRoomPopup() {
+  document.getElementById("waitingRoomPopup")?.remove();
+}
+
+async function admitAllWaitingRoomUsers() {
+  if (!isHost() || !collabPendingJoins.length || waitingRoomBulkAdmissionInProgress) return;
+  const requests = collabPendingJoins.map((entry) => ({ ...entry }));
+  const dialog = await showAppConfirm(
+    "ADMIT EVERYONE?",
+    `Are you sure you want to admit all ${requests.length} waiting ${requests.length === 1 ? "person" : "people"}? They will immediately receive access to the collaboration session.`,
+    "YES, ADMIT ALL",
+    "CANCEL",
+  );
+  if (!dialog?.ok) return;
+  waitingRoomBulkAdmissionInProgress = true;
+  renderWaitingRoomPopup();
+  try {
+    const results = [];
+    for (const request of requests) {
+      results.push(await approveJoinRequest(request.socketId, { silent: true }));
     }
-    showNotification("Join request rejected.", "success");
+    const admitted = results.filter((result) => result?.ok).length;
+    const failed = results.length - admitted;
+    if (admitted) showNotification(`${admitted} ${admitted === 1 ? "person" : "people"} admitted.`, "success");
+    if (failed) showNotification(`${failed} join ${failed === 1 ? "request" : "requests"} could not be admitted.`, "error");
+  } finally {
+    waitingRoomBulkAdmissionInProgress = false;
+    renderWaitingRoomPopup();
+  }
+}
+
+function renderWaitingRoomPopup() {
+  removeWaitingRoomPopup();
+  if (
+    !activeSessionId ||
+    !isHost() ||
+    !collabPermissions.requireJoinApproval ||
+    !Array.isArray(collabPendingJoins) ||
+    !collabPendingJoins.length
+  ) return;
+
+  const popup = document.createElement("aside");
+  popup.id = "waitingRoomPopup";
+  popup.className = "waiting-room-popup";
+  popup.setAttribute("role", "dialog");
+  popup.setAttribute("aria-label", "Waiting room join requests");
+  popup.innerHTML = `
+    <div class="waiting-room-popup-header">
+      <div>
+        <span><i class="fa-solid fa-user-clock"></i> WAITING ROOM</span>
+        <strong>${collabPendingJoins.length} waiting</strong>
+      </div>
+      <button id="waitingRoomAdmitAllBtn" type="button" ${waitingRoomBulkAdmissionInProgress ? "disabled" : ""}>${waitingRoomBulkAdmissionInProgress ? '<i class="fa-solid fa-spinner fa-spin"></i> ADMITTING' : '<i class="fa-solid fa-users"></i> ADMIT ALL'}</button>
+    </div>
+    <div class="waiting-room-request-list">
+      ${collabPendingJoins.map((entry) => {
+        const color = getSafeWaitingRoomColor(entry.theme);
+        return `<article class="waiting-room-request-card" data-waiting-socket="${escapeHtmlAttributeValue(entry.socketId)}">
+          <div class="waiting-room-user">
+            <span class="waiting-room-color" style="--waiting-user-color:${color}">${escapeHtml(String(entry.name || "?").slice(0, 1).toUpperCase())}</span>
+            <div>
+              <strong>${escapeHtml(entry.name || "Unknown user")}</strong>
+              <small><span style="background:${color}"></span> Chosen color ${escapeHtml(color.toUpperCase())}</small>
+            </div>
+          </div>
+          <div class="waiting-room-actions">
+            <button type="button" class="waiting-room-accept" data-waiting-action="accept" ${waitingRoomBulkAdmissionInProgress ? "disabled" : ""}><i class="fa-solid fa-check"></i> ACCEPT</button>
+            <button type="button" class="waiting-room-deny" data-waiting-action="deny" ${waitingRoomBulkAdmissionInProgress ? "disabled" : ""}><i class="fa-solid fa-xmark"></i> DENY</button>
+          </div>
+        </article>`;
+      }).join("")}
+    </div>`;
+  document.body.appendChild(popup);
+
+  document.getElementById("waitingRoomAdmitAllBtn")?.addEventListener("click", admitAllWaitingRoomUsers);
+  popup.querySelectorAll("[data-waiting-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (waitingRoomBulkAdmissionInProgress) return;
+      const card = button.closest("[data-waiting-socket]");
+      const socketId = card?.dataset.waitingSocket || "";
+      if (!socketId) return;
+      card.querySelectorAll("button").forEach((action) => { action.disabled = true; });
+      const result = button.dataset.waitingAction === "accept"
+        ? await approveJoinRequest(socketId)
+        : await rejectJoinRequest(socketId);
+      if (!result?.ok) card.querySelectorAll("button").forEach((action) => { action.disabled = false; });
+    });
   });
 }
 
@@ -13816,6 +14178,7 @@ function showKickConfirmation(targetName) {
 function showKickedOutModal() {
   resetTransientCollabUiState();
   activeSessionId = null;
+  removeWaitingRoomPopup();
   collabParticipants = [];
   collabPendingJoins = [];
   collabShareLink = "";
@@ -14004,6 +14367,7 @@ function ensureCollabSocket() {
       closeAnnouncementPopup();
     }
     enforceCollabPermissionsUI();
+    renderWaitingRoomPopup();
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);
@@ -14022,6 +14386,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:banned", () => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
     collabBans = [];
@@ -14180,6 +14545,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:session-ended", (payload) => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
     collabShareLink = "";
@@ -15949,6 +16315,7 @@ const fontPickerModal = document.getElementById("fontPickerModal");
 const closeFontPickerBtn = document.getElementById("closeFontPickerBtn");
 const fontGrid = document.getElementById("fontGrid");
 const fontSearchInput = document.getElementById("fontSearchInput");
+const fontCatalogStatus = document.getElementById("fontCatalogStatus");
 
 const fonts = [
   { name: "Arial", family: "Arial, sans-serif", keywords: "clean ui sans" },
@@ -16054,20 +16421,116 @@ function ensureFontPreviewImport(fontName) {
   document.head.appendChild(link);
 }
 
-function renderFonts(query = "") {
+const FONT_CATALOG_PAGE_SIZE = 160;
+let fontsourceFonts = [];
+let fontsourceCatalogState = "idle";
+let fontsourceCatalogError = "";
+let fontCatalogRenderLimit = FONT_CATALOG_PAGE_SIZE;
+
+function getFontsourceVariant(font) {
+  const subsets = Array.isArray(font?.subsets) ? font.subsets : [];
+  const weights = Array.isArray(font?.weights) ? font.weights : [];
+  const styles = Array.isArray(font?.styles) ? font.styles : [];
+  const subset = subsets.includes(font?.defaultSubset)
+    ? font.defaultSubset
+    : (subsets.includes("latin") ? "latin" : (subsets[0] || "latin"));
+  const weight = weights.includes(400) ? 400 : (weights[0] || 400);
+  const style = styles.includes("normal") ? "normal" : (styles[0] || "normal");
+  return { subset, weight, style };
+}
+
+function getFontsourceFileUrl(font) {
+  const { subset, weight, style } = getFontsourceVariant(font);
+  return `https://cdn.jsdelivr.net/fontsource/fonts/${encodeURIComponent(font.id)}@latest/${encodeURIComponent(subset)}-${weight}-${encodeURIComponent(style)}.woff2`;
+}
+
+function getFontsourceFamily(font) {
+  const category = ["serif", "sans-serif", "monospace", "cursive", "fantasy"].includes(font?.category)
+    ? font.category
+    : "sans-serif";
+  return `${quoteFontFamilyName(font.family)}, ${category}`;
+}
+
+function buildFontsourceCss(font) {
+  const { weight, style } = getFontsourceVariant(font);
+  const family = quoteFontFamilyName(font.family);
+  return `@font-face {\n  font-family: ${family};\n  font-style: ${style};\n  font-display: swap;\n  font-weight: ${weight};\n  src: url('${getFontsourceFileUrl(font)}') format('woff2');\n}\n\nfont-family: ${getFontsourceFamily(font)};`;
+}
+
+function ensureFontsourcePreview(font, preview) {
+  if (!font?.id || !preview) return;
+  const styleId = `fontsourcePreview_${font.id.replace(/[^a-z0-9_-]/gi, "_")}`;
+  if (!document.getElementById(styleId)) {
+    const { weight, style } = getFontsourceVariant(font);
+    const face = document.createElement("style");
+    face.id = styleId;
+    face.textContent = `@font-face { font-family: ${quoteFontFamilyName(font.family)}; font-style: ${style}; font-display: swap; font-weight: ${weight}; src: url('${getFontsourceFileUrl(font)}') format('woff2'); }`;
+    document.head.appendChild(face);
+  }
+  preview.style.fontFamily = getFontsourceFamily(font);
+}
+
+const fontPreviewObserver = typeof IntersectionObserver === "function"
+  ? new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const font = fontsourceFonts.find((item) => item.id === entry.target.dataset.fontId);
+        ensureFontsourcePreview(font, entry.target);
+        fontPreviewObserver.unobserve(entry.target);
+      });
+    }, { rootMargin: "180px 0px" })
+  : null;
+
+function setFontCatalogStatus(message, state = "") {
+  if (!fontCatalogStatus) return;
+  fontCatalogStatus.textContent = message;
+  if (state) fontCatalogStatus.dataset.state = state;
+  else delete fontCatalogStatus.dataset.state;
+}
+
+async function loadFontsourceFonts() {
+  if (fontsourceCatalogState === "loading" || fontsourceCatalogState === "ready") return;
+  fontsourceCatalogState = "loading";
+  setFontCatalogStatus("Loading every free Fontsource family...");
+  try {
+    const response = await fetch("/api/fonts/fontsource", { headers: { Accept: "application/json" } });
+    const data = await response.json();
+    if (!response.ok || !data?.ok || !Array.isArray(data.fonts)) {
+      throw new Error(data?.error || "The font catalog could not be loaded.");
+    }
+    fontsourceFonts = data.fonts;
+    fontsourceCatalogState = "ready";
+    fontsourceCatalogError = "";
+    renderFonts(fontSearchInput?.value || "", true);
+  } catch (error) {
+    fontsourceCatalogState = "error";
+    fontsourceCatalogError = error?.message || "The free catalog is unavailable.";
+    renderFonts(fontSearchInput?.value || "", true);
+  }
+}
+
+function renderFonts(query = "", resetLimit = false) {
+  if (!fontGrid) return;
+  if (resetLimit) fontCatalogRenderLimit = FONT_CATALOG_PAGE_SIZE;
   const customFontName = normalizeFontName(query);
   const term = customFontName.toLowerCase();
-  const filteredFonts = fonts.filter((font) => {
+  const filteredSystemFonts = fonts.filter((font) => {
     const haystack = `${font.name} ${font.family} ${font.keywords || ""}`.toLowerCase();
     return !term || haystack.includes(term);
   });
-  const exactBuiltInMatch = filteredFonts.some(
-    (font) => font.name.toLowerCase() === term,
+  const filteredCatalogFonts = fontsourceFonts.filter((font) => {
+    const haystack = `${font.family} ${font.category} ${font.type}`.toLowerCase();
+    return !term || haystack.includes(term);
+  });
+  const visibleCatalogFonts = filteredCatalogFonts.slice(0, fontCatalogRenderLimit);
+  const exactFontMatch = [...filteredSystemFonts.map((font) => font.name), ...filteredCatalogFonts.map((font) => font.family)].some(
+    (name) => name.toLowerCase() === term,
   );
 
+  if (fontPreviewObserver) fontPreviewObserver.disconnect();
   fontGrid.innerHTML = "";
 
-  if (customFontName && !exactBuiltInMatch) {
+  if (customFontName && !exactFontMatch && filteredSystemFonts.length === 0 && filteredCatalogFonts.length === 0) {
     ensureFontPreviewImport(customFontName);
     const customCard = document.createElement("div");
     customCard.className = "font-card font-card-custom";
@@ -16084,7 +16547,7 @@ function renderFonts(query = "") {
     fontGrid.appendChild(customCard);
   }
 
-  filteredFonts.forEach((font) => {
+  filteredSystemFonts.forEach((font) => {
     const card = document.createElement("div");
     card.className = "font-card";
     card.innerHTML = `
@@ -16096,9 +16559,46 @@ function renderFonts(query = "") {
     fontGrid.appendChild(card);
   });
 
-  if (filteredFonts.length === 0 && !customFontName) {
+  visibleCatalogFonts.forEach((font) => {
+    const card = document.createElement("div");
+    card.className = "font-card";
+    card.innerHTML = `
+      <div class="font-name">${escapeHtml(font.family)}<span class="font-card-source">Fontsource</span></div>
+      <div class="font-preview" data-font-id="${escapeHtml(font.id)}">The quick brown fox</div>
+      <div class="font-code">${escapeHtml(font.category)} &middot; ${escapeHtml(getFontsourceVariant(font).weight)}</div>
+    `;
+    const preview = card.querySelector(".font-preview");
+    if (fontPreviewObserver) fontPreviewObserver.observe(preview);
+    else ensureFontsourcePreview(font, preview);
+    card.addEventListener("click", () => copyFontCode(buildFontsourceCss(font), font.family));
+    fontGrid.appendChild(card);
+  });
+
+  if (visibleCatalogFonts.length < filteredCatalogFonts.length) {
+    const loadMore = document.createElement("button");
+    loadMore.type = "button";
+    loadMore.className = "font-load-more";
+    loadMore.textContent = `Load ${Math.min(FONT_CATALOG_PAGE_SIZE, filteredCatalogFonts.length - visibleCatalogFonts.length)} more fonts`;
+    loadMore.addEventListener("click", () => {
+      fontCatalogRenderLimit += FONT_CATALOG_PAGE_SIZE;
+      renderFonts(query);
+    });
+    fontGrid.appendChild(loadMore);
+  }
+
+  const visibleTotal = filteredSystemFonts.length + visibleCatalogFonts.length;
+  const matchingTotal = filteredSystemFonts.length + filteredCatalogFonts.length;
+  if (fontsourceCatalogState === "loading" || fontsourceCatalogState === "idle") {
+    setFontCatalogStatus(`${filteredSystemFonts.length} system fonts ready. Loading the free catalog...`);
+  } else if (fontsourceCatalogState === "error") {
+    setFontCatalogStatus(`System fonts are available. ${fontsourceCatalogError}`, "error");
+  } else {
+    setFontCatalogStatus(`Showing ${visibleTotal.toLocaleString()} of ${matchingTotal.toLocaleString()} matching fonts - ${fontsourceFonts.length.toLocaleString()} free catalog families`, "ready");
+  }
+
+  if (matchingTotal === 0 && !customFontName) {
     fontGrid.innerHTML =
-      '<div class="font-card" style="grid-column: 1 / -1; cursor: default;"><div class="font-name">Start Typing</div><div class="font-preview" style="font-size:16px;">Search built-in fonts or type any Google Font name.</div></div>';
+      '<div class="font-card" style="grid-column: 1 / -1; cursor: default;"><div class="font-name">No fonts found</div><div class="font-preview" style="font-size:16px;">Try a different family name or category.</div></div>';
   }
 }
 
@@ -16144,12 +16644,13 @@ function fallbackCopy(text, fontName) {
 
 if (fontPickerBtn && fontPickerModal) {
   fontPickerBtn.addEventListener("click", () => {
-    renderFonts();
+    fontPickerModal.style.display = "flex";
+    renderFonts("", true);
+    loadFontsourceFonts();
     if (fontSearchInput) {
       fontSearchInput.value = "";
       fontSearchInput.focus();
     }
-    fontPickerModal.style.display = "flex";
   });
 }
 
@@ -16169,9 +16670,123 @@ if (fontPickerModal) {
 
 if (fontSearchInput) {
   fontSearchInput.addEventListener("input", (e) => {
-    renderFonts(e.target.value || "");
+    renderFonts(e.target.value || "", true);
   });
 }
+
+// PART 16.5 - FONT AWESOME ICON CATALOG
+const FONT_AWESOME_CDN_TAG = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">';
+let fontAwesomeCatalogEntries = [];
+let fontAwesomeCatalogLoaded = false;
+
+function flattenFontAwesomeCatalog(icons) {
+  return (Array.isArray(icons) ? icons : []).flatMap((icon) =>
+    (Array.isArray(icon.styles) ? icon.styles : []).map((style) => ({
+      id: String(icon.id || ""),
+      label: String(icon.label || icon.id || ""),
+      aliases: Array.isArray(icon.aliases) ? icon.aliases.map(String) : [],
+      prefix: String(style.prefix || ""),
+      style: String(style.style || ""),
+    })),
+  );
+}
+
+function renderFontAwesomeIcons() {
+  if (!fontAwesomeIconGrid) return;
+  const query = String(fontAwesomeIconSearch?.value || "").trim().toLowerCase();
+  const styleFilter = String(fontAwesomeStyleFilter?.value || "all");
+  const visible = fontAwesomeCatalogEntries.filter((icon) => {
+    if (styleFilter !== "all" && icon.prefix !== styleFilter) return false;
+    if (!query) return true;
+    return `${icon.id} ${icon.label} ${icon.aliases.join(" ")} ${icon.style}`.toLowerCase().includes(query);
+  });
+
+  if (fontAwesomeIconCount) {
+    fontAwesomeIconCount.textContent = `${visible.length.toLocaleString()} of ${fontAwesomeCatalogEntries.length.toLocaleString()} icon styles`;
+  }
+  if (!visible.length) {
+    fontAwesomeIconGrid.innerHTML = '<div class="icon-catalog-empty"><i class="fa-solid fa-magnifying-glass"></i><br>No matching icons found.</div>';
+    return;
+  }
+
+  fontAwesomeIconGrid.innerHTML = visible.map((icon) => {
+    const className = `${icon.prefix} fa-${icon.id}`;
+    const htmlCode = `<i class="${className}"></i>`;
+    return `<button type="button" class="icon-catalog-card" data-icon-code="${escapeHtmlAttributeValue(htmlCode)}" title="Copy ${escapeHtmlAttributeValue(htmlCode)}">
+      <i class="${escapeHtmlAttributeValue(className)}" aria-hidden="true"></i>
+      <strong>${escapeHtml(icon.label)}</strong>
+      <code>${escapeHtml(className)}</code>
+    </button>`;
+  }).join("");
+}
+
+async function loadFontAwesomeIconCatalog() {
+  if (fontAwesomeCatalogLoaded) {
+    renderFontAwesomeIcons();
+    return;
+  }
+  if (fontAwesomeIconStatus) {
+    fontAwesomeIconStatus.hidden = false;
+    fontAwesomeIconStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading every free Font Awesome icon…';
+  }
+  try {
+    const response = await fetch("/api/icons/fontawesome", {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    const data = await response.json();
+    if (!response.ok || !data?.ok || !Array.isArray(data.icons)) {
+      throw new Error(data?.error || "The icon library could not be loaded.");
+    }
+    fontAwesomeCatalogEntries = flattenFontAwesomeCatalog(data.icons);
+    fontAwesomeCatalogLoaded = true;
+    if (fontAwesomeCdnCode) fontAwesomeCdnCode.textContent = data.cdnTag || FONT_AWESOME_CDN_TAG;
+    if (fontAwesomeIconStatus) fontAwesomeIconStatus.hidden = true;
+    renderFontAwesomeIcons();
+  } catch (error) {
+    if (fontAwesomeIconStatus) {
+      fontAwesomeIconStatus.hidden = false;
+      fontAwesomeIconStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${escapeHtml(String(error?.message || error))}</span><button type="button" id="retryFontAwesomeIconsBtn" class="run-button">RETRY</button>`;
+      document.getElementById("retryFontAwesomeIconsBtn")?.addEventListener("click", loadFontAwesomeIconCatalog, { once: true });
+    }
+  }
+}
+
+function openFontAwesomeIconCatalog() {
+  if (!fontAwesomeIconModal) return;
+  fontAwesomeIconModal.hidden = false;
+  if (fontAwesomeCdnCode) fontAwesomeCdnCode.textContent = FONT_AWESOME_CDN_TAG;
+  if (fontAwesomeIconSearch) fontAwesomeIconSearch.value = "";
+  if (fontAwesomeStyleFilter) fontAwesomeStyleFilter.value = "all";
+  loadFontAwesomeIconCatalog();
+  setTimeout(() => fontAwesomeIconSearch?.focus(), 0);
+}
+
+function closeFontAwesomeIconCatalog() {
+  if (fontAwesomeIconModal) fontAwesomeIconModal.hidden = true;
+}
+
+getIconsBtn?.addEventListener("click", openFontAwesomeIconCatalog);
+closeFontAwesomeIconBtn?.addEventListener("click", closeFontAwesomeIconCatalog);
+fontAwesomeIconModal?.addEventListener("click", (event) => {
+  if (event.target === fontAwesomeIconModal) closeFontAwesomeIconCatalog();
+});
+fontAwesomeIconSearch?.addEventListener("input", renderFontAwesomeIcons);
+fontAwesomeStyleFilter?.addEventListener("change", renderFontAwesomeIcons);
+fontAwesomeIconGrid?.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-icon-code]");
+  if (!card) return;
+  copyTextValue(card.dataset.iconCode, `Copied ${card.dataset.iconCode}`);
+});
+copyFontAwesomeCdnBtn?.addEventListener("click", () => {
+  copyTextValue(fontAwesomeCdnCode?.textContent || FONT_AWESOME_CDN_TAG, "Font Awesome CDN link copied");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && fontAwesomeIconModal && !fontAwesomeIconModal.hidden) {
+    event.preventDefault();
+    closeFontAwesomeIconCatalog();
+  }
+});
 
 // PART 17 - TUTORIAL SYSTEM
 

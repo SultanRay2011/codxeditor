@@ -60,6 +60,11 @@ const COUNTRY_LANGUAGE_MAP = {
 };
 const localizationProfileCache = new Map();
 const uiTranslationCache = new Map();
+const FONT_AWESOME_VERSION = "6.5.2";
+const FONT_AWESOME_CDN_HREF = `https://cdnjs.cloudflare.com/ajax/libs/font-awesome/${FONT_AWESOME_VERSION}/css/all.min.css`;
+let fontAwesomeCatalogCache = null;
+const FONTSOURCE_API_URL = "https://api.fontsource.org/v1/fonts";
+let fontsourceCatalogCache = null;
 const DEFAULT_PERMISSIONS = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -141,7 +146,8 @@ function getCountryName(countryCode) {
   }
 }
 
-async function resolveLocalizationProfile(req, browserLanguage = "") {
+async function resolveLocalizationProfile(req, browserLanguage = "", browserCountryCode = "") {
+  const clientCountry = String(browserCountryCode || "").trim().toUpperCase();
   const headerCountry = String(
     req.headers["cf-ipcountry"] ||
     req.headers["x-vercel-ip-country"] ||
@@ -149,11 +155,13 @@ async function resolveLocalizationProfile(req, browserLanguage = "") {
     "",
   ).trim().toUpperCase();
   const clientIp = getClientIp(req);
-  const cacheKey = headerCountry || clientIp || `browser:${browserLanguage}`;
+  const cacheKey = (/^[A-Z]{2}$/.test(clientCountry) ? clientCountry : "") || headerCountry || clientIp || `browser:${browserLanguage}`;
   const cached = localizationProfileCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < 6 * 60 * 60 * 1000) return cached.profile;
 
-  let countryCode = /^[A-Z]{2}$/.test(headerCountry) ? headerCountry : "";
+  let countryCode = /^[A-Z]{2}$/.test(clientCountry)
+    ? clientCountry
+    : (/^[A-Z]{2}$/.test(headerCountry) ? headerCountry : "");
   let country = countryCode ? getCountryName(countryCode) : "";
   if (!countryCode && isPublicClientIp(clientIp)) {
     try {
@@ -219,6 +227,107 @@ async function translateUiText(text, targetLanguage, clientIp) {
   }
 }
 
+async function fetchFontAwesomeIconPage(page) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const url = new URL(`https://api.fontawesome.com/releases/${FONT_AWESOME_VERSION}/icons`);
+    url.searchParams.set("license", "free");
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("page_size", "500");
+    const response = await fetch(url, { signal: controller.signal });
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data?.icons)) {
+      throw new Error(data?.message || `Font Awesome API returned ${response.status}.`);
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function loadFontAwesomeCatalog() {
+  if (fontAwesomeCatalogCache) return fontAwesomeCatalogCache;
+  const firstPage = await fetchFontAwesomeIconPage(1);
+  const pageCount = Math.max(1, Number(firstPage.totalPageCount || 1));
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, pageCount - 1) }, (_value, index) =>
+      fetchFontAwesomeIconPage(index + 2),
+    ),
+  );
+  const rawIcons = [firstPage, ...remainingPages].flatMap((page) => page.icons || []);
+  const prefixClassMap = { fas: "fa-solid", far: "fa-regular", fab: "fa-brands" };
+  const icons = rawIcons
+    .map((icon) => {
+      const freeStyles = Array.isArray(icon?.familyStylesByLicense?.free)
+        ? icon.familyStylesByLicense.free
+        : [];
+      const styles = freeStyles
+        .map((entry) => ({
+          prefix: prefixClassMap[entry.prefix] || "",
+          style: String(entry.shorthand || entry.style || ""),
+        }))
+        .filter((entry) => entry.prefix)
+        .filter((entry, index, list) => list.findIndex((item) => item.prefix === entry.prefix) === index);
+      return {
+        id: String(icon.id || ""),
+        label: String(icon.label || icon.id || ""),
+        aliases: Array.isArray(icon?.aliases?.names) ? icon.aliases.names.map(String) : [],
+        styles,
+      };
+    })
+    .filter((icon) => icon.id && icon.styles.length)
+    .sort((left, right) => left.id.localeCompare(right.id));
+
+  fontAwesomeCatalogCache = {
+    version: FONT_AWESOME_VERSION,
+    cdnHref: FONT_AWESOME_CDN_HREF,
+    cdnTag: `<link rel="stylesheet" href="${FONT_AWESOME_CDN_HREF}">`,
+    totalIcons: icons.length,
+    totalVariations: icons.reduce((total, icon) => total + icon.styles.length, 0),
+    icons,
+  };
+  return fontAwesomeCatalogCache;
+}
+
+async function loadFontsourceCatalog() {
+  if (fontsourceCatalogCache) return fontsourceCatalogCache;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(FONTSOURCE_API_URL, { signal: controller.signal });
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data)) {
+      throw new Error(data?.message || `Fontsource API returned ${response.status}.`);
+    }
+
+    const fonts = data
+      .map((font) => ({
+        id: String(font?.id || "").trim(),
+        family: String(font?.family || "").trim(),
+        category: String(font?.category || "sans-serif").trim(),
+        defaultSubset: String(font?.defSubset || "latin").trim(),
+        subsets: Array.isArray(font?.subsets) ? font.subsets.map(String) : [],
+        weights: Array.isArray(font?.weights) ? font.weights.map(Number).filter(Number.isFinite) : [],
+        styles: Array.isArray(font?.styles) ? font.styles.map(String) : [],
+        variable: Boolean(font?.variable),
+        type: String(font?.type || "google").trim(),
+      }))
+      .filter((font) => font.id && font.family)
+      .sort((left, right) => left.family.localeCompare(right.family));
+
+    fontsourceCatalogCache = {
+      source: "Fontsource",
+      totalFonts: fonts.length,
+      fonts,
+    };
+    return fontsourceCatalogCache;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 app.use(express.json({ limit: "25mb" }));
 app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
@@ -234,7 +343,11 @@ loadPublishedProjects();
 
 app.get("/api/localization/profile", async (req, res) => {
   try {
-    const profile = await resolveLocalizationProfile(req, req.query?.browserLanguage);
+    const profile = await resolveLocalizationProfile(
+      req,
+      req.query?.browserLanguage,
+      req.query?.countryCode,
+    );
     res.json({ ok: true, ...profile, enabled: profile.language !== "en" });
   } catch (_error) {
     res.json({ ok: true, countryCode: "", country: "", language: "en", enabled: false });
@@ -243,7 +356,11 @@ app.get("/api/localization/profile", async (req, res) => {
 
 app.post("/api/localization/translate", async (req, res) => {
   try {
-    const profile = await resolveLocalizationProfile(req, req.body?.browserLanguage);
+    const profile = await resolveLocalizationProfile(
+      req,
+      req.body?.browserLanguage,
+      req.body?.countryCode,
+    );
     const texts = Array.isArray(req.body?.texts) ? req.body.texts.slice(0, 40) : [];
     if (profile.language === "en" || !texts.length) {
       res.json({ ok: true, language: profile.language, translations: texts.map((text) => String(text || "")) });
@@ -261,6 +378,25 @@ app.post("/api/localization/translate", async (req, res) => {
     res.json({ ok: true, language: profile.language, translations });
   } catch (error) {
     res.status(502).json({ ok: false, error: error.message || "Translation service unavailable." });
+  }
+});
+
+app.get("/api/icons/fontawesome", async (_req, res) => {
+  try {
+    const catalog = await loadFontAwesomeCatalog();
+    res.json({ ok: true, ...catalog });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message || "Font Awesome icons are unavailable." });
+  }
+});
+
+app.get("/api/fonts/fontsource", async (_req, res) => {
+  try {
+    const catalog = await loadFontsourceCatalog();
+    res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+    res.json({ ok: true, ...catalog });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message || "The free font catalog is unavailable." });
   }
 });
 
