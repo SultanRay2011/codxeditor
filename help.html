@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="author" content="CodX Editor" />
+    <link rel="canonical" href="https://codxeditor.up.railway.app/help.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="CodX Editor Guide | Projects, Preview, Node.js & Collaboration" />
+    <meta property="og:description" content="A complete practical guide to the CodX Editor workspace, coding tools, GitHub, Node.js, publishing, collaboration, shortcuts, and troubleshooting." />
+    <meta property="og:url" content="https://codxeditor.up.railway.app/help.html" />
+    <meta
+      name="description"
+      content="A clear guide to CodX Editor features, including editing, preview, saving, publishing, collaboration, shortcuts, settings, and troubleshooting."
+    />
+    <meta name="theme-color" content="#4CAF50" />
+    <link rel="icon" type="image/png" href="cx.png" />
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260712" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-12","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
+    </script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      body.nav-open {
+        overflow: hidden;
+      }
+
+      :root {
+        --green: #4caf50;
+        --green-dark: #2e7d32;
+        --green-soft: #e9f8ed;
+        --ink: #151815;
+        --muted: #5b675f;
+        --line: rgba(24, 42, 29, 0.12);
+        --panel: rgba(255, 255, 255, 0.94);
+        --shadow: 0 18px 45px rgba(25, 48, 34, 0.12);
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(76, 175, 80, 0.14), transparent 24%),
+          radial-gradient(circle at right center, rgba(129, 199, 132, 0.16), transparent 22%),
+          linear-gradient(135deg, #f5fff7 0%, #ffffff 58%, #eef9f1 100%);
+        padding-top: 82px;
+        overflow-x: hidden;
+      }
+
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        z-index: 1000;
+        padding: 15px 40px;
+      }
+
+      .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1400px;
+        margin: 0 auto;
+        gap: 20px;
+      }
+
+      .logo-container {
+        display: flex;
+        align-items: center;
+        z-index: 1001;
+      }
+
+      .logo-container img {
+        height: 45px;
+        width: auto;
+      }
+
+      .menu-toggle {
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        z-index: 1001;
+      }
+
+      .menu-toggle span {
+        display: block;
+        width: 25px;
+        height: 3px;
+        background: #333;
+        border-radius: 3px;
+        transition: all 0.3s ease;
+      }
+
+      .menu-toggle.active span:nth-child(1) {
+        transform: rotate(45deg) translate(8px, 8px);
+      }
+
+      .menu-toggle.active span:nth-child(2) {
+        opacity: 0;
+      }
+
+      .menu-toggle.active span:nth-child(3) {
+        transform: rotate(-45deg) translate(7px, -7px);
+      }
+
+      .nav-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .nav-btn {
+        padding: 10px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.95em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+      }
+
+      .nav-btn.active {
+        background: var(--green);
+        color: white;
+      }
+
+      .nav-btn:not(.active) {
+        background: transparent;
+        color: #333;
+      }
+
+      .nav-btn:not(.active):hover {
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--green);
+      }
+
+      .particles {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .particle {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: rgba(76, 175, 80, 0.28);
+        border-radius: 50%;
+        animation: float 15s infinite;
+      }
+
+      .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+      .particle:nth-child(2) { left: 22%; animation-delay: 2s; }
+      .particle:nth-child(3) { left: 35%; animation-delay: 4s; }
+      .particle:nth-child(4) { left: 48%; animation-delay: 6s; }
+      .particle:nth-child(5) { left: 62%; animation-delay: 8s; }
+      .particle:nth-child(6) { left: 76%; animation-delay: 10s; }
+      .particle:nth-child(7) { left: 88%; animation-delay: 12s; }
+
+      @keyframes float {
+        0% { transform: translateY(100vh) scale(0); opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { transform: translateY(-100vh) scale(1); opacity: 0; }
+      }
+
+      .container {
+        position: relative;
+        z-index: 1;
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 36px 20px 60px;
+      }
+
+      .hero {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        padding: 34px;
+        margin-bottom: 24px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) 300px;
+        align-items: center;
+        gap: 32px;
+        overflow: hidden;
+      }
+
+      .hero-logo {
+        width: 300px;
+        height: 300px;
+        object-fit: contain;
+        margin: 0 0 0 auto;
+        padding: 24px;
+        border-radius: 34px;
+        background: linear-gradient(180deg, rgba(76, 175, 80, 0.16), rgba(76, 175, 80, 0.06));
+        border: 1px solid rgba(76, 175, 80, 0.18);
+        box-shadow: 0 24px 48px rgba(46, 125, 50, 0.16);
+        display: block;
+        align-self: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--green-soft);
+        color: var(--green-dark);
+        font-size: 0.85rem;
+        font-weight: 800;
+        margin-bottom: 16px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.3rem);
+        line-height: 1.05;
+        margin-bottom: 14px;
+        max-width: 13ch;
+      }
+
+      .lead {
+        color: var(--muted);
+        line-height: 1.7;
+        max-width: 72ch;
+        font-size: 1.02rem;
+      }
+
+      .hero-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--green-dark);
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+
+      .help-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 22px;
+      }
+
+      .toc,
+      .section-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .toc {
+        position: sticky;
+        top: 102px;
+        align-self: start;
+        padding: 20px;
+      }
+
+      .toc h2 {
+        font-size: 1rem;
+        margin-bottom: 12px;
+      }
+
+      .toc ul {
+        list-style: none;
+        display: grid;
+        gap: 8px;
+      }
+
+      .toc a {
+        text-decoration: none;
+        color: var(--muted);
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 9px 10px;
+        display: block;
+        transition: 0.2s ease;
+      }
+
+      .toc a:hover,
+      .toc a.active {
+        background: rgba(76, 175, 80, 0.12);
+        color: var(--green-dark);
+      }
+
+      .content {
+        display: grid;
+        gap: 18px;
+      }
+
+      .section-card {
+        padding: 24px;
+      }
+
+      .section-card h2 {
+        font-size: 1.35rem;
+        margin-bottom: 10px;
+      }
+
+      .section-copy {
+        color: var(--muted);
+        line-height: 1.7;
+        margin-bottom: 16px;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .feature-item {
+        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(241, 249, 243, 0.94));
+        border: 1px solid rgba(46, 125, 50, 0.12);
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .feature-item h3 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+
+      .feature-item h3 i {
+        color: var(--green-dark);
+      }
+
+      .feature-item p,
+      .feature-item li,
+      .section-card li {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .feature-item ul,
+      .section-card ul {
+        margin-left: 18px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .simple-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .simple-list li {
+        list-style: none;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(76, 175, 80, 0.08);
+        border: 1px solid rgba(76, 175, 80, 0.12);
+      }
+
+      .shortcut-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .shortcut-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(76, 175, 80, 0.08);
+        border: 1px solid rgba(76, 175, 80, 0.12);
+      }
+
+      kbd {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid rgba(24, 42, 29, 0.12);
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+        font-family: "Segoe UI", sans-serif;
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      code {
+        font-family: Consolas, "Courier New", monospace;
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--green-dark);
+        border-radius: 7px;
+        padding: 2px 6px;
+      }
+
+      @media (max-width: 980px) {
+        .help-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .toc {
+          position: static;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .hero {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-logo {
+          width: min(180px, 58vw);
+          height: min(180px, 58vw);
+          margin: 8px auto 0;
+        }
+
+        header {
+          padding: 12px 18px;
+        }
+
+        .menu-toggle {
+          display: flex;
+        }
+
+        .nav-buttons {
+          position: fixed;
+          top: 0;
+          right: -100%;
+          height: 100vh;
+          width: 280px;
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(10px);
+          flex-direction: column;
+          padding: 90px 20px 20px;
+          transition: right 0.3s ease;
+          box-shadow: -5px 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-buttons.active {
+          right: 0;
+        }
+
+        .nav-btn {
+          width: 100%;
+          padding: 15px 20px;
+          font-size: 1em;
+          text-align: left;
+        }
+
+        .feature-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .shortcut-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+</head>
+  <body class="site-refurbished page-help">
+    <header>
+      <div class="header-content">
+        <div class="logo-container">
+          <img src="cx.png" alt="CodX Editor Logo" />
+        </div>
+        <button type="button" class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <nav class="nav-buttons">
+          <a href="index.html" class="nav-btn">Home</a>
+          <a href="about.html" class="nav-btn">About</a>
+          <a href="contact.html" class="nav-btn">Contact</a>
+          <a href="help.html" class="nav-btn active">Help</a>
+          <a href="terms.html" class="nav-btn">Terms and Conditions</a>
+          <a href="privacy.html" class="nav-btn">Privacy Policy</a>
+          <a href="welcome.html" class="nav-btn" style="background:#4caf50;color:#fff;">Launch CodX Editor</a>
+        </nav>
+      </div>
+    </header>
+
+    <div class="particles">
+      <div class="particle"></div>
+      <div class="particle"></div>
+      <div class="particle"></div>
+      <div class="particle"></div>
+      <div class="particle"></div>
+      <div class="particle"></div>
+      <div class="particle"></div>
+    </div>
+
+    <main class="container">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><i class="fa-solid fa-circle-question"></i> CodX Editor Guide</div>
+          <h1>Learn the editor without digging through menus.</h1>
+          <p class="lead">
+            CodX Editor is a browser coding workspace for building web projects. This guide explains the main tools in plain language: writing code, managing project files, previewing your work, sharing projects, and working with friends.
+          </p>
+          <div class="hero-pills">
+            <span class="pill"><i class="fa-solid fa-code"></i> Code editing</span>
+            <span class="pill"><i class="fa-solid fa-eye"></i> Live preview</span>
+            <span class="pill"><i class="fa-solid fa-share-nodes"></i> Publishing</span>
+            <span class="pill"><i class="fa-solid fa-users"></i> Collaboration</span>
+            <span class="pill"><i class="fa-brands fa-github"></i> GitHub</span>
+            <span class="pill"><i class="fa-brands fa-node-js"></i> Node.js</span>
+            <span class="pill"><i class="fa-solid fa-keyboard"></i> Shortcuts</span>
+          </div>
+        </div>
+        <svg class="page-illustration help-illustration" viewBox="0 0 420 300" role="img" aria-labelledby="helpIllustrationTitle helpIllustrationDesc">
+          <title id="helpIllustrationTitle">Illustrated CodX Editor learning map</title>
+          <desc id="helpIllustrationDesc">A code window connected to preview, files, console, GitHub, and collaboration guide cards.</desc>
+          <rect class="ill-surface" x="42" y="40" width="235" height="170" rx="20" stroke-width="3"/>
+          <rect class="ill-soft" x="42" y="40" width="235" height="38" rx="20"/><circle cx="66" cy="59" r="6" fill="#fb7185"/><circle cx="86" cy="59" r="6" fill="#fbbf24"/><circle cx="106" cy="59" r="6" fill="#4ade80"/>
+          <path d="M80 112l-22 18 22 18M126 104l-20 52M152 112l22 18-22 18" class="ill-line"/>
+          <rect x="188" y="101" width="64" height="72" rx="10" fill="#e6f6f0"/><rect class="ill-accent" x="199" y="113" width="42" height="8" rx="4"/><rect x="199" y="131" width="32" height="6" rx="3" fill="#8fbbaa"/><rect x="199" y="146" width="42" height="6" rx="3" fill="#8fbbaa"/>
+          <g><rect x="304" y="24" width="92" height="54" rx="13" class="ill-accent"/><text x="350" y="57" text-anchor="middle" fill="white" font-size="22">?</text><rect x="304" y="94" width="92" height="54" rx="13" fill="#eef3ff"/><path d="M331 121h38" stroke="#2563eb" stroke-width="5" stroke-linecap="round"/><rect x="304" y="164" width="92" height="54" rx="13" fill="#f5edff"/><circle cx="340" cy="191" r="11" fill="#7c3aed"/><circle cx="361" cy="191" r="11" fill="#16a34a"/></g>
+          <path d="M277 75l27-24M277 125h27M277 178l27 13" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 5"/>
+          <rect x="78" y="232" width="266" height="42" rx="16" fill="#0f766e"/><text x="211" y="258" text-anchor="middle" fill="white" font-size="14" font-weight="700">BUILD  •  CHECK  •  SHARE  •  LEARN</text>
+        </svg>
+      </section>
+
+      <div class="help-layout">
+        <aside class="toc">
+          <h2>On This Page</h2>
+          <ul>
+            <li><a href="#getting-started">Getting Started</a></li>
+            <li><a href="#workspace">Workspace Layout</a></li>
+            <li><a href="#editing">Editing Tools</a></li>
+            <li><a href="#projects">Projects & Files</a></li>
+            <li><a href="#github">GitHub Repositories</a></li>
+            <li><a href="#nodejs">Node.js Runtime</a></li>
+            <li><a href="#preview">Preview & Console</a></li>
+            <li><a href="#publish">Publishing</a></li>
+            <li><a href="#settings">Settings & Fonts</a></li>
+            <li><a href="#collaboration">Collaboration</a></li>
+            <li><a href="#developer-tools">Developer Tools</a></li>
+            <li><a href="#shortcuts">Shortcuts</a></li>
+            <li><a href="#tips">Helpful Tips</a></li>
+          </ul>
+        </aside>
+
+        <div class="content">
+          <section class="section-card" id="getting-started">
+            <h2>Getting Started</h2>
+            <p class="section-copy">
+              The editor opens after you accept the site terms. From there, you can start typing, add more files, preview the result, save your work in the browser, or export a copy to your computer.
+            </p>
+            <ul class="simple-list">
+              <li><strong>Auto-Run:</strong> keeps the preview in sync while you type.</li>
+              <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
+              <li><strong>GitHub:</strong> signs in through GitHub OAuth, lists repositories, and lets you create, edit, upload, and commit repository files.</li>
+              <li><strong>Help:</strong> opens this guide whenever you need a quick reminder.</li>
+              <li><strong>More:</strong> opens saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
+              <li><strong>Guided tour:</strong> explains the main editor controls step by step with Back, Next, Finish, and Close actions.</li>
+            </ul>
+          </section>
+
+          <section class="seo-section" aria-labelledby="fiveMinuteTitle">
+            <span class="section-kicker"><i class="fa-solid fa-stopwatch"></i> First useful result</span>
+            <h2 id="fiveMinuteTitle">A five-minute orientation project</h2>
+            <p>If you are new to the workspace, use this small exercise to understand the complete feedback loop before exploring advanced tools.</p>
+            <div class="workflow-list">
+              <article class="workflow-item"><div><h3>Open the starter files</h3><p>Select <code>index.html</code>, <code>style.css</code>, and <code>script.js</code> in turn. Notice that structure, appearance, and behavior are intentionally separated.</p></div></article>
+              <article class="workflow-item"><div><h3>Change one visible thing</h3><p>Edit the main heading in HTML, change an accent color in CSS, and add a safe <code>console.log()</code> message in JavaScript.</p></div></article>
+              <article class="workflow-item"><div><h3>Run and inspect</h3><p>Use Run or Auto-Run, check the preview, and open the console. If an error appears, click its location and compare the reported line with the highlighted token.</p></div></article>
+              <article class="workflow-item"><div><h3>Save a portable copy</h3><p>Give the browser project a name, then export a ZIP. The saved copy is convenient for the same browser; the ZIP is the backup you can move elsewhere.</p></div></article>
+            </div>
+          </section>
+
+          <section class="section-card" id="workspace">
+            <h2>Workspace Layout</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bars"></i> Top Controls</h3>
+                <ul>
+                  <li>Use Auto-Run and Console toggles from the top bar.</li>
+                  <li>Open collaboration, fullscreen preview, settings, media upload, and help from the main header.</li>
+                  <li>Use the preview code icon to inspect rendered HTML and the magnifying-glass icon to zoom in, zoom out, or reset preview scale.</li>
+                  <li>The More menu keeps extra project actions in one place so the editor stays cleaner.</li>
+                  <li>The Homepage option returns you to the main site from inside the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-table-columns"></i> Split Workspace</h3>
+                <ul>
+                  <li>The left side contains your files and code editor.</li>
+                  <li>The right side shows the live website preview and console output.</li>
+                  <li>The divider between the editor and preview can be dragged to resize the workspace.</li>
+                  <li>On smaller screens, the editor and preview stack so both stay usable.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-expand"></i> Fullscreen Preview</h3>
+                <ul>
+                  <li>Open the preview in fullscreen to check layouts with more space.</li>
+                  <li>Exit fullscreen from the browser fullscreen control or the same editor button.</li>
+                  <li>Settings can choose whether the complete preview panel and its tools remain visible in fullscreen.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-laptop-code"></i> Zen Mode</h3>
+                <ul>
+                  <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
+                  <li>The Show files in Zen Mode setting controls whether the file explorer remains visible.</li>
+                  <li>Use the exit button or press <kbd>Esc</kbd> to leave Zen Mode.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
+                <ul>
+                  <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
+                  <li>Editor Extras contains Enable Node.js, Fonts, Get Icons, Zen Mode, and Homepage.</li>
+                  <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML.</li>
+                  <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="editing">
+            <h2>Editing Tools</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-code"></i> Code Editor</h3>
+                <ul>
+                  <li>Write HTML, CSS, JavaScript, JSON, environment files, and Node backend files such as <code>.mjs</code>, <code>.cjs</code>, and TypeScript-family files.</li>
+                  <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
+                  <li>CSS and JavaScript inside HTML blocks receive their own highlighting, while JSON keys, Node globals, and environment keys use dedicated colors.</li>
+                  <li>Tabs insert four spaces for tidy indentation.</li>
+                  <li>Remote cursors and typing indicators appear in the editor during collaboration.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Suggestions</h3>
+                <ul>
+                  <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
+                  <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
+                  <li>Typing <code>lorem</code> can insert placeholder text.</li>
+                  <li>Path suggestions help when typing links, scripts, stylesheets, and media sources.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bolt"></i> Fast HTML Helpers</h3>
+                <ul>
+                  <li>Type <code>cxstart</code> in an empty HTML file and press <kbd>Enter</kbd> to insert a starter page structure.</li>
+                  <li>Use Emmet-style abbreviations such as <code>div&gt;ul&gt;li*3</code>, then press <kbd>Tab</kbd> to expand them. The caret is placed inside the generated tag, or inside the first editable child when the abbreviation is nested.</li>
+                  <li>Brackets, quotes, braces, and common tag patterns are completed for you while typing.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-rotate-left"></i> Undo & Redo</h3>
+                <ul>
+                  <li>The toolbar has dedicated Undo and Redo buttons for editor changes.</li>
+                  <li>Keyboard undo and redo shortcuts also work inside the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-triangle-exclamation"></i> Error Guidance</h3>
+                <ul>
+                  <li>CodX Editor checks common HTML, CSS, JavaScript, and inline script issues.</li>
+                  <li>HTML diagnostics underline the exact incorrect tag or duplicate attribute and distinguish missing, extra, misspelled, malformed, void, and incorrectly nested tags.</li>
+                  <li>The HTML checker understands comments, quoted attributes, script/style content, custom elements, and valid optional closing tags to reduce false errors.</li>
+                  <li>Error badges can appear beside affected files.</li>
+                  <li>Click an error badge to jump toward the first detected problem.</li>
+                  <li>The console also catches logs, warnings, runtime errors, and promise failures from the preview.</li>
+                  <li>JavaScript diagnostics identify exact lines, columns, and causes for dangling operators, reversed comparisons, and mismatched or missing brackets.</li>
+                  <li>Click a located console diagnostic to open the correct file at the exact problem.</li>
+                  <li>Large error counts are shortened so file badges stay readable.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-graduation-cap"></i> Guided Tour</h3>
+                <ul>
+                  <li>The built-in tour explains the main controls step by step.</li>
+                  <li>Each step uses a custom animated pointer to demonstrate the highlighted tool without clicking it or changing your project.</li>
+                  <li>Use Back, Next, Finish, or Close to move through the available steps.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="projects">
+            <h2>Projects & Files</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-folder-tree"></i> File Explorer</h3>
+                <ul>
+                  <li>Create project files for markup, styling, scripts, and environment-style notes.</li>
+                  <li>Switch between files from the explorer.</li>
+                  <li>Rename or delete files when your project structure changes.</li>
+                  <li>Duplicate file names are blocked where the editor needs unique names.</li>
+                  <li>File names cannot contain spaces. Spaces are automatically replaced with dashes; dashes and underscores are supported.</li>
+                  <li>Older saved, imported, or collaborative projects are migrated to the same filename rule and matching project references are updated.</li>
+                  <li>The file list can show file-level error status and team focus indicators.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-floppy-disk"></i> Saving</h3>
+                <ul>
+                  <li>Save projects inside your browser with a custom project name.</li>
+                  <li>Open saved projects from the project library.</li>
+                  <li>Autosave keeps a draft while you work and can restore it after a reload.</li>
+                  <li>The project status badge tells you whether the current work is saved or unsaved.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-layer-group"></i> Starter Templates</h3>
+                <ul>
+                  <li>Choose from built-in starters for landing pages, portfolios, and contact forms.</li>
+                  <li>Templates include matching markup, styling, and scripts so you can begin faster.</li>
+                  <li>If you have unsaved work, the editor asks before replacing your current project.</li>
+                  <li>Apply a template when you want to replace the current project with a coordinated frontend starter.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-file-zipper"></i> Import & Export</h3>
+                <ul>
+                  <li>Export the full project as a ZIP archive and choose the archive name.</li>
+                  <li>Import a ZIP archive to load supported project text files.</li>
+                  <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
+                  <li>Imports focus on editable project files, while Add Media handles images, audio, and video.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-photo-film"></i> Media Files</h3>
+                <ul>
+                  <li>Add images, videos, and audio to your project from the media button.</li>
+                  <li>The preview rewrites local media references so playback and image display work inside the browser preview.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-plus"></i> Fresh Project</h3>
+                <ul>
+                  <li>Start a clean starter project from the More menu.</li>
+                  <li>If your current work is unsaved, CodX Editor gives you a chance to save before clearing the workspace.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="github">
+            <h2>GitHub Repositories</h2>
+            <p class="section-copy">
+              Connect with GitHub OAuth from More. CodX Editor keeps the access token on the server in an HTTP-only session and opens a repository workspace after you sign in.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-brands fa-github"></i> Connect & Browse</h3>
+                <ul>
+                  <li>Choose Connect to GitHub and complete the normal GitHub account authorization screen.</li>
+                  <li>After connecting, click the GitHub button again to search repositories you can access.</li>
+                  <li>Public/private status, default branch, write access, and repository descriptions are shown on repository cards.</li>
+                  <li>The connection survives page refreshes. Use Disconnect when you want to remove the CodX Editor session.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-folder-tree"></i> Repository Files</h3>
+                <ul>
+                  <li>Choose Update files to load the selected branch's existing file tree.</li>
+                  <li>Use the refresh icon to reload the current branch without closing the repository window.</li>
+                  <li>Click an existing text file to load and edit its contents.</li>
+                  <li>Binary files can be replaced through Upload file but are not opened in the text editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-file-circle-plus"></i> Create & Upload</h3>
+                <ul>
+                  <li>Create file adds a new path and text content to the pending changes list.</li>
+                  <li>Upload file supports one or more local files.</li>
+                  <li>Created, edited, and uploaded files can be reviewed or removed before committing.</li>
+                  <li>Spaces in newly created or uploaded names are converted to dashes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-code-commit"></i> Commit Changes</h3>
+                <ul>
+                  <li>Choose the target branch and stage at least one created, edited, or uploaded file.</li>
+                  <li>The commit message and longer description are optional.</li>
+                  <li>When the message is blank, CodX Editor uses <code>Update files from CodX Editor</code>.</li>
+                  <li>After success, use the commit link to inspect the result on GitHub.</li>
+                  <li>Avoid uploading secrets such as <code>.env</code> files.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="nodejs">
+            <h2>Node.js Runtime</h2>
+            <p class="section-copy">
+              Enable Node.js from More to start a browser-isolated Node workspace. Node processes and npm packages run inside a WebContainer in your browser, not inside the CodX Editor or Railway server.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-brands fa-node-js"></i> Enable Node.js</h3>
+                <ul>
+                  <li>Enable Node.js hides the normal webpage preview and expands the console into a command terminal.</li>
+                  <li>If missing, CodX Editor creates <code>package.json</code> with project name <code>project</code> and a starter <code>server.js</code>.</li>
+                  <li>Disable Node.js restores the normal preview while leaving the browser runtime available for the current tab.</li>
+                  <li>Use a current Chrome or Edge browser and hard-refresh if the isolation-header message appears.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-terminal"></i> Commands</h3>
+                <ul>
+                  <li>Type commands in the Node console and press <kbd>Enter</kbd>.</li>
+                  <li>Install dependencies with commands such as <code>npm install express</code>.</li>
+                  <li>Start the generated project with <code>npm start</code>.</li>
+                  <li>Terminal output removes spinner/control codes so npm output stays readable.</li>
+                  <li>Dependency changes sync <code>package.json</code> and <code>package-lock.json</code> back into the editor.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-server"></i> Server Preview</h3>
+                <ul>
+                  <li>The default runtime port is <code>8000</code>.</li>
+                  <li>When a server becomes ready, the console shows a clickable <code>http://localhost:8000</code> label.</li>
+                  <li>The link opens a CodX Editor Node.js preview tab that securely embeds the browser runtime server.</li>
+                  <li>The underlying WebContainer proxy address is handled automatically.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-shield-halved"></i> Runtime Notes</h3>
+                <ul>
+                  <li>Project files are copied into the in-browser runtime before commands run.</li>
+                  <li>Native Node addons may not work; prefer JavaScript or WebAssembly-compatible packages.</li>
+                  <li>Node mode does not expose Railway environment variables or GitHub OAuth secrets to project code.</li>
+                  <li>Closing or refreshing the browser tab ends that temporary Node runtime.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="preview">
+            <h2>Preview & Console</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-eye"></i> Live Preview</h3>
+                <ul>
+                  <li>The preview combines your markup, styling, scripts, and media into a working page.</li>
+                  <li>The preview header shows the page title when your HTML provides one.</li>
+                  <li>The preview can also show a favicon when your project provides one.</li>
+                  <li>Internal links can move between pages inside your project.</li>
+                  <li>Missing project pages show a friendly fallback instead of breaking the editor.</li>
+                  <li>Use the inspect icon, then hover a preview element to see its highlighted HTML structure above that element.</li>
+                  <li>Use the magnifying-glass icon to open zoom controls with plus, minus, percentage, and reset actions.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-terminal"></i> Console Output</h3>
+                <ul>
+                  <li>Toggle the console panel from the header.</li>
+                  <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li>Smart syntax messages report the actual problematic operator or bracket instead of only showing the token where parsing stopped.</li>
+                  <li>Located diagnostics are clickable and jump to the reported line and column.</li>
+                  <li>Use Clear to remove old console messages.</li>
+                  <li>When Node.js is enabled, this area becomes an interactive command terminal and the normal preview closes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-link"></i> Linked Project Paths</h3>
+                <ul>
+                  <li>Project links, scripts, stylesheets, media sources, buttons, and forms are handled inside preview where possible.</li>
+                  <li>Path suggestions help you choose existing project files while typing source or link attributes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bug"></i> Debugging Flow</h3>
+                <ul>
+                  <li>Use the file badges to find likely syntax problems.</li>
+                  <li>Use the console for runtime behavior after the page runs.</li>
+                  <li>Use manual Run when you want to test changes at a specific moment.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="publish">
+            <h2>Publishing</h2>
+            <p class="section-copy">
+              Publishing turns the current project into a shareable page. You can create a custom link or update a link you already own with its verification key.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-plus"></i> Create a Link</h3>
+                <ul>
+                  <li>Press Publish / Share from the More menu.</li>
+                  <li>Choose Create a Link.</li>
+                  <li>Type the ending you want for the published link.</li>
+                  <li>The dialog previews the full link as you type.</li>
+                  <li>Only letters, numbers, and hyphens are accepted for the custom ending.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-key"></i> Verification Key</h3>
+                <ul>
+                  <li>After a link is published, CodX Editor shows a verification key.</li>
+                  <li>Save that key somewhere safe.</li>
+                  <li>The key proves you own the published link when you want to update it later.</li>
+                  <li>The success dialog includes a Copy Key button when a key is available.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-pen-to-square"></i> Update a Link</h3>
+                <ul>
+                  <li>Choose Update a Link from the publish dialog.</li>
+                  <li>Enter the custom link ending and the verification key for that link.</li>
+                  <li>CodX Editor asks for confirmation before replacing the existing published project.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-copy"></i> Sharing Options</h3>
+                <ul>
+                  <li>After publishing, CodX Editor shows the finished custom link.</li>
+                  <li>Use Copy Link to copy it to your clipboard.</li>
+                  <li>Shortcut buttons help share through WhatsApp, Discord, or Snapchat where the browser and device allow it.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-shield-halved"></i> Unique Links</h3>
+                <ul>
+                  <li>Two published projects cannot use the same custom link ending.</li>
+                  <li>Case variations are treated as the same link, so names stay clear and predictable.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-globe"></i> Published Pages</h3>
+                <ul>
+                  <li>The published page renders your project with linked styles, scripts, and supported media.</li>
+                  <li>The browser tab uses the title from your project’s HTML title tag.</li>
+                  <li>The server keeps published projects so links remain available after normal reloads.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="settings">
+            <h2>Settings & Fonts</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-sliders"></i> Editor Settings</h3>
+                <ul>
+                  <li>Change the editor background color.</li>
+                  <li>Change the main theme color.</li>
+                  <li>Adjust editor text size.</li>
+                  <li>Preview settings before applying them.</li>
+                  <li>Reset settings back to defaults when needed.</li>
+                  <li>Use toggle controls for Show files in Zen Mode and Preview panel in fullscreen.</li>
+                  <li>Background and theme color fields use interactive color picker controls in Settings.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-font"></i> Font Picker</h3>
+                <ul>
+                  <li>Browse system fonts plus the full free, open-source Fontsource catalog.</li>
+                  <li>Search every available family by name, category, or style keyword.</li>
+                  <li>Font previews load only as they enter view, keeping the picker fast.</li>
+                  <li>Click a system font to copy its font-family value, or a catalog font to copy ready-to-use @font-face CSS.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-brands fa-google"></i> Google Fonts</h3>
+                <ul>
+                  <li>Paste a Google Fonts link or embed snippet into settings.</li>
+                  <li>The editor can use that font for the code area after applying settings.</li>
+                  <li>The settings preview updates so you can inspect the style before applying.</li>
+                  <li>This requires internet access because the font is loaded from Google.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-language"></i> Automatic Language</h3>
+                <ul>
+                  <li>CodX Editor detects the visitor’s country and translates visible interface controls into a local language.</li>
+                  <li>Local development falls back to the browser language when a public country cannot be detected.</li>
+                  <li>Code, filenames, preview content, terminal output, console output, and collaboration messages are never translated.</li>
+                  <li>Translations are cached to make later visits faster and reduce API usage.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="collaboration">
+            <h2>Collaboration</h2>
+            <p class="section-copy">
+              Collaboration lets multiple people work together in one session. It includes shared files, chat, live cursors, typing presence, roles, and room controls.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-users"></i> Sessions</h3>
+                <ul>
+                  <li>Create a session and share the invite link.</li>
+                  <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
+                  <li>When someone requests entry, the host receives a waiting-room popup showing the person’s name and chosen color with Accept and Deny buttons.</li>
+                  <li>Admit All processes every current request only after the host confirms the bulk action in a second dialog.</li>
+                  <li>Join with a display name, personal color, and a collaboration cursor icon.</li>
+                  <li>Invalid session links show a friendly not-found page.</li>
+                  <li>If approval is enabled, guests see the host's session name while they wait for acceptance.</li>
+                  <li>If the connection drops, offline notices are throttled to about once per minute and a reconnect message appears once the session is restored.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-comments"></i> Chat</h3>
+                <ul>
+                  <li>Use group chat for everyone in the room.</li>
+                  <li>Use private chat for direct messages.</li>
+                  <li>Messages use the sender’s chosen color.</li>
+                  <li>Moderators can clear group chat when permitted.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-arrow-pointer"></i> Presence</h3>
+                <ul>
+                  <li>See where collaborators are typing.</li>
+                  <li>Choose a pointer, hand, mouse, crosshair, pen, or text cursor for other collaborators to see.</li>
+                  <li>See live cursors in participant colors.</li>
+                  <li>Follow a participant to stay on their file and cursor location.</li>
+                  <li>Team focus and pinned file indicators help guide the group.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-crown"></i> Host</h3>
+                <ul>
+                  <li>The host controls the room and can manage participants.</li>
+                  <li>The host can transfer ownership to another participant.</li>
+                  <li>If the host disconnects, a co-host can be promoted automatically when available.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-user-shield"></i> Co-Host</h3>
+                <ul>
+                  <li>Co-hosts help moderate without owning every room control.</li>
+                  <li>They can use team tools such as file focus, participant follow, selected file access, and chat cleanup where allowed.</li>
+                  <li>They cannot transfer host, lock ownership-level controls, or end ownership-only flows.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-user"></i> Participant</h3>
+                <ul>
+                  <li>Participants can code, preview, chat, and collaborate normally unless room settings limit them.</li>
+                  <li>Hosts can freeze editing, mute chat, limit file access, kick, or ban devices from a session.</li>
+                  <li>The participant list shows useful status such as muted, frozen, and priority.</li>
+                  <li>Participant More options are shown as neat action cards for role, message, mute, freeze, file access, follow, details, copy, kick, and ban actions.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-people-group"></i> Room Controls</h3>
+                <ul>
+                  <li>Lock the room, set read-only mode, pause collaboration, or disable chat.</li>
+                  <li>Use checkbox pickers to apply feature restrictions to selected participants.</li>
+                  <li>Limit chat, saving, opening saved projects, templates, publishing, running, or console access for specific participants.</li>
+                  <li>Group Controls show affected counts so you can quickly see how many people are limited.</li>
+                  <li>Pin a team file, bring everyone to a file, set an announcement, run a session timer, save a snapshot, regenerate invites, and end the session.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-ban"></i> Safety Tools</h3>
+                <ul>
+                  <li>Kicked users are removed from the room and shown a notice.</li>
+                  <li>Banned devices cannot rejoin the same session until unbanned.</li>
+                  <li>Quiet Mode reduces presence noise for calmer collaboration.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-list-check"></i> Participant Checkboxes</h3>
+                <ul>
+                  <li>Some group-control buttons open a participant checklist instead of changing everyone at once.</li>
+                  <li>Checked participants become affected by that setting; unchecked participants keep access unless a room-wide setting blocks it.</li>
+                  <li>Participant More shows whether a restriction is personal or room-wide.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="developer-tools">
+            <h2>Developer Tools</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
+                <ul>
+                  <li>Use the hidden inspection panel for quick internal checks while testing the editor.</li>
+                  <li>It can inspect state, files, participants, permissions, errors, preview information, and clear its output.</li>
+                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd>.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-graduation-cap"></i> Guided Tutorial</h3>
+                <ul>
+                  <li>The tutorial highlights core controls such as Auto-Run, Console, Collaboration, More, Files, Run, ZIP tools, and Preview.</li>
+                  <li>A custom pointer moves to each highlighted control and performs a short visual click animation.</li>
+                  <li>Use Back, Next, Finish, or Close to move through it at your pace.</li>
+                  <li>The tutorial remains available during its guided flow; the removed reset-tutorial control is not part of settings.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bell"></i> Notifications & Dialogs</h3>
+                <ul>
+                  <li>CodX Editor uses confirmation dialogs for sensitive actions like deleting, replacing, updating published links, and ending sessions.</li>
+                  <li>Notifications confirm successful actions or explain why something is blocked.</li>
+                  <li>Publish and collaboration dialogs can scroll when their content is taller than the screen.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="shortcuts">
+            <h2>Shortcuts</h2>
+            <div class="shortcut-list">
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd></span><span>Export the project as a ZIP archive</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run the preview manually</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a file in the project</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></span><span>Show or hide the console panel</span></div>
+              <div class="shortcut-row"><span><kbd>Esc</kbd></span><span>Close supported overlays or exit Zen Mode</span></div>
+              <div class="shortcut-row"><span><code>cxstart</code> + <kbd>Enter</kbd></span><span>Insert starter HTML in an empty HTML file</span></div>
+              <div class="shortcut-row"><span>Emmet abbreviation + <kbd>Tab</kbd></span><span>Expand HTML shorthand</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd></span><span>Open the developer inspection panel</span></div>
+            </div>
+          </section>
+
+          <section class="section-card" id="tips">
+            <h2>Helpful Tips</h2>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-lightbulb"></i> If Preview Looks Wrong</h3>
+                <ul>
+                  <li>Run the preview manually if Auto-Run is off.</li>
+                  <li>Open the console and check for script errors.</li>
+                  <li>Check file badges for syntax issues.</li>
+                  <li>Make sure linked project paths match files in the explorer.</li>
+                  <li>Remember that spaces in filenames are converted to dashes.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-box-archive"></i> If You Need a Backup</h3>
+                <ul>
+                  <li>Save the project in the browser for quick local access.</li>
+                  <li>Export a ZIP archive when you want a portable copy.</li>
+                  <li>Publish only when you are ready to share a browser link.</li>
+                  <li>Use GitHub commits when you want version history in a repository.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-user-group"></i> If You Are Collabing</h3>
+                <ul>
+                  <li>Use pinned files and announcements to keep everyone aligned.</li>
+                  <li>Use selected file access when different people should work on different parts.</li>
+                  <li>Use follow mode when teaching, reviewing, or pair-programming.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-compass"></i> If You Feel Lost</h3>
+                <ul>
+                  <li>Use the More menu as the main place for project-level actions.</li>
+                  <li>Keep the console open while learning JavaScript; it is your best little truth-teller.</li>
+                  <li>For Node projects, enable Node.js and run commands from the expanded terminal.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="standalone-footer">
+      <p><strong>CodX Editor Guide</strong> · Updated July 12, 2026</p>
+      <nav aria-label="Help footer links"><a href="index.html">Home</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="welcome.html">Open Editor</a></nav>
+    </footer>
+
+    <script>
+      const menuToggle = document.querySelector(".menu-toggle");
+      const navButtons = document.querySelector(".nav-buttons");
+      const navLinks = document.querySelectorAll(".nav-btn");
+      const tocLinks = Array.from(document.querySelectorAll(".toc a"));
+      const observedSections = tocLinks
+        .map((link) => {
+          const id = (link.getAttribute("href") || "").replace(/^#/, "");
+          return document.getElementById(id);
+        })
+        .filter(Boolean);
+
+      if (menuToggle && navButtons) {
+        menuToggle.addEventListener("click", () => {
+          const isOpen = menuToggle.classList.toggle("active");
+          navButtons.classList.toggle("active", isOpen);
+          menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+          document.body.classList.toggle("nav-open", isOpen);
+        });
+
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest(".header-content")) {
+            menuToggle.classList.remove("active");
+            navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
+          }
+        });
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            menuToggle.classList.remove("active");
+            navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
+          }
+        });
+      }
+
+      navLinks.forEach((link) => {
+        link.addEventListener("click", () => {
+          if (menuToggle && navButtons) {
+            menuToggle.classList.remove("active");
+            navButtons.classList.remove("active");
+            menuToggle.setAttribute("aria-expanded", "false");
+            document.body.classList.remove("nav-open");
+          }
+        });
+      });
+
+      function setActiveTocLink(id) {
+        tocLinks.forEach((link) => {
+          const isActive = link.getAttribute("href") === `#${id}`;
+          link.classList.toggle("active", isActive);
+        });
+      }
+
+      if (observedSections.length) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            const visible = entries
+              .filter((entry) => entry.isIntersecting)
+              .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+            if (visible && visible.target && visible.target.id) {
+              setActiveTocLink(visible.target.id);
+            }
+          },
+          {
+            rootMargin: "-18% 0px -55% 0px",
+            threshold: [0.2, 0.35, 0.55],
+          },
+        );
+
+        observedSections.forEach((section) => observer.observe(section));
+        setActiveTocLink(observedSections[0].id);
+      }
+    </script>
+  </body>
+</html>

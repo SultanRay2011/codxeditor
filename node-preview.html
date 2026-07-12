@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="description" content="Private runtime bridge for a CodX Editor Node.js project preview.">
+    <link rel="icon" type="image/png" href="cx.png">
+    <title>Node.js Preview | CodX Editor</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #080c12; color: #d6deeb; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { display: grid; grid-template-rows: 38px 1fr; }
+      header { display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid #2b3340; background: #111720; font-size: 12px; }
+      header strong { color: #7ee787; }
+      iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+      #message { display: none; place-items: center; padding: 30px; text-align: center; color: #aab4c3; background: radial-gradient(circle at 50% 38%, rgba(34,197,94,.12), transparent 28rem), #080c12; }
+      #message strong { display: block; margin-bottom: 8px; color: #f87171; }
+      .runtime-card { width: min(520px, 92vw); padding: 28px; border: 1px solid #2b3340; border-radius: 20px; background: #111720; box-shadow: 0 28px 70px rgba(0,0,0,.4); }
+      .runtime-card svg { width: min(270px, 80%); margin-bottom: 18px; }
+      .runtime-card p { margin: 8px auto 0; max-width: 48ch; line-height: 1.65; }
+      .runtime-card a { display: inline-flex; margin-top: 18px; padding: 10px 14px; border-radius: 9px; background: #238636; color: #fff; text-decoration: none; font-weight: 700; }
+    </style>
+  </head>
+  <body class="page-node-preview">
+    <header><span>CodX Editor Node.js</span><strong id="previewAddress">http://localhost:8000</strong></header>
+    <iframe id="nodePreviewFrame" title="Node.js server preview" allow="cross-origin-isolated"></iframe>
+    <main id="message"><div class="runtime-card">
+      <svg viewBox="0 0 300 170" role="img" aria-labelledby="runtimeIllustrationTitle"><title id="runtimeIllustrationTitle">A Node.js server connecting localhost port 8000 to a browser preview</title><rect x="16" y="28" width="108" height="112" rx="16" fill="#17211a" stroke="#22c55e" stroke-width="3"/><circle cx="70" cy="84" r="31" fill="#22c55e"/><path d="M50 85h40M70 65v40" stroke="#07130a" stroke-width="7" stroke-linecap="round"/><path d="M132 84h45" stroke="#64748b" stroke-width="4" stroke-dasharray="7 6"/><rect x="184" y="28" width="100" height="112" rx="16" fill="#f8fafc"/><rect x="184" y="28" width="100" height="25" rx="16" fill="#334155"/><path d="M205 78h58M205 96h44M205 114h54" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/></svg>
+      <strong>Preview unavailable</strong><p>Return to CodX Editor, start the Node.js server again, wait for the localhost link, and reopen that link from the terminal.</p><a href="frontend.html" target="_top">Return to CodX Editor</a>
+    </div></main>
+    <script>
+      (() => {
+        const port = new URLSearchParams(location.search).get("port") || "8000";
+        const frame = document.getElementById("nodePreviewFrame");
+        const message = document.getElementById("message");
+        document.getElementById("previewAddress").textContent = `http://localhost:${port}`;
+        document.title = `localhost:${port} | CodX Editor Node.js`;
+        let runtimeUrl = "";
+        try { runtimeUrl = localStorage.getItem(`codxNodePreview:${port}`) || ""; } catch (_error) {}
+        let parsed = null;
+        try { parsed = new URL(runtimeUrl); } catch (_error) {}
+        const allowedHost = parsed && /(?:^|\.)(?:webcontainer-api\.io|webcontainer\.io|stackblitz\.io)$/.test(parsed.hostname);
+        if (!parsed || parsed.protocol !== "https:" || !allowedHost) {
+          frame.remove();
+          message.style.display = "grid";
+          return;
+        }
+        frame.src = parsed.href;
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Generated folders
+dist/
+build/
+coverage/
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Local agent/editor metadata
+.agents/
+.codex/
+
+# Local application sessions
+.codx-github-sessions.enc
+.codx-github-sessions.enc.tmp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Package-manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

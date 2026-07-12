@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="description" content="Review the CodX Editor service summary and continue to the browser coding workspace." />
+    <link rel="icon" type="image/png" href="cx.png" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260712" />
+    <title>Welcome | CodX Editor</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #ffffff;
+        color: #1a1a1a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 20px;
+        max-width: 520px;
+        width: 100%;
+        max-height: 92vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow:
+          0 4px 24px rgba(0, 0, 0, 0.07),
+          0 1px 4px rgba(0, 0, 0, 0.04);
+        animation: fadeUp 0.4s ease;
+      }
+
+      /* ── Header ── */
+      .card-header {
+        padding: 32px 36px 24px;
+        border-bottom: 1px solid #f0f0f0;
+        flex-shrink: 0;
+        text-align: center;
+      }
+
+      .logo-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .logo-row img {
+        height: 36px;
+        width: auto;
+      }
+
+      .brand-name {
+        font-size: 1.45em;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+      }
+
+      .brand-name .cod {
+        color: #1a1a1a;
+      }
+      .brand-name .x {
+        color: #4caf50;
+      }
+      .brand-name .editor {
+        color: #1a1a1a;
+      }
+
+      .card-header h2 {
+        font-size: 1.05em;
+        font-weight: 600;
+        color: #1a1a1a;
+        margin-bottom: 4px;
+      }
+
+      .card-header p {
+        font-size: 0.88em;
+        color: #888;
+      }
+
+      /* ── Body ── */
+      .card-body {
+        padding: 24px 36px;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .card-body::-webkit-scrollbar {
+        width: 5px;
+      }
+      .card-body::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .card-body::-webkit-scrollbar-thumb {
+        background: #ddd;
+        border-radius: 4px;
+      }
+
+      .summary-box {
+        background: #f4fdf5;
+        border: 1px solid #c8eac9;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        font-size: 0.88em;
+        color: #2e6e32;
+        line-height: 1.6;
+      }
+
+      .summary-box strong {
+        font-weight: 600;
+      }
+
+      .terms-section {
+        margin-bottom: 18px;
+      }
+
+      .terms-section h2 {
+        font-size: 0.82em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #aaa;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .terms-section h2 i {
+        font-size: 0.95em;
+        color: #4caf50;
+      }
+
+      .terms-section p,
+      .terms-section li {
+        font-size: 0.9em;
+        line-height: 1.65;
+        color: #555;
+      }
+
+      .terms-section ul {
+        margin-left: 16px;
+      }
+
+      .terms-section li {
+        margin-bottom: 4px;
+      }
+
+      .terms-section a {
+        color: #4caf50;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .terms-section a:hover {
+        text-decoration: underline;
+      }
+
+      .divider {
+        border: none;
+        border-top: 1px solid #f0f0f0;
+        margin: 18px 0;
+      }
+
+      .last-updated {
+        font-size: 0.82em;
+        color: #bbb;
+        margin-top: 4px;
+      }
+
+      /* ── Footer ── */
+      .card-footer {
+        padding: 20px 36px 24px;
+        border-top: 1px solid #f0f0f0;
+        flex-shrink: 0;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .checkbox-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: #4caf50;
+      }
+
+      .checkbox-row label {
+        font-size: 0.9em;
+        color: #555;
+        cursor: pointer;
+        line-height: 1.4;
+      }
+
+      .checkbox-row label a {
+        color: #4caf50;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .checkbox-row label a:hover {
+        text-decoration: underline;
+      }
+
+      .continue-btn {
+        width: 100%;
+        padding: 13px;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.95em;
+        font-weight: 600;
+        cursor: not-allowed;
+        transition:
+          background 0.2s,
+          color 0.2s,
+          box-shadow 0.2s,
+          transform 0.15s;
+        background: #f0f0f0;
+        color: #aaa;
+      }
+
+      .continue-btn.enabled {
+        background: #4caf50;
+        color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(76, 175, 80, 0.3);
+      }
+
+      .continue-btn.enabled:hover {
+        background: #43a047;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 18px rgba(76, 175, 80, 0.38);
+      }
+
+      .continue-btn.enabled:active {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
+      .help-link {
+        display: block;
+        text-align: center;
+        margin-top: 12px;
+        font-size: 0.85em;
+        color: #aaa;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+
+      .help-link:hover {
+        color: #4caf50;
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 560px) {
+        .card {
+          border-radius: 14px;
+        }
+        .card-header,
+        .card-body,
+        .card-footer {
+          padding-left: 22px;
+          padding-right: 22px;
+        }
+        .brand-name {
+          font-size: 1.25em;
+        }
+      }
+
+      @media (max-width: 768px) and (max-height: 500px) {
+        .card {
+          max-height: 96vh;
+        }
+        .card-header {
+          padding-top: 18px;
+          padding-bottom: 14px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .card-body {
+          padding: 18px 16px;
+        }
+        .card-footer {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body class="site-refurbished page-welcome">
+      <div class="card" id="termsModal">
+        <svg class="utility-illustration" viewBox="0 0 320 180" role="img" aria-labelledby="welcomeIllustrationTitle">
+          <title id="welcomeIllustrationTitle">A safe path from reviewing the service summary to opening the code editor</title>
+          <rect x="18" y="22" width="174" height="136" rx="18" fill="#f5f3ff" stroke="#4f46e5" stroke-width="3"/>
+          <rect x="40" y="48" width="108" height="10" rx="5" fill="#4f46e5"/><rect x="40" y="76" width="128" height="7" rx="4" fill="#a5b4fc"/><rect x="40" y="96" width="112" height="7" rx="4" fill="#a5b4fc"/>
+          <circle cx="160" cy="126" r="22" fill="#16a34a"/><path d="M150 126l7 8 14-17" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+          <path d="M201 89h48" stroke="#64748b" stroke-width="4" stroke-linecap="round"/><path d="M239 77l14 12-14 12" fill="none" stroke="#64748b" stroke-width="4"/>
+          <rect x="257" y="48" width="48" height="82" rx="10" fill="#102018"/><path d="M272 75l-8 8 8 8M289 75l8 8-8 8" fill="none" stroke="#86efac" stroke-width="3"/>
+        </svg>
+      <div class="card-header">
+        <div class="logo-row">
+          <img src="cx.png" alt="CodX Editor Logo" />
+          <span class="brand-name">
+            <span class="cod">Cod</span><span class="x">X</span
+            ><span class="editor"> Editor</span>
+          </span>
+        </div>
+        <h2>Before you start coding</h2>
+        <p>Please review our Terms and Conditions below</p>
+      </div>
+
+      <div class="card-body">
+        <div class="summary-box">
+          <strong>Quick summary:</strong> CodX Editor is a free, browser-based
+          code editor. Standard drafts stay in your browser; optional sharing,
+          collaboration, GitHub, translation, publishing, and Node.js features
+          use external or server-side services. By continuing, you agree to the terms.
+        </div>
+
+        <div class="terms-section">
+          <h2>
+            <i class="fa-solid fa-clipboard-list"></i> Service Description
+          </h2>
+          <p>
+            CodX Editor lets you write, run, and debug HTML, CSS, and JavaScript
+            directly in your browser. The service is provided "as is" without
+            warranties.
+          </p>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="terms-section">
+          <h2>
+            <i class="fa-solid fa-circle-check"></i> Your Responsibilities
+          </h2>
+          <ul>
+            <li>Use the service only for lawful purposes</li>
+            <li>Do not create or distribute malicious code or malware</li>
+            <li>Do not attempt unauthorized access to our systems</li>
+            <li>Take responsibility for backing up your own code</li>
+          </ul>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="terms-section">
+          <h2>
+            <i class="fa-solid fa-shield-halved"></i> Your Content &amp; Privacy
+          </h2>
+          <p>
+            <strong>You own your code.</strong> Browser projects remain local by
+            default. Content is transmitted when you deliberately use features
+            that require it, such as publishing, collaboration, GitHub, or a
+            connected runtime. See our <a href="terms.html" target="_blank">Terms</a>
+            and <a href="privacy.html" target="_blank">Privacy Guide</a> for details.
+          </p>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="terms-section">
+          <h2><i class="fa-solid fa-triangle-exclamation"></i> Disclaimer</h2>
+          <p>
+            The service is provided "as is" without guarantees. We are not
+            liable for any loss of data, code, or damages resulting from your
+            use of the service.
+          </p>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="terms-section">
+          <h2><i class="fa-solid fa-pen-to-square"></i> Updates</h2>
+          <p>
+            We may modify these terms at any time. Continued use after changes
+            means you accept the new terms.
+          </p>
+        </div>
+
+        <p class="last-updated">Last updated: July 12, 2026</p>
+      </div>
+
+      <div class="card-footer">
+        <div class="checkbox-row">
+          <input type="checkbox" id="agreeCheckbox" />
+          <label for="agreeCheckbox">
+            I agree to the
+            <a href="terms.html" target="_blank">Terms and Conditions</a>
+          </label>
+        </div>
+        <button class="continue-btn" id="continueButton">
+          Start using CodX Editor
+        </button>
+        <a class="help-link" href="help.html"
+          >Need help understanding the features?</a
+        >
+        <a class="help-link" href="index.html">Return to the public homepage</a>
+      </div>
+    </div>
+
+    <script>
+      const checkbox = document.getElementById("agreeCheckbox");
+      const button = document.getElementById("continueButton");
+      const modal = document.getElementById("termsModal");
+
+      function resolveNextEditorRoute() {
+        const savedRoute = localStorage.getItem("codxPendingEditorRoute");
+        if (savedRoute && savedRoute.startsWith("/frontend.html")) {
+          localStorage.removeItem("codxPendingEditorRoute");
+          return savedRoute;
+        }
+        localStorage.removeItem("codxPendingEditorRoute");
+        return "/frontend.html";
+      }
+
+      if (localStorage.getItem("codxTermsAgreed") === "true") {
+        modal.style.display = "none";
+        window.location.href = resolveNextEditorRoute();
+      }
+
+      checkbox.addEventListener("change", function () {
+        if (this.checked) {
+          button.classList.add("enabled");
+          button.textContent = "Start using CodX Editor";
+        } else {
+          button.classList.remove("enabled");
+          button.textContent = "Start using CodX Editor";
+        }
+      });
+
+      button.addEventListener("click", function () {
+        if (!checkbox.checked) return;
+        localStorage.setItem("codxTermsAgreed", "true");
+        localStorage.setItem("codxTermsAgreedDate", new Date().toISOString());
+        button.textContent = "Welcome! 🎉";
+        button.style.background = "#2e7d32";
+        setTimeout(() => {
+          window.location.href = resolveNextEditorRoute();
+        }, 800);
+      });
+    </script>
+  </body>
+</html>
