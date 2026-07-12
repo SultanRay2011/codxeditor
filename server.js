@@ -2037,7 +2037,13 @@ io.on("connection", (socket) => {
         socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
         logAdminEvent("Join approval requested", `${name} requested access to session ${sessionId}.`, sessionId);
         emitSessionMeta(sessionId);
-        ack?.({ ok: false, pending: true, error: "Waiting for host approval." });
+        ack?.({
+          ok: false,
+          pending: true,
+          sessionId,
+          hostName: session.hostName || "",
+          error: "Waiting for host approval.",
+        });
         return;
       }
 

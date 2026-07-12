@@ -12831,14 +12831,19 @@ function renderWaitingRoomPopup() {
   });
 }
 
-function showJoinPendingState(sessionId, name) {
-  joinRequestContext = { sessionId, name };
+function showJoinPendingState(sessionId, name, hostName = "") {
+  const resolvedHostName = String(hostName || collabHostName || "").trim();
+  if (resolvedHostName) collabHostName = resolvedHostName;
+  joinRequestContext = { sessionId, name, hostName: resolvedHostName };
+  const sessionLabel = resolvedHostName
+    ? `${resolvedHostName}'s session`
+    : "the host's session";
   collabModalView = "join-pending";
   setCollabCloseButtonVisible(false);
   modalTitle.innerHTML = "<strong>WAITING FOR APPROVAL</strong>";
   modalBody.innerHTML = `
     <p style="margin:8px 0 16px;color:var(--text-primary);">
-      Your request to join <strong>${escapeHtml(sessionId)}</strong> as <strong>${escapeHtml(name)}</strong> is waiting for the host.
+      Your request to join <strong>${escapeHtml(sessionLabel)}</strong> as <strong>${escapeHtml(name)}</strong> is waiting for the host.
     </p>
   `;
   setModalActions("");
@@ -15561,7 +15566,7 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
       if (!res || !res.ok) {
         if (res && res.pending) {
           myInfo = { name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
-          showJoinPendingState(sid, name);
+          showJoinPendingState(res.sessionId || sid, name, res.hostName);
           return;
         }
         const rawError = String((res && res.error) || "");
@@ -15811,7 +15816,7 @@ function promptJoinTheme(name, sid) {
           if (!res || !res.ok) {
             if (res && res.pending) {
               myInfo = { name, theme };
-              showJoinPendingState(sid, name);
+              showJoinPendingState(res.sessionId || sid, name, res.hostName);
               return;
             }
             if (res && String(res.error || "").toLowerCase().includes("session not found")) {
