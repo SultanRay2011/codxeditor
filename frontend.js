@@ -8617,6 +8617,8 @@ function syncSyntaxLayerStyle(textarea) {
   const computed = window.getComputedStyle(textarea);
   highlightLayer.style.fontFamily = computed.fontFamily;
   highlightLayer.style.fontSize = computed.fontSize;
+  highlightLayer.style.fontWeight = computed.fontWeight;
+  highlightLayer.style.fontStyle = computed.fontStyle;
   highlightLayer.style.lineHeight = computed.lineHeight;
   highlightLayer.style.letterSpacing = computed.letterSpacing;
   highlightLayer.style.tabSize = computed.tabSize;
