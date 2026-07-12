@@ -14,7 +14,6 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const IS_VERCEL = Boolean(process.env.VERCEL);
 const sessions = new Map();
 const socketMeta = new Map();
 const editorPresenceSockets = new Set();
@@ -335,11 +334,34 @@ app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
   next();
 });
+const PRIVATE_STATIC_PATHS = new Set([
+  "/package.json",
+  "/package-lock.json",
+  "/published-projects.json",
+  "/README.md",
+  "/server.js",
+]);
+app.use((req, res, next) => {
+  let requestPath = "";
+  try {
+    requestPath = decodeURIComponent(String(req.path || ""));
+  } catch {
+    return res.status(400).type("text/plain").send("Invalid request path.");
+  }
+  if (
+    PRIVATE_STATIC_PATHS.has(requestPath) ||
+    requestPath === "/node_modules" ||
+    requestPath.startsWith("/node_modules/")
+  ) {
+    return res.status(404).type("text/plain").send("Not found.");
+  }
+  next();
+});
 app.use(
   "/vendor/webcontainer",
   express.static(path.join(__dirname, "node_modules", "@webcontainer", "api", "dist")),
 );
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
 
 app.get("/api/localization/profile", async (req, res) => {
@@ -1085,7 +1107,6 @@ function loadPublishedProjects() {
 }
 
 function savePublishedProjects() {
-  if (IS_VERCEL) return;
   try {
     const serialized = JSON.stringify(Array.from(publishedProjects.values()), null, 2);
     fs.writeFileSync(PUBLISHED_PROJECTS_FILE, serialized, "utf8");
@@ -1150,7 +1171,6 @@ function getGitHubSessionEncryptionKey() {
 }
 
 function loadGitHubSessions() {
-  if (IS_VERCEL) return;
   const key = getGitHubSessionEncryptionKey();
   if (!key || !fs.existsSync(GITHUB_SESSIONS_FILE)) return;
   try {
@@ -1180,7 +1200,6 @@ function loadGitHubSessions() {
 }
 
 function saveGitHubSessions() {
-  if (IS_VERCEL) return;
   const key = getGitHubSessionEncryptionKey();
   if (!key) return;
   try {
@@ -3026,17 +3045,13 @@ server.on("error", (err) => {
   throw err;
 });
 
-if (!IS_VERCEL) {
-  startServer(PORT);
+startServer(PORT);
 
-  setInterval(() => {
-    const now = Date.now();
-    Array.from(sessions.entries()).forEach(([sessionId, session]) => {
-      if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
-        endSession(sessionId, "The collaboration session timer ended.");
-      }
-    });
-  }, 1000);
-}
-
-module.exports = app;
+setInterval(() => {
+  const now = Date.now();
+  Array.from(sessions.entries()).forEach(([sessionId, session]) => {
+    if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
+      endSession(sessionId, "The collaboration session timer ended.");
+    }
+  });
+}, 1000);
