@@ -13042,6 +13042,26 @@ function participantCannotSeeFile(participant, fileName) {
   );
 }
 
+function didParticipantFileAccessExpand(previousParticipant, nextParticipant) {
+  if (!previousParticipant || !nextParticipant) return false;
+  const previousRole = String(previousParticipant.role || "participant");
+  const nextRole = String(nextParticipant.role || "participant");
+  if (
+    !["host", "co-host"].includes(previousRole) &&
+    ["host", "co-host"].includes(nextRole)
+  ) {
+    return true;
+  }
+  if (!Array.isArray(previousParticipant.allowedFiles)) return false;
+  if (!Array.isArray(nextParticipant.allowedFiles)) return true;
+  const previousAllowed = new Set(
+    previousParticipant.allowedFiles.map((name) => String(name || "").trim().toLowerCase()),
+  );
+  return nextParticipant.allowedFiles.some(
+    (name) => !previousAllowed.has(String(name || "").trim().toLowerCase()),
+  );
+}
+
 function updateFileVisibilityQuickButton() {
   if (!collabFileVisibilityBtn) return;
   const canManage = Boolean(activeSessionId && canUseCoHostTools() && activeFile);
@@ -14861,6 +14881,15 @@ function ensureCollabSocket() {
 
   collabSocket.on("collab:participants", (participants) => {
     const nextParticipants = Array.isArray(participants) ? participants : [];
+    const previousMeBeforeAccessUpdate = getMyParticipant();
+    const myNameKey = String(myInfo.name || "").trim().toLowerCase();
+    const nextMeAfterAccessUpdate = nextParticipants.find(
+      (participant) => String(participant?.name || "").trim().toLowerCase() === myNameKey,
+    );
+    const personalFileAccessExpanded = didParticipantFileAccessExpand(
+      previousMeBeforeAccessUpdate,
+      nextMeAfterAccessUpdate,
+    );
     updateTimelineFromParticipants(nextParticipants);
 
     // Detect new joiners and show notification
@@ -14907,6 +14936,9 @@ function ensureCollabSocket() {
     renderRemoteCursors();
     enforceCollabPermissionsUI();
     syncFollowedParticipantView();
+    if (personalFileAccessExpanded) {
+      setTimeout(() => resumeCollabSession(), 0);
+    }
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);

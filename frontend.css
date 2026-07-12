@@ -308,8 +308,9 @@ body.zen-mode .line-numbers {
 body.zen-mode #zenExitBtn {
   display: inline-flex !important;
   position: fixed !important;
-  top: max(12px, env(safe-area-inset-top, 0px) + 12px) !important;
+  top: auto !important;
   right: max(12px, env(safe-area-inset-right, 0px) + 12px) !important;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px) + 12px) !important;
   z-index: 5000 !important;
 }
 
@@ -2438,8 +2439,9 @@ iframe {
   }
 
   body.zen-mode #zenExitBtn {
-    top: max(10px, env(safe-area-inset-top, 0px) + 10px) !important;
+    top: auto !important;
     right: max(10px, env(safe-area-inset-right, 0px) + 10px) !important;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px) + 10px) !important;
     padding: 8px 12px;
     font-size: 11px;
   }
@@ -4955,5 +4957,71 @@ iframe {
   .tutorial-tool-pointer.is-playing > .tutorial-pointer-click,
   #tutorialHighlight.is-pointer-playing {
     animation: none;
+  }
+}
+
+/* Phone workspace: one-row header and editor-only canvas. */
+@media (max-width: 768px) {
+  header {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 7px !important;
+    padding: 7px 8px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+
+  header::-webkit-scrollbar {
+    display: none;
+  }
+
+  header > *,
+  header .run-button,
+  .header-switches,
+  .header-more-menu,
+  .theme-toggle {
+    flex: 0 0 auto !important;
+  }
+
+  .header-more-menu,
+  .theme-toggle {
+    margin-left: 0 !important;
+  }
+
+  .header-more-panel {
+    position: fixed;
+    top: 54px;
+    right: 8px;
+    left: auto;
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+  }
+
+  #previewFullscreenBtn,
+  .header-switches,
+  .mobile-preview-control,
+  .mobile-preview-setting,
+  .editor-container > .divider,
+  .editor-container > .preview {
+    display: none !important;
+  }
+
+  .editor-container {
+    flex-direction: row !important;
+    min-height: 0;
+  }
+
+  .editor-container > .editors {
+    display: flex !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
   }
 }

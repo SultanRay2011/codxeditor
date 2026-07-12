@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260712-google-font-tools20" />
+    <link rel="stylesheet" href="/frontend.css?v=20260712-phone-editor-only22" />
   </head>
   <body>
     <a
@@ -65,8 +65,8 @@
     >
     <header>
       <div class="header-switches">
-        <label for="autoRun">Auto-Run</label>
-        <label class="switch" title="Toggle auto-run feature">
+        <label class="mobile-preview-control" for="autoRun">Auto-Run</label>
+        <label class="switch mobile-preview-control" title="Toggle auto-run feature">
           <input type="checkbox" id="autoRun" checked />
           <span class="slider"></span>
         </label>
@@ -823,6 +823,7 @@
         </div>
 
         <div
+          class="mobile-preview-setting"
           style="
             display: flex;
             align-items: center;
@@ -1691,7 +1692,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
-    <script src="/frontend.js?v=20260712-google-font-tools23"></script>
+    <script src="/frontend.js?v=20260712-hide-files-restore24"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>
