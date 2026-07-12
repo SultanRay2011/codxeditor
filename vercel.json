@@ -4,12 +4,7 @@
   "buildCommand": "node scripts/prepare-vercel-public.js",
   "functions": {
     "api/index.js": {
-      "includeFiles": [
-        "404-for-preview.html",
-        "404.html",
-        "frontend.html",
-        "published-projects.json"
-      ],
+      "includeFiles": "*.{html,json}",
       "maxDuration": 60
     }
   },
