@@ -14,6 +14,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const IS_VERCEL = Boolean(process.env.VERCEL);
 const sessions = new Map();
 const socketMeta = new Map();
 const editorPresenceSockets = new Set();
@@ -1084,6 +1085,7 @@ function loadPublishedProjects() {
 }
 
 function savePublishedProjects() {
+  if (IS_VERCEL) return;
   try {
     const serialized = JSON.stringify(Array.from(publishedProjects.values()), null, 2);
     fs.writeFileSync(PUBLISHED_PROJECTS_FILE, serialized, "utf8");
@@ -1148,6 +1150,7 @@ function getGitHubSessionEncryptionKey() {
 }
 
 function loadGitHubSessions() {
+  if (IS_VERCEL) return;
   const key = getGitHubSessionEncryptionKey();
   if (!key || !fs.existsSync(GITHUB_SESSIONS_FILE)) return;
   try {
@@ -1177,6 +1180,7 @@ function loadGitHubSessions() {
 }
 
 function saveGitHubSessions() {
+  if (IS_VERCEL) return;
   const key = getGitHubSessionEncryptionKey();
   if (!key) return;
   try {
@@ -3022,13 +3026,17 @@ server.on("error", (err) => {
   throw err;
 });
 
-startServer(PORT);
+if (!IS_VERCEL) {
+  startServer(PORT);
 
-setInterval(() => {
-  const now = Date.now();
-  Array.from(sessions.entries()).forEach(([sessionId, session]) => {
-    if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
-      endSession(sessionId, "The collaboration session timer ended.");
-    }
-  });
-}, 1000);
+  setInterval(() => {
+    const now = Date.now();
+    Array.from(sessions.entries()).forEach(([sessionId, session]) => {
+      if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
+        endSession(sessionId, "The collaboration session timer ended.");
+      }
+    });
+  }, 1000);
+}
+
+module.exports = app;
