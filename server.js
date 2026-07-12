@@ -1809,6 +1809,84 @@ function normalizeAllowedFiles(files, input) {
   );
 }
 
+function getStoredParticipantFileAccess(session, name) {
+  const stored = session?.fileAccessByName?.[normalizeName(name)];
+  return Array.isArray(stored) ? normalizeAllowedFiles(session.files, stored) : null;
+}
+
+function storeParticipantFileAccess(session, participant) {
+  if (!session || !participant) return;
+  if (!session.fileAccessByName) session.fileAccessByName = {};
+  const key = normalizeName(participant.name);
+  if (!key) return;
+  if (Array.isArray(participant.allowedFiles)) {
+    session.fileAccessByName[key] = [...participant.allowedFiles];
+  } else {
+    delete session.fileAccessByName[key];
+  }
+}
+
+function getFilesForParticipant(session, participant) {
+  const files = cloneFiles(session?.files || []);
+  if (!participant || !Array.isArray(participant.allowedFiles)) return files;
+  const allowed = new Set(participant.allowedFiles);
+  return files.filter((file) => allowed.has(String(file?.name || "")));
+}
+
+function getActiveFileForParticipant(session, participant) {
+  const visibleFiles = getFilesForParticipant(session, participant);
+  const requested = String(participant?.currentFile || session?.activeFileName || "");
+  return visibleFiles.some((file) => String(file?.name || "") === requested)
+    ? requested
+    : String(visibleFiles[0]?.name || "") || null;
+}
+
+function emitSessionStateToParticipant(session, participant, user = null) {
+  if (!session || !participant?.socketId) return;
+  io.to(participant.socketId).emit("collab:state", {
+    files: getFilesForParticipant(session, participant),
+    activeFileName: getActiveFileForParticipant(session, participant),
+    user,
+  });
+}
+
+function emitSessionStateToRoom(session, sourceSocketId = "", user = null) {
+  (session?.participants || []).forEach((participant) => {
+    if (participant.socketId === sourceSocketId) return;
+    emitSessionStateToParticipant(session, participant, user);
+  });
+}
+
+function mergeFilesFromRestrictedParticipant(sessionFiles, incomingFiles, allowedFiles) {
+  const allowed = new Set(allowedFiles || []);
+  const incomingMap = new Map(
+    (incomingFiles || [])
+      .filter((file) => allowed.has(String(file?.name || "")))
+      .map((file) => [String(file?.name || ""), file]),
+  );
+  const previousNames = new Set((sessionFiles || []).map((file) => String(file?.name || "")));
+  const merged = (sessionFiles || []).flatMap((file) => {
+    const name = String(file?.name || "");
+    if (!allowed.has(name)) return [file];
+    return incomingMap.has(name) ? [incomingMap.get(name)] : [];
+  });
+  (incomingFiles || []).forEach((file) => {
+    const name = String(file?.name || "");
+    if (allowed.has(name) && !previousNames.has(name)) merged.push(file);
+  });
+  return merged;
+}
+
+function rebaseParticipantFileAccess(participant, previousFiles, nextFiles) {
+  if (!Array.isArray(participant?.allowedFiles)) return;
+  const previousNames = (previousFiles || []).map((file) => String(file?.name || ""));
+  const previouslyAllowed = new Set(participant.allowedFiles);
+  const hiddenNames = new Set(previousNames.filter((name) => !previouslyAllowed.has(name)));
+  const nextNames = (nextFiles || []).map((file) => String(file?.name || ""));
+  const nextAllowed = nextNames.filter((name) => !hiddenNames.has(name));
+  participant.allowedFiles = nextAllowed.length === nextNames.length ? null : nextAllowed;
+}
+
 function getChangedFileNames(previousFiles, nextFiles) {
   const prevMap = new Map((previousFiles || []).map((file) => [String(file?.name || ""), String(file?.content || "")]));
   const nextMap = new Map((nextFiles || []).map((file) => [String(file?.name || ""), String(file?.content || "")]));
@@ -1893,7 +1971,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     priority: false,
     currentFile: session.activeFileName || null,
     joinedAt: Date.now(),
-    allowedFiles: null,
+    allowedFiles: getStoredParticipantFileAccess(session, name),
     disabledFeatures: [],
     deviceId,
   });
@@ -1904,8 +1982,8 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     ok: true,
     sessionId,
     sessionPin: session.pin || "",
-    files: cloneFiles(session.files),
-    activeFileName: session.activeFileName || null,
+    files: getFilesForParticipant(session, session.participants.at(-1)),
+    activeFileName: getActiveFileForParticipant(session, session.participants.at(-1)),
     hostName: session.hostName,
     permissions: session.permissions,
     participants: session.participants.map(sanitizeParticipant),
@@ -1978,6 +2056,7 @@ io.on("connection", (socket) => {
         chat: { group: [], private: {} },
         pendingJoins: [],
         bans: [],
+        fileAccessByName: {},
       });
 
       socket.join(sessionId);
@@ -2081,7 +2160,7 @@ io.on("connection", (socket) => {
         priority: false,
         currentFile: session.activeFileName || null,
         joinedAt: Date.now(),
-        allowedFiles: null,
+        allowedFiles: getStoredParticipantFileAccess(session, name),
         disabledFeatures: [],
         deviceId,
       });
@@ -2092,8 +2171,8 @@ io.on("connection", (socket) => {
         ok: true,
         sessionId,
         sessionPin: session.pin || "",
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName || null,
+        files: getFilesForParticipant(session, session.participants.at(-1)),
+        activeFileName: getActiveFileForParticipant(session, session.participants.at(-1)),
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
@@ -2167,7 +2246,7 @@ io.on("connection", (socket) => {
           priority: false,
           currentFile: session.activeFileName || null,
           joinedAt: Date.now(),
-          allowedFiles: null,
+          allowedFiles: getStoredParticipantFileAccess(session, name),
           disabledFeatures: [],
           deviceId,
         };
@@ -2190,8 +2269,8 @@ io.on("connection", (socket) => {
 
       ack?.({
         ok: true,
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName || null,
+        files: getFilesForParticipant(session, participant),
+        activeFileName: getActiveFileForParticipant(session, participant),
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
@@ -2322,10 +2401,10 @@ io.on("connection", (socket) => {
       session.permissions?.readOnlyAll ||
       session.permissions?.pauseCollab
     ) {
-      socket.emit("collab:state", {
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName,
-        user: { name: member.name, theme: member.theme, role: member.role || "participant" },
+      emitSessionStateToParticipant(session, member, {
+        name: member.name,
+        theme: member.theme,
+        role: member.role || "participant",
       });
       return;
     }
@@ -2339,38 +2418,26 @@ io.on("connection", (socket) => {
     const incomingFiles = cloneFiles(payload?.files);
     const requestedActiveFileName = payload?.activeFileName || null;
     const allowedFiles = Array.isArray(member.allowedFiles) ? member.allowedFiles : null;
-    if (allowedFiles) {
-      const changedFileNames = getChangedFileNames(session.files, incomingFiles);
-      const attemptedOutsideAllowedFiles = changedFileNames.some(
-        (name) => !allowedFiles.includes(name),
-      );
-      if (attemptedOutsideAllowedFiles) {
-        socket.emit("collab:state", {
-          files: cloneFiles(session.files),
-          activeFileName: session.activeFileName,
-          user: { name: member.name, theme: member.theme, role: member.role || "participant" },
-        });
-        return;
-      }
+    if (allowedFiles && incomingFiles.some((file) => !allowedFiles.includes(String(file?.name || "")))) {
+      emitSessionStateToParticipant(session, member, safeUser);
+      return;
     }
 
-    session.files = incomingFiles;
+    const previousFiles = cloneFiles(session.files);
+    session.files = allowedFiles
+      ? mergeFilesFromRestrictedParticipant(session.files, incomingFiles, allowedFiles)
+      : incomingFiles;
     member.currentFile = requestedActiveFileName || null;
     if (!session.activeFileName || member.role === "host" || member.role === "co-host") {
       session.activeFileName = requestedActiveFileName;
     }
     session.permissions = normalizePermissions(session.permissions, session.files);
-    session.participants.forEach((participant) => {
-      if (Array.isArray(participant.allowedFiles)) {
-        participant.allowedFiles = normalizeAllowedFiles(session.files, participant.allowedFiles);
-      }
-    });
+    session.participants.forEach((participant) =>
+      rebaseParticipantFileAccess(participant, previousFiles, session.files),
+    );
+    session.participants.forEach((participant) => storeParticipantFileAccess(session, participant));
 
-    socket.to(sessionId).emit("collab:state", {
-      files: cloneFiles(session.files),
-      activeFileName: session.activeFileName,
-      user: safeUser,
-    });
+    emitSessionStateToRoom(session, socket.id, safeUser);
     emitParticipants(sessionId);
     emitSessionMeta(sessionId);
   });
@@ -2516,11 +2583,63 @@ io.on("connection", (socket) => {
       } else {
         target.allowedFiles = normalizeAllowedFiles(session.files, payload?.allowedFiles);
       }
+      storeParticipantFileAccess(session, target);
       logAdminEvent("File access updated", `${target.name}'s file access was changed in session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
+      emitSessionStateToParticipant(session, target);
       ack?.({ ok: true });
     } catch {
       ack?.({ ok: false, error: "Failed to update file access." });
+    }
+  });
+
+  socket.on("collab:set-file-visibility", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        ack?.({ ok: false, error: "Session not found." });
+        return;
+      }
+      const actor = canUseLimitedRoomTools(session, socket.id);
+      if (!actor) {
+        ack?.({ ok: false, error: "You do not have permission to hide files." });
+        return;
+      }
+      const fileName = String(payload?.fileName || "").trim();
+      const allNames = (session.files || []).map((file) => String(file?.name || ""));
+      if (!fileName || !allNames.includes(fileName)) {
+        ack?.({ ok: false, error: "File not found." });
+        return;
+      }
+      const requestedHidden = new Set(
+        (Array.isArray(payload?.hiddenFor) ? payload.hiddenFor : []).map(normalizeName),
+      );
+      const changedParticipants = [];
+      session.participants.forEach((target) => {
+        if (!canModerateTarget(session, socket.id, target)) return;
+        const targetKey = normalizeName(target.name);
+        const currentAllowed = Array.isArray(target.allowedFiles)
+          ? new Set(target.allowedFiles)
+          : new Set(allNames);
+        if (requestedHidden.has(targetKey)) currentAllowed.delete(fileName);
+        else currentAllowed.add(fileName);
+        target.allowedFiles = currentAllowed.size === allNames.length
+          ? null
+          : allNames.filter((name) => currentAllowed.has(name));
+        storeParticipantFileAccess(session, target);
+        changedParticipants.push(target);
+      });
+      logAdminEvent(
+        "File visibility updated",
+        `${fileName} visibility was updated for ${changedParticipants.length} participant(s) in session ${sessionId}.`,
+        sessionId,
+      );
+      emitParticipants(sessionId);
+      changedParticipants.forEach((target) => emitSessionStateToParticipant(session, target));
+      ack?.({ ok: true });
+    } catch {
+      ack?.({ ok: false, error: "Failed to update file visibility." });
     }
   });
 

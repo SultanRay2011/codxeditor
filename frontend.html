@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260711-tutorial-pointer11" />
+    <link rel="stylesheet" href="/frontend.css?v=20260712-google-font-tools20" />
   </head>
   <body>
     <a
@@ -135,9 +135,8 @@
       <button
         id="helpPageBtn"
         class="run-button"
-        title="Open help page"
-        aria-label="Open help page"
-        onclick="window.location.href='/help.html'"
+        title="Open help and learning options"
+        aria-label="Open help and learning options"
       >
         <i class="fa-solid fa-circle-question"></i>
         <strong>HELP</strong>
@@ -303,14 +302,26 @@
                 <span id="projectStatusMeta" class="project-status-meta">Ready</span>
               </div>
             </div>
-            <button
-              id="newFileBtn"
-              class="run-button"
-              style="padding: 4px 12px; font-size: 12px"
-              aria-label="Create new file"
-            >
-              <i class="fa-solid fa-plus"></i> <strong>NEW FILE</strong>
-            </button>
+            <div class="file-toolbar-actions">
+              <button
+                id="collabFileVisibilityBtn"
+                class="run-button file-visibility-quick-btn"
+                type="button"
+                aria-label="Manage who can see the active file"
+                title="Manage file visibility"
+                hidden
+              >
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <button
+                id="newFileBtn"
+                class="run-button"
+                style="padding: 4px 12px; font-size: 12px"
+                aria-label="Create new file"
+              >
+                <i class="fa-solid fa-plus"></i> <strong>NEW FILE</strong>
+              </button>
+            </div>
           </div>
           <div
             id="fileList"
@@ -325,6 +336,10 @@
           <div class="editor-wrapper">
             <pre id="highlightLayer" aria-hidden="true"></pre>
             <div id="remoteCursorLayer" aria-hidden="true"></div>
+            <div id="localCollabCursor" class="local-collab-cursor" aria-hidden="true" hidden>
+              <span class="local-collab-cursor-label">You</span>
+              <i id="localCollabCursorIcon" class="local-collab-cursor-icon fa-solid fa-arrow-pointer"></i>
+            </div>
             <button
               id="zenExitBtn"
               class="run-button"
@@ -450,6 +465,15 @@
             <span id="previewLink"></span>
           </div>
           <div class="preview-header-actions" aria-label="Preview tools">
+            <button
+              id="previewRefreshBtn"
+              class="preview-icon-button"
+              type="button"
+              title="Refresh preview"
+              aria-label="Refresh preview"
+            >
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
             <button
               id="previewInspectBtn"
               class="preview-icon-button"
@@ -915,6 +939,44 @@
             "
             aria-label="Google Fonts embed link"
           />
+          <div id="googleFontCustomization" class="google-font-customization" hidden>
+            <div class="google-font-customization-header">
+              <span class="google-font-customization-icon" aria-hidden="true"><i class="fa-solid fa-font"></i></span>
+              <div>
+                <strong>Customize Google Font</strong>
+                <small id="googleFontDetectedName">Font detected</small>
+              </div>
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontWeight">Text weight</label>
+                <output id="editorFontWeightValue" for="editorFontWeight">400 · Normal</output>
+              </div>
+              <input id="editorFontWeight" type="range" min="100" max="900" step="100" value="400" />
+              <div class="google-font-range-labels" aria-hidden="true"><span>Thin</span><span>Black</span></div>
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontLetterSpacing">Letter spacing</label>
+                <output id="editorFontLetterSpacingValue" for="editorFontLetterSpacing">0px</output>
+              </div>
+              <input id="editorFontLetterSpacing" type="range" min="-1" max="4" step="0.1" value="0" />
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontLineHeight">Line height</label>
+                <output id="editorFontLineHeightValue" for="editorFontLineHeight">1.5</output>
+              </div>
+              <input id="editorFontLineHeight" type="range" min="1.1" max="2.2" step="0.1" value="1.5" />
+            </div>
+            <label class="google-font-italic-toggle" for="editorFontItalic">
+              <span><i class="fa-solid fa-italic" aria-hidden="true"></i> Italic text</span>
+              <span class="switch">
+                <input id="editorFontItalic" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </div>
           <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 12px">
             Uses <code>@import</code>. Internet is required for this custom
             font.
@@ -1578,20 +1640,18 @@
           Start by opening files, previewing your page, and using the main controls for GitHub, collaboration, and publishing.
         </p>
 
-        <ul
-          style="
-            margin: 0 0 20px 0;
-            padding-left: 18px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            font-size: 14px;
-          "
-        >
-          <li>Use Auto-Run or Run to refresh the preview.</li>
-          <li>Use the GitHub button to upload from your current project or your file explorer.</li>
-          <li>Use Collaboration to invite people, chat, and share cursors.</li>
-          <li>Use More for templates, save/load, publish, ZIP tools, and settings.</li>
-        </ul>
+        <div id="tutorialLiveDemo" class="tutorial-live-demo" role="group" aria-labelledby="tutorialDemoTitle">
+          <div class="tutorial-demo-label">
+            <span class="tutorial-live-dot"></span>
+            <strong id="tutorialDemoTitle">LIVE PREVIEW</strong>
+            <button id="tutorialReplayDemoBtn" class="tutorial-demo-replay" type="button" aria-label="Replay this demonstration" title="Replay animation">
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div id="tutorialDemoStage" class="tutorial-demo-stage" aria-hidden="true"></div>
+          <div class="tutorial-demo-result" aria-hidden="true"><i class="fa-solid fa-circle-check"></i><span>Demonstration complete</span></div>
+          <div class="tutorial-demo-timeline"><i></i></div>
+        </div>
 
         <div
           style="
@@ -1623,13 +1683,15 @@
       </div>
       <div id="tutorialToolPointer" class="tutorial-tool-pointer" aria-hidden="true">
         <i id="tutorialToolPointerIcon" class="fa-solid fa-arrow-pointer"></i>
-        <span></span>
+        <span class="tutorial-pointer-ring"></span>
+        <b class="tutorial-pointer-click"></b>
+        <small id="tutorialToolPointerAction">Click</small>
       </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
-    <script src="/frontend.js?v=20260712-waiting-host12"></script>
+    <script src="/frontend.js?v=20260712-google-font-tools23"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>

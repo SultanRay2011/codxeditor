@@ -10,6 +10,8 @@ const previewPanel = document.querySelector(".preview");
 const lineNumbers = document.getElementById("lineNumbers");
 const highlightLayer = document.getElementById("highlightLayer");
 const remoteCursorLayer = document.getElementById("remoteCursorLayer");
+const localCollabCursor = document.getElementById("localCollabCursor");
+const localCollabCursorIcon = document.getElementById("localCollabCursorIcon");
 const editorContainer = document.querySelector(".editor-container");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
@@ -27,9 +29,19 @@ const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
 const editorFontEmbedInput = document.getElementById("editorFontEmbed");
+const googleFontCustomization = document.getElementById("googleFontCustomization");
+const googleFontDetectedName = document.getElementById("googleFontDetectedName");
+const editorFontWeightInput = document.getElementById("editorFontWeight");
+const editorFontWeightValue = document.getElementById("editorFontWeightValue");
+const editorFontItalicInput = document.getElementById("editorFontItalic");
+const editorFontLetterSpacingInput = document.getElementById("editorFontLetterSpacing");
+const editorFontLetterSpacingValue = document.getElementById("editorFontLetterSpacingValue");
+const editorFontLineHeightInput = document.getElementById("editorFontLineHeight");
+const editorFontLineHeightValue = document.getElementById("editorFontLineHeightValue");
 const settingsPreview = document.getElementById("settingsPreview");
 const settingsPreviewCode = document.getElementById("settingsPreviewCode");
 const newFileBtn = document.getElementById("newFileBtn");
+const collabFileVisibilityBtn = document.getElementById("collabFileVisibilityBtn");
 const fileList = document.getElementById("fileList");
 const collabBtn = document.getElementById("collabBtn");
 const collabModal = document.getElementById("collabModal");
@@ -44,6 +56,7 @@ const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
 const previewTitleEl = document.getElementById("previewTitle");
 const previewLinkEl = document.getElementById("previewLink");
 const previewFaviconEl = document.getElementById("previewFavicon");
+const previewRefreshBtn = document.getElementById("previewRefreshBtn");
 const previewInspectBtn = document.getElementById("previewInspectBtn");
 const previewZoomBtn = document.getElementById("previewZoomBtn");
 const previewZoomModal = document.getElementById("previewZoomModal");
@@ -81,6 +94,7 @@ const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
 const enableNodeRuntimeBtn = document.getElementById("enableNodeRuntimeBtn");
 const enableNodeRuntimeBtnLabel = document.getElementById("enableNodeRuntimeBtnLabel");
 const getIconsBtn = document.getElementById("getIconsBtn");
+const helpPageBtn = document.getElementById("helpPageBtn");
 const fontAwesomeIconModal = document.getElementById("fontAwesomeIconModal");
 const closeFontAwesomeIconBtn = document.getElementById("closeFontAwesomeIconBtn");
 const fontAwesomeIconSearch = document.getElementById("fontAwesomeIconSearch");
@@ -3015,6 +3029,7 @@ function resetTransientCollabUiState() {
   currentTypingIndicator = null;
   remoteCursorState = {};
   remoteTypingState = {};
+  hideLocalCollabCursor();
   followedParticipantName = "";
   lastAnnouncementText = "";
   if (announcementPopup) {
@@ -3255,6 +3270,7 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
 
 function closeAppDialog(result = null) {
   if (appDialog) appDialog.style.display = "none";
+  if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
     appDialogInput.style.display = "none";
     appDialogInput.value = "";
@@ -3479,6 +3495,57 @@ function showGitHubUploadSourcePicker() {
     setTimeout(() => document.getElementById("githubUploadFromProjectBtn")?.focus(), 0);
   });
 }
+
+function showHelpChoiceDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "help-choice";
+    if (appDialogTitle) appDialogTitle.textContent = "HELP & LEARNING";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="help-choice-heading"><i class="fa-solid fa-compass"></i> How would you like to continue?</span>
+        <span class="help-choice-copy">Follow the guided editor tour, or open the complete CodX Editor handbook.</span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="helpTakeTourBtn" class="help-choice-button help-tour-choice">
+          <span class="help-choice-icon"><i class="fa-solid fa-route"></i></span>
+          <span><strong>TAKE A TOUR</strong><small>See each editor tool with live animations.</small></span>
+          <i class="fa-solid fa-arrow-right help-choice-arrow"></i>
+        </button>
+        <button type="button" id="helpOpenHandbookBtn" class="help-choice-button help-handbook-choice">
+          <span class="help-choice-icon"><i class="fa-solid fa-book-open"></i></span>
+          <span><strong>OPEN HANDBOOK</strong><small>Read the full guide in help.html.</small></span>
+          <i class="fa-solid fa-arrow-up-right-from-square help-choice-arrow"></i>
+        </button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("helpTakeTourBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "tour" });
+    });
+    document.getElementById("helpOpenHandbookBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "handbook" });
+    });
+    setTimeout(() => document.getElementById("helpTakeTourBtn")?.focus(), 0);
+  });
+}
+
+helpPageBtn?.addEventListener("click", async () => {
+  const result = await showHelpChoiceDialog();
+  if (!result?.ok) return;
+  if (result.action === "tour") {
+    startTutorial();
+    return;
+  }
+  if (result.action === "handbook") window.location.assign("/help.html");
+});
 
 function showAppConfirm(title, message, okText = "YES", cancelText = "NO", okVariant = "") {
   return showAppDialog({
@@ -4176,7 +4243,7 @@ function getInspectorMarkup(element) {
   if (!element || !element.outerHTML) return "";
   const clone = element.cloneNode(true);
   clone
-    .querySelectorAll("#__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-preview-zoom-styles")
+    .querySelectorAll("#__codx-inspector-root, #__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-inspector-cursor-styles, #__codx-preview-zoom-styles")
     .forEach((node) => node.remove());
   clone.querySelectorAll("script, style").forEach((node) => {
     node.textContent = node.tagName === "SCRIPT" ? "/* script content */" : "/* styles */";
@@ -4188,15 +4255,73 @@ function getInspectorMarkup(element) {
 
 function removePreviewInspector(previewDoc) {
   if (!previewDoc) return;
+  previewDoc.getElementById("__codx-inspector-root")?.remove();
   previewDoc.getElementById("__codx-inspector-overlay")?.remove();
   previewDoc.getElementById("__codx-inspector-outline")?.remove();
+  previewDoc.getElementById("__codx-inspector-styles")?.remove();
+  previewDoc.getElementById("__codx-inspector-cursor-styles")?.remove();
   previewDoc.documentElement?.classList.remove("__codx-inspecting");
   previewDoc.__codxInspectedElement = null;
 }
 
+function ensurePreviewInspector(previewDoc) {
+  let root = previewDoc.getElementById("__codx-inspector-root");
+  if (!root) {
+    root = previewDoc.createElement("div");
+    root.id = "__codx-inspector-root";
+    [
+      ["all", "initial"],
+      ["display", "block"],
+      ["position", "fixed"],
+      ["inset", "0"],
+      ["width", "100vw"],
+      ["height", "100vh"],
+      ["overflow", "visible"],
+      ["pointer-events", "none"],
+      ["z-index", "2147483647"],
+    ].forEach(([property, value]) => root.style.setProperty(property, value, "important"));
+
+    const shadow = root.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host { all: initial; pointer-events: none; }
+        *, *::before, *::after { box-sizing: border-box; text-shadow: none; }
+        #outline { display: block; position: fixed; z-index: 1; pointer-events: none; border: 2px solid #58a6ff; background: rgba(88,166,255,.12); }
+        #overlay { display: block; position: fixed; z-index: 2; pointer-events: none; max-height: 220px; overflow: hidden; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #c9d1d9; box-shadow: 0 12px 32px rgba(0,0,0,.38); font: 12px/1.5 Consolas, Monaco, monospace; text-align: left; }
+        .label { display: block; margin: 0; padding: 5px 9px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+        pre { display: block; margin: 0; padding: 9px 11px; max-height: 184px; overflow: hidden; border: 0; background: #0d1117; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+        code { display: block; margin: 0; padding: 0; border: 0; background: transparent; color: #c9d1d9; font: inherit; white-space: inherit; }
+        .token { display: inline; margin: 0; padding: 0; border: 0; background: transparent; font: inherit; }
+        .token.comment { color: #8b949e; font-style: italic; }
+        .token.keyword { color: #ff7b72; }
+        .token.string { color: #a5d6ff; }
+        .token.tag, .token.tag-punctuation { color: #7ee787; }
+        .token.attr { color: #d2a8ff; }
+        .token.number, .token.builtin, .token.constant { color: #79c0ff; }
+        .token.property { color: #ffa657; }
+        .token.selector { color: #f2cc60; }
+        .token.operator, .token.punctuation { color: #c9d1d9; }
+        .token.identifier, .token.variable, .token.declaration { color: #c4a7e7; }
+        .token.function, .token.method, .token.property-access { color: #ff9bce; }
+        .token.json-key, .token.env-key { color: #7ee787; }
+        .token.html-text { color: #f0f6fc; }
+      </style>
+      <div id="outline"></div>
+      <div id="overlay"><div class="label">HTML</div><pre><code></code></pre></div>
+    `;
+    previewDoc.documentElement.appendChild(root);
+  }
+  return {
+    root,
+    outline: root.shadowRoot?.getElementById("outline"),
+    overlay: root.shadowRoot?.getElementById("overlay"),
+  };
+}
+
 function positionPreviewInspector(previewDoc, element) {
-  const overlay = previewDoc?.getElementById("__codx-inspector-overlay");
-  const outline = previewDoc?.getElementById("__codx-inspector-outline");
+  const root = previewDoc?.getElementById("__codx-inspector-root");
+  const overlay = root?.shadowRoot?.getElementById("overlay");
+  const outline = root?.shadowRoot?.getElementById("outline");
   if (!overlay || !outline || !element?.isConnected) return;
 
   const rect = element.getBoundingClientRect();
@@ -4219,22 +4344,15 @@ function positionPreviewInspector(previewDoc, element) {
 }
 
 function showPreviewInspector(previewDoc, element) {
-  if (!element || element.id?.startsWith("__codx-inspector")) return;
-  let overlay = previewDoc.getElementById("__codx-inspector-overlay");
-  let outline = previewDoc.getElementById("__codx-inspector-outline");
-  if (!outline) {
-    outline = previewDoc.createElement("div");
-    outline.id = "__codx-inspector-outline";
-    previewDoc.body.appendChild(outline);
-  }
-  if (!overlay) {
-    overlay = previewDoc.createElement("div");
-    overlay.id = "__codx-inspector-overlay";
-    overlay.innerHTML = '<div class="__codx-inspector-label">HTML</div><pre><code></code></pre>';
-    previewDoc.body.appendChild(overlay);
-  }
+  if (!element || element.nodeType !== 1 || element.id?.startsWith("__codx-inspector")) return;
+  const { overlay, outline } = ensurePreviewInspector(previewDoc);
+  if (!overlay || !outline) return;
   previewDoc.__codxInspectedElement = element;
-  overlay.querySelector("code").innerHTML = highlightHtml(getInspectorMarkup(element));
+  const markup = getInspectorMarkup(element);
+  const codeElement = overlay.querySelector("code");
+  codeElement.innerHTML = markup ? highlightHtml(markup) : '<span class="token comment">No HTML available</span>';
+  overlay.style.display = "block";
+  outline.style.display = "block";
   positionPreviewInspector(previewDoc, element);
 }
 
@@ -4250,26 +4368,10 @@ function bindPreviewInspector() {
   if (!isPreviewInspecting) return;
 
   previewDoc.documentElement.classList.add("__codx-inspecting");
-  if (!previewDoc.getElementById("__codx-inspector-styles")) {
+  if (!previewDoc.getElementById("__codx-inspector-cursor-styles")) {
     const styles = previewDoc.createElement("style");
-    styles.id = "__codx-inspector-styles";
-    styles.textContent = `
-      html.__codx-inspecting, html.__codx-inspecting * { cursor: crosshair !important; }
-      #__codx-inspector-outline { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #58a6ff; background: rgba(88,166,255,.12); box-sizing: border-box; }
-      #__codx-inspector-overlay { position: fixed; z-index: 2147483646; pointer-events: none; box-sizing: border-box; max-height: 190px; overflow: hidden; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #c9d1d9; box-shadow: 0 12px 32px rgba(0,0,0,.38); font: 12px/1.5 Consolas, Monaco, monospace; }
-      #__codx-inspector-overlay .__codx-inspector-label { padding: 4px 8px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; }
-      #__codx-inspector-overlay pre { margin: 0; padding: 8px 10px; max-height: 155px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-      #__codx-inspector-overlay .token.comment { color: #8b949e; } #__codx-inspector-overlay .token.keyword { color: #ff7b72; }
-      #__codx-inspector-overlay .token.string { color: #a5d6ff; } #__codx-inspector-overlay .token.tag, #__codx-inspector-overlay .token.tag-punctuation { color: #7ee787; }
-      #__codx-inspector-overlay .token.attr { color: #d2a8ff; } #__codx-inspector-overlay .token.number { color: #79c0ff; }
-      #__codx-inspector-overlay .token.property { color: #ffa657; } #__codx-inspector-overlay .token.selector { color: #f2cc60; }
-      #__codx-inspector-overlay .token.operator, #__codx-inspector-overlay .token.punctuation { color: #c9d1d9; }
-      #__codx-inspector-overlay .token.identifier, #__codx-inspector-overlay .token.variable, #__codx-inspector-overlay .token.declaration { color: #c4a7e7; }
-      #__codx-inspector-overlay .token.function, #__codx-inspector-overlay .token.method, #__codx-inspector-overlay .token.property-access { color: #ff9bce; }
-      #__codx-inspector-overlay .token.builtin, #__codx-inspector-overlay .token.constant { color: #79c0ff; }
-      #__codx-inspector-overlay .token.json-key, #__codx-inspector-overlay .token.env-key { color: #7ee787; }
-      #__codx-inspector-overlay .token.html-text { color: #f0f6fc; }
-    `;
+    styles.id = "__codx-inspector-cursor-styles";
+    styles.textContent = "html.__codx-inspecting, html.__codx-inspecting * { cursor: crosshair !important; }";
     (previewDoc.head || previewDoc.documentElement).appendChild(styles);
   }
 
@@ -4277,6 +4379,11 @@ function bindPreviewInspector() {
     previewDoc.__codxInspectorBound = true;
     previewDoc.addEventListener("pointerover", (event) => {
       if (isPreviewInspecting) showPreviewInspector(previewDoc, event.target);
+    }, true);
+    previewDoc.addEventListener("pointermove", (event) => {
+      if (isPreviewInspecting && previewDoc.__codxInspectedElement !== event.target) {
+        showPreviewInspector(previewDoc, event.target);
+      }
     }, true);
     previewDoc.addEventListener("click", (event) => {
       if (!isPreviewInspecting) return;
@@ -4287,6 +4394,9 @@ function bindPreviewInspector() {
       if (isPreviewInspecting) positionPreviewInspector(previewDoc, previewDoc.__codxInspectedElement);
     }, true);
   }
+
+  const initialElement = previewDoc.body?.firstElementChild || previewDoc.body;
+  if (initialElement) showPreviewInspector(previewDoc, initialElement);
 }
 
 function setPreviewInspecting(enabled) {
@@ -4299,6 +4409,30 @@ function setPreviewInspecting(enabled) {
     previewInspectBtn.setAttribute("aria-label", previewInspectBtn.title);
   }
   bindPreviewInspector();
+}
+
+function refreshPreviewPane() {
+  if (!previewRefreshBtn || previewRefreshBtn.disabled) return;
+  const originalTitle = "Refresh preview";
+  let completed = false;
+  const finishRefresh = () => {
+    iframe.removeEventListener("load", finishRefresh);
+    if (completed) return;
+    completed = true;
+    previewRefreshBtn.disabled = false;
+    previewRefreshBtn.classList.remove("is-refreshing");
+    previewRefreshBtn.title = originalTitle;
+    previewRefreshBtn.setAttribute("aria-label", originalTitle);
+  };
+
+  previewRefreshBtn.disabled = true;
+  previewRefreshBtn.classList.add("is-refreshing");
+  previewRefreshBtn.title = "Refreshing preview";
+  previewRefreshBtn.setAttribute("aria-label", "Refreshing preview");
+  iframe.addEventListener("load", finishRefresh, { once: true });
+
+  updatePreview();
+  setTimeout(finishRefresh, 1400);
 }
 
 function applyPreviewZoom() {
@@ -4353,6 +4487,7 @@ function closePreviewZoomModal() {
   previewZoomLastFocusedElement = null;
 }
 
+previewRefreshBtn?.addEventListener("click", refreshPreviewPane);
 previewInspectBtn?.addEventListener("click", () => setPreviewInspecting(!isPreviewInspecting));
 previewZoomBtn?.addEventListener("click", openPreviewZoomModal);
 closePreviewZoomBtn?.addEventListener("click", closePreviewZoomModal);
@@ -4546,6 +4681,10 @@ const defaultSettings = {
   textSize: "14",
   fontFamily: "'JetBrains Mono', 'Consolas', monospace",
   fontEmbed: "",
+  fontWeight: "400",
+  fontItalic: false,
+  fontLetterSpacing: "0",
+  fontLineHeight: "1.5",
   themeColor: "#238636",
   zenShowFiles: true,
   fullscreenPreviewPanel: true,
@@ -5332,17 +5471,38 @@ function renderFileList() {
     trashIcon.className = "fa-solid fa-trash";
     deleteBtn.appendChild(trashIcon);
 
+    let visibilityBtn = null;
+    if (activeSessionId && canUseCoHostTools()) {
+      const hiddenCount = getModeratableCollabParticipants().filter((participant) =>
+        participantCannotSeeFile(participant, file.name),
+      ).length;
+      visibilityBtn = document.createElement("button");
+      visibilityBtn.className = `file-visibility-action${hiddenCount ? " has-hidden-users" : ""}`;
+      visibilityBtn.dataset.file = file.name;
+      visibilityBtn.setAttribute("aria-label", `Manage visibility for ${file.name}`);
+      visibilityBtn.title = hiddenCount
+        ? `${hiddenCount} participant(s) cannot see this file`
+        : "Everyone can see this file";
+      const eyeIcon = document.createElement("i");
+      eyeIcon.className = hiddenCount ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+      visibilityBtn.appendChild(eyeIcon);
+    }
+
     fileItem.appendChild(nameSpan);
+    if (visibilityBtn) fileItem.appendChild(visibilityBtn);
     fileItem.appendChild(renameBtn);
     fileItem.appendChild(deleteBtn);
 
     fileItem.addEventListener("click", (e) => {
-      if (e.target.closest(".delete-file") || e.target.closest(".rename-file"))
+      if (e.target.closest(".delete-file") || e.target.closest(".rename-file") || e.target.closest(".file-visibility-action"))
         return;
       switchFile(file.name);
     });
     renameBtn.addEventListener("click", () => renameFile(file.name));
     deleteBtn.addEventListener("click", () => deleteFile(file.name));
+    if (visibilityBtn) {
+      visibilityBtn.addEventListener("click", () => showFileVisibilityEditor(file.name, "quick", true));
+    }
     fileList.appendChild(fileItem);
   });
   enforceCollabPermissionsUI();
@@ -5563,6 +5723,16 @@ function loadSettings() {
         editorFontFamilySelect.value = defaultSettings.fontFamily;
       }
       editorFontEmbedInput.value = settings.fontEmbed || "";
+      if (editorFontWeightInput) {
+        editorFontWeightInput.value = normalizeEditorFontWeight(settings.fontWeight || defaultSettings.fontWeight);
+      }
+      if (editorFontItalicInput) editorFontItalicInput.checked = Boolean(settings.fontItalic);
+      if (editorFontLetterSpacingInput) {
+        editorFontLetterSpacingInput.value = settings.fontLetterSpacing ?? defaultSettings.fontLetterSpacing;
+      }
+      if (editorFontLineHeightInput) {
+        editorFontLineHeightInput.value = settings.fontLineHeight ?? defaultSettings.fontLineHeight;
+      }
       if (zenShowFilesCheckbox) {
         zenShowFilesCheckbox.checked =
           settings.zenShowFiles !== undefined
@@ -5599,6 +5769,10 @@ function resetToDefaultSettings() {
   textSizeValue.textContent = defaultSettings.textSize + "px";
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
+  if (editorFontWeightInput) editorFontWeightInput.value = defaultSettings.fontWeight;
+  if (editorFontItalicInput) editorFontItalicInput.checked = defaultSettings.fontItalic;
+  if (editorFontLetterSpacingInput) editorFontLetterSpacingInput.value = defaultSettings.fontLetterSpacing;
+  if (editorFontLineHeightInput) editorFontLineHeightInput.value = defaultSettings.fontLineHeight;
   if (zenShowFilesCheckbox) zenShowFilesCheckbox.checked = defaultSettings.zenShowFiles;
   if (fullscreenPreviewPanelCheckbox) {
     fullscreenPreviewPanelCheckbox.checked = defaultSettings.fullscreenPreviewPanel;
@@ -5647,7 +5821,70 @@ function getGoogleFontFamilyName(cssUrl) {
   }
 }
 
+function normalizeEditorFontWeight(value) {
+  const numeric = Math.round(Number(value) / 100) * 100;
+  return String(Math.min(900, Math.max(100, Number.isFinite(numeric) ? numeric : 400)));
+}
+
+function getEditorFontWeightLabel(weight) {
+  return ({
+    100: "Thin",
+    200: "Extra Light",
+    300: "Light",
+    400: "Normal",
+    500: "Medium",
+    600: "Semi Bold",
+    700: "Bold",
+    800: "Extra Bold",
+    900: "Black",
+  })[Number(weight)] || "Normal";
+}
+
+function updateGoogleFontCustomizationUI(cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value)) {
+  const hasGoogleEmbed = Boolean(cssUrl);
+  if (googleFontCustomization) googleFontCustomization.hidden = !hasGoogleEmbed;
+  if (googleFontDetectedName) {
+    googleFontDetectedName.textContent = hasGoogleEmbed
+      ? `${getGoogleFontFamilyName(cssUrl) || "Google Font"} detected`
+      : "Font detected";
+  }
+  const weight = normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight);
+  if (editorFontWeightInput) editorFontWeightInput.value = weight;
+  if (editorFontWeightValue) editorFontWeightValue.textContent = `${weight} · ${getEditorFontWeightLabel(weight)}`;
+  if (editorFontLetterSpacingValue) {
+    editorFontLetterSpacingValue.textContent = `${Number(editorFontLetterSpacingInput?.value || 0).toFixed(1).replace(".0", "")}px`;
+  }
+  if (editorFontLineHeightValue) {
+    editorFontLineHeightValue.textContent = Number(editorFontLineHeightInput?.value || 1.5).toFixed(1);
+  }
+}
+
+function getCustomizedGoogleFontsCssUrl(cssUrl) {
+  if (!cssUrl) return "";
+  try {
+    const url = new URL(cssUrl);
+    const families = url.searchParams.getAll("family");
+    if (!families.length) return cssUrl;
+    const firstFamilyName = decodeURIComponent(families[0]).replace(/\+/g, " ").split(":")[0].trim();
+    if (!firstFamilyName) return cssUrl;
+    const weight = normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight);
+    url.searchParams.delete("family");
+    url.searchParams.append("family", `${firstFamilyName}:wght@${weight}`);
+    families.slice(1).forEach((family) => url.searchParams.append("family", family));
+    if (!url.searchParams.has("display")) url.searchParams.set("display", "swap");
+    return url
+      .toString()
+      .replace(/%3A/gi, ":")
+      .replace(/%40/gi, "@")
+      .replace(/%2C/gi, ",")
+      .replace(/%3B/gi, ";");
+  } catch {
+    return cssUrl;
+  }
+}
+
 function applyGoogleFontImport(cssUrl) {
+  cssUrl = getCustomizedGoogleFontsCssUrl(cssUrl);
   let linkEl = document.getElementById("editorGoogleFontImport");
   if (!cssUrl) {
     if (linkEl) linkEl.remove();
@@ -5683,23 +5920,35 @@ function getEffectiveEditorFontFamily() {
 }
 
 function updateFontControlsState() {
-  const hasGoogleEmbed = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value);
+  const hasGoogleEmbed = Boolean(cssUrl);
   editorFontFamilySelect.disabled = hasGoogleEmbed;
   editorFontFamilySelect.title = hasGoogleEmbed
     ? "Disabled because a Google Fonts embed link is active."
     : "";
+  updateGoogleFontCustomizationUI(cssUrl);
 }
 
 function updatePreviewBox() {
+  const useGoogleCustomization = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const selectedWeight = useGoogleCustomization ? editorFontWeightInput?.value || defaultSettings.fontWeight : defaultSettings.fontWeight;
+  const selectedItalic = useGoogleCustomization && Boolean(editorFontItalicInput?.checked);
+  const selectedSpacing = useGoogleCustomization ? editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing : defaultSettings.fontLetterSpacing;
+  const selectedLineHeight = useGoogleCustomization ? editorFontLineHeightInput?.value || defaultSettings.fontLineHeight : defaultSettings.fontLineHeight;
   settingsPreview.style.backgroundColor = editorBgColorInput.value;
   settingsPreview.style.borderColor = themeColorInput.value;
   settingsPreview.style.fontSize = editorTextSizeInput.value + "px";
   settingsPreview.style.fontFamily = getEffectiveEditorFontFamily();
-  settingsPreview.style.lineHeight = "1.5";
+  settingsPreview.style.fontWeight = selectedWeight;
+  settingsPreview.style.fontStyle = selectedItalic ? "italic" : "normal";
+  settingsPreview.style.letterSpacing = `${selectedSpacing}px`;
+  settingsPreview.style.lineHeight = selectedLineHeight;
   settingsPreviewCode.style.fontSize = editorTextSizeInput.value + "px";
   settingsPreviewCode.style.fontFamily = getEffectiveEditorFontFamily();
-  settingsPreviewCode.style.lineHeight = "1.5";
-  settingsPreviewCode.style.letterSpacing = "normal";
+  settingsPreviewCode.style.fontWeight = selectedWeight;
+  settingsPreviewCode.style.fontStyle = selectedItalic ? "italic" : "normal";
+  settingsPreviewCode.style.lineHeight = selectedLineHeight;
+  settingsPreviewCode.style.letterSpacing = `${selectedSpacing}px`;
   settingsPreviewCode.style.tabSize = "4";
   settingsPreviewCode.innerHTML = highlightJs(settingsPreviewSampleCode);
 }
@@ -5709,9 +5958,18 @@ function applySettingsToEditors() {
   if (!editor) return;
   const editorWrapper = editor.closest(".editor-wrapper");
   const selectedBg = editorBgColorInput.value || defaultSettings.bgColor;
+  const useGoogleCustomization = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const selectedWeight = useGoogleCustomization ? editorFontWeightInput?.value || defaultSettings.fontWeight : defaultSettings.fontWeight;
+  const selectedItalic = useGoogleCustomization && Boolean(editorFontItalicInput?.checked);
+  const selectedSpacing = useGoogleCustomization ? editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing : defaultSettings.fontLetterSpacing;
+  const selectedLineHeight = useGoogleCustomization ? editorFontLineHeightInput?.value || defaultSettings.fontLineHeight : defaultSettings.fontLineHeight;
 
   editor.style.fontSize = editorTextSizeInput.value + "px";
   editor.style.fontFamily = getEffectiveEditorFontFamily();
+  editor.style.fontWeight = selectedWeight;
+  editor.style.fontStyle = selectedItalic ? "italic" : "normal";
+  editor.style.letterSpacing = `${selectedSpacing}px`;
+  editor.style.lineHeight = selectedLineHeight;
   editor.style.backgroundColor = "transparent";
   if (editorWrapper) {
     editorWrapper.style.backgroundColor = selectedBg;
@@ -5720,6 +5978,7 @@ function applySettingsToEditors() {
     highlightLayer.style.backgroundColor = selectedBg;
   }
   lineNumbers.style.fontSize = editorTextSizeInput.value + "px";
+  lineNumbers.style.lineHeight = selectedLineHeight;
   syncSyntaxLayerStyle(editor);
   renderSyntaxHighlight(editor);
   updateThemeColor(themeColorInput.value);
@@ -5828,6 +6087,37 @@ editorFontEmbedInput.addEventListener("input", () => {
   updatePreviewBox();
 });
 
+if (editorFontWeightInput) {
+  editorFontWeightInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+  editorFontWeightInput.addEventListener("change", () => {
+    applyGoogleFontImport(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  });
+}
+
+if (editorFontItalicInput) {
+  editorFontItalicInput.addEventListener("change", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
+if (editorFontLetterSpacingInput) {
+  editorFontLetterSpacingInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
+if (editorFontLineHeightInput) {
+  editorFontLineHeightInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
 settingsBtn.addEventListener("click", () => {
   loadSettings();
   settingsModal.style.display = "flex";
@@ -5858,6 +6148,10 @@ applySettingsBtn.addEventListener("click", () => {
     textSize: editorTextSizeInput.value,
     fontFamily: editorFontFamilySelect.value,
     fontEmbed: cssUrl || "",
+    fontWeight: normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight),
+    fontItalic: Boolean(editorFontItalicInput?.checked),
+    fontLetterSpacing: editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing,
+    fontLineHeight: editorFontLineHeightInput?.value || defaultSettings.fontLineHeight,
     zenShowFiles: zenShowFilesCheckbox ? zenShowFilesCheckbox.checked : defaultSettings.zenShowFiles,
     fullscreenPreviewPanel: fullscreenPreviewPanelCheckbox
       ? fullscreenPreviewPanelCheckbox.checked
@@ -11949,7 +12243,12 @@ document.getElementById("activeEditor").addEventListener("mouseenter", (event) =
 });
 document.getElementById("activeEditor").addEventListener("mouseleave", () => {
   isPointerInsideEditor = false;
+  hideLocalCollabCursor();
   clearOwnSessionCursorBroadcast();
+});
+window.addEventListener("blur", hideLocalCollabCursor);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hideLocalCollabCursor();
 });
 window.addEventListener("beforeunload", clearOwnSessionCursorBroadcast);
 startBackgroundTimers();
@@ -12252,7 +12551,11 @@ function isCoHost() {
 }
 
 function updateCollabButtonState() {
-  if (!collabBtn) return;
+  if (!collabBtn) {
+    updateFileVisibilityQuickButton();
+    return;
+  }
+  if (!activeSessionId) hideLocalCollabCursor();
   const label = !activeSessionId
     ? "COLLAB WITH FRIENDS"
     : canUseCoHostTools()
@@ -12272,6 +12575,7 @@ function updateCollabButtonState() {
         : "Collaborate with friends";
   collabBtn.setAttribute("aria-label", readableLabel);
   collabBtn.title = readableLabel;
+  updateFileVisibilityQuickButton();
 }
 
 function canUseCoHostTools() {
@@ -12379,7 +12683,8 @@ function enforceCollabPermissionsUI() {
   const me = getMyParticipant();
   const personalDisabledFeatures = new Set(Array.isArray(me?.disabledFeatures) ? me.disabledFeatures : []);
   const lockPersonalChat = participantRestricted && (collabPermissions.disableAllChat || personalDisabledFeatures.has("chat"));
-  const lockNewFile = participantRestricted && collabPermissions.disableNewFile;
+  const personalFileVisibilityLimited = participantRestricted && Array.isArray(me?.allowedFiles);
+  const lockNewFile = participantRestricted && (collabPermissions.disableNewFile || personalFileVisibilityLimited);
   const lockExport = participantRestricted && collabPermissions.disableExportZip;
   const lockImport = participantRestricted && collabPermissions.disableImportZip;
   const lockSaveProject = participantRestricted && (collabPermissions.disableSaveProject || personalDisabledFeatures.has("saveProject"));
@@ -12394,7 +12699,11 @@ function enforceCollabPermissionsUI() {
 
   if (newFileBtn) {
     newFileBtn.disabled = lockNewFile;
-    newFileBtn.title = lockNewFile ? "The host disabled new file creation." : "";
+    newFileBtn.title = lockNewFile
+      ? personalFileVisibilityLimited
+        ? "New files are unavailable while private file visibility limits are active."
+        : "The host disabled new file creation."
+      : "";
   }
   if (exportZipBtn) {
     exportZipBtn.disabled = lockExport;
@@ -12717,6 +13026,33 @@ function approveJoinRequest(socketId, options = {}) {
       resolve(res);
     });
   });
+}
+
+function getModeratableCollabParticipants() {
+  return collabParticipants.filter((participant) => canModerateParticipant(participant));
+}
+
+function participantCannotSeeFile(participant, fileName) {
+  return Boolean(
+    participant &&
+      Array.isArray(participant.allowedFiles) &&
+      !participant.allowedFiles.includes(fileName),
+  );
+}
+
+function updateFileVisibilityQuickButton() {
+  if (!collabFileVisibilityBtn) return;
+  const canManage = Boolean(activeSessionId && canUseCoHostTools() && activeFile);
+  collabFileVisibilityBtn.hidden = !canManage;
+  if (!canManage) return;
+  const hiddenCount = getModeratableCollabParticipants().filter((participant) =>
+    participantCannotSeeFile(participant, activeFile.name),
+  ).length;
+  collabFileVisibilityBtn.classList.toggle("has-hidden-users", hiddenCount > 0);
+  collabFileVisibilityBtn.title = hiddenCount
+    ? `${hiddenCount} participant(s) cannot see ${activeFile.name}`
+    : `Everyone can see ${activeFile.name}`;
+  collabFileVisibilityBtn.setAttribute("aria-label", `Manage visibility for ${activeFile.name}`);
 }
 
 function rejectJoinRequest(socketId, options = {}) {
@@ -13215,6 +13551,7 @@ function showGroupControls(sessionId) {
         ${renderCollabControlButton({ id: "groupManageMuteBtn", icon: "fa-solid fa-comment-slash", title: `Mute Chat (${countParticipantsWithFlag("mutedChat")} affected)`, desc: "Pick who cannot chat.", active: countParticipantsWithFlag("mutedChat") > 0, tone: "warning" })}
         ${renderCollabControlButton({ id: "groupManageFreezeBtn", icon: "fa-solid fa-snowflake", title: `Freeze Editing (${countParticipantsWithFlag("frozenEditing")} affected)`, desc: "Pick who cannot edit.", active: countParticipantsWithFlag("frozenEditing") > 0, tone: "blue" })}
         ${renderCollabControlButton({ id: "groupManagePriorityBtn", icon: "fa-solid fa-star", title: `Priority (${countParticipantsWithFlag("priority")} marked)`, desc: "Pick priority people.", active: countParticipantsWithFlag("priority") > 0, tone: "purple" })}
+        ${renderCollabControlButton({ id: "groupHideFilesBtn", icon: "fa-solid fa-eye-slash", title: "Hide Files", desc: "Choose who cannot see a file.", active: collabParticipants.some((participant) => Array.isArray(participant.allowedFiles)) })}
       </div>
     </div>
     <div class="collab-section-card">
@@ -13271,6 +13608,7 @@ function showGroupControls(sessionId) {
   bind("groupManageMuteBtn", () => showGroupParticipantFlagPicker("mutedChat"));
   bind("groupManageFreezeBtn", () => showGroupParticipantFlagPicker("frozenEditing"));
   bind("groupManagePriorityBtn", () => showGroupParticipantFlagPicker("priority"));
+  bind("groupHideFilesBtn", () => showFileVisibilityEditor(activeFile ? activeFile.name : "", "group-controls"));
   bind("groupBringToFileBtn", bringEveryoneToFile);
   bind("groupPinFileBtn", async () => {
     const result = await promptForExistingFile("Pin which file for the team? Leave blank to clear.", collabPermissions.pinnedFile || (activeFile ? activeFile.name : ""));
@@ -13454,33 +13792,95 @@ function showTransferHostConfirmation(targetName) {
   if (noBtn) noBtn.onclick = () => showParticipantActions(safeName);
 }
 
-function updateParticipantAllowedFiles(targetName, allowedFiles, reset = false) {
-  if (!collabSocket || !activeSessionId || !canUseCoHostTools()) return;
+function emitCollabWithAck(eventName, payload, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (!collabSocket?.connected) {
+      reject(new Error("Collaboration is not connected."));
+      return;
+    }
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const error = new Error("The collaboration server did not respond.");
+      error.code = "ACK_TIMEOUT";
+      reject(error);
+    }, timeoutMs);
+    collabSocket.emit(eventName, payload, (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(response || { ok: false, error: "Empty server response." });
+    });
+  });
+}
+
+async function updateParticipantAllowedFiles(targetName, allowedFiles, reset = false) {
+  if (!collabSocket || !activeSessionId || !canUseCoHostTools()) return false;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) {
     showNotification("You do not have permission to update this file access.", "error");
-    return;
+    return false;
   }
-  collabSocket.emit(
-    "collab:set-participant-files",
-    {
+  try {
+    const res = await emitCollabWithAck("collab:set-participant-files", {
       sessionId: activeSessionId,
       targetName,
       allowedFiles,
       reset,
-    },
-    (res) => {
-      if (!res?.ok) {
-        showNotification((res && res.error) || "Failed to update file access", "error");
-      } else {
-        showNotification(
-          reset ? `${targetName}'s file access was reset.` : `${targetName}'s file access updated.`,
-          "success",
-        );
-        showParticipantActions(targetName);
-      }
-    },
-  );
+    });
+    if (!res?.ok) {
+      showNotification(res?.error || "Failed to update file access", "error");
+      return false;
+    }
+    showNotification(
+      reset ? `${targetName}'s hidden files were cleared.` : `${targetName}'s hidden files updated.`,
+      "success",
+    );
+    renderFileList();
+    showParticipantActions(targetName);
+    return true;
+  } catch (error) {
+    showNotification(error?.message || "Failed to update file access", "error");
+    return false;
+  }
+}
+
+async function saveFileVisibility(fileName, hiddenFor) {
+  const hiddenNames = new Set((hiddenFor || []).map((name) => String(name || "").trim().toLowerCase()));
+  try {
+    const response = await emitCollabWithAck(
+      "collab:set-file-visibility",
+      { sessionId: activeSessionId, fileName, hiddenFor },
+      2800,
+    );
+    if (!response?.ok) throw new Error(response?.error || "Failed to update file visibility.");
+    return true;
+  } catch (error) {
+    if (error?.code !== "ACK_TIMEOUT") throw error;
+  }
+
+  const allFileNames = projectFiles.map((file) => file.name);
+  const updates = getModeratableCollabParticipants().map(async (participant) => {
+    const participantKey = String(participant.name || "").trim().toLowerCase();
+    const shouldHide = hiddenNames.has(participantKey);
+    const currentlyAllowed = Array.isArray(participant.allowedFiles)
+      ? [...participant.allowedFiles]
+      : [...allFileNames];
+    const nextAllowed = shouldHide
+      ? currentlyAllowed.filter((name) => name !== fileName)
+      : Array.from(new Set([...currentlyAllowed, fileName]));
+    const reset = nextAllowed.length === allFileNames.length;
+    const response = await emitCollabWithAck("collab:set-participant-files", {
+      sessionId: activeSessionId,
+      targetName: participant.name,
+      allowedFiles: reset ? [] : nextAllowed,
+      reset,
+    });
+    if (!response?.ok) throw new Error(response?.error || `Failed to update ${participant.name}.`);
+  });
+  await Promise.all(updates);
+  return true;
 }
 
 const groupFeatureControlConfig = [
@@ -13513,11 +13913,10 @@ function showParticipantDetails(targetName) {
   if (!canUseCoHostTools()) return;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) return;
-  const allowedText = Array.isArray(participant.allowedFiles)
-    ? participant.allowedFiles.length
-      ? participant.allowedFiles.join(", ")
-      : "No file access"
-    : "Using session file access";
+  const hiddenFileNames = projectFiles
+    .filter((file) => participantCannotSeeFile(participant, file.name))
+    .map((file) => file.name);
+  const allowedText = hiddenFileNames.length ? hiddenFileNames.join(", ") : "None";
   collabModalView = "participant-actions";
   setCollabCloseButtonVisible(true);
   modalTitle.innerHTML = "<strong>PARTICIPANT DETAILS</strong>";
@@ -13530,7 +13929,7 @@ function showParticipantDetails(targetName) {
       <p><strong>Chat:</strong> ${participant.mutedChat ? "Muted" : "Enabled"}</p>
       <p><strong>Editing:</strong> ${participant.frozenEditing ? "Frozen" : "Enabled"}</p>
       <p><strong>Priority:</strong> ${participant.priority ? "Marked" : "Normal"}</p>
-      <p><strong>File access:</strong> ${escapeHtml(allowedText)}</p>
+      <p><strong>Hidden files:</strong> ${escapeHtml(allowedText)}</p>
     </div>
   `;
   setModalActions(`
@@ -13541,16 +13940,112 @@ function showParticipantDetails(targetName) {
   collabModal.style.display = "flex";
 }
 
+function showFileVisibilityEditor(fileName = "", returnView = "group-controls", fixedFile = false) {
+  if (!canUseCoHostTools()) return;
+  const selectedFile = projectFiles.find((file) => file.name === fileName) || activeFile || projectFiles[0];
+  if (!selectedFile) {
+    showNotification("There are no files to manage.", "info");
+    return;
+  }
+  const participants = getModeratableCollabParticipants();
+  const fileOptions = projectFiles
+    .map((file) => `<option value="${escapeHtml(file.name)}" ${file.name === selectedFile.name ? "selected" : ""}>${escapeHtml(file.name)}</option>`)
+    .join("");
+  const participantOptions = participants
+    .map((participant) => `
+      <label class="file-access-option">
+        <span class="file-access-check">
+          <input type="checkbox" value="${escapeHtml(participant.name)}" ${participantCannotSeeFile(participant, selectedFile.name) ? "checked" : ""}>
+          <span class="file-access-box" aria-hidden="true"></span>
+        </span>
+        <span class="file-access-name">
+          <span class="collab-participant-color" style="display:inline-block;background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
+          ${escapeHtml(participant.name)}
+        </span>
+      </label>`)
+    .join("");
+  collabModalView = "file-visibility";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = fixedFile ? "<strong>HIDE FILE</strong>" : "<strong>HIDE FILES</strong>";
+  modalBody.innerHTML = `
+    <div class="collab-section-card file-visibility-card">
+      <span class="collab-meta-label">FILE</span>
+      ${fixedFile
+        ? `<div class="visibility-file-name"><i class="fa-regular fa-file-code" aria-hidden="true"></i><strong>${escapeHtml(selectedFile.name)}</strong></div>`
+        : `<select id="visibilityFileSelect" class="collab-select" aria-label="Choose a file">${fileOptions}</select>`}
+      <p class="collab-section-note">Checked participants cannot see this file in their Files tab. Hosts and co-hosts keep access.</p>
+      <label class="file-access-option file-access-select-all">
+        <span class="file-access-check">
+          <input id="visibilitySelectAll" type="checkbox">
+          <span class="file-access-box" aria-hidden="true"></span>
+        </span>
+        <span class="file-access-name"><strong>SELECT ALL PARTICIPANTS</strong></span>
+      </label>
+      <div id="fileVisibilityParticipantList" class="participant-file-access-list">
+        ${participantOptions || `<div class="collab-section-note">No participants are available to manage.</div>`}
+      </div>
+    </div>`;
+  setModalActions(`
+    <button id="fileVisibilitySaveBtn" class="run-button"><strong>SAVE VISIBILITY</strong></button>
+    <button id="fileVisibilityBackBtn" class="run-button"><strong>BACK</strong></button>
+  `);
+  collabModal.style.display = "flex";
+
+  const select = document.getElementById("visibilityFileSelect");
+  const selectAll = document.getElementById("visibilitySelectAll");
+  const list = document.getElementById("fileVisibilityParticipantList");
+  const boxes = () => Array.from(list?.querySelectorAll("input[type='checkbox']") || []);
+  const syncSelectAll = () => {
+    if (!selectAll) return;
+    const current = boxes();
+    selectAll.checked = current.length > 0 && current.every((input) => input.checked);
+    selectAll.indeterminate = current.some((input) => input.checked) && !selectAll.checked;
+  };
+  boxes().forEach((input) => input.addEventListener("change", syncSelectAll));
+  syncSelectAll();
+  if (selectAll) selectAll.onchange = () => boxes().forEach((input) => { input.checked = selectAll.checked; });
+  if (select) select.onchange = () => showFileVisibilityEditor(select.value, returnView, false);
+  const saveBtn = document.getElementById("fileVisibilitySaveBtn");
+  if (saveBtn) saveBtn.onclick = async () => {
+    const hiddenFor = boxes().filter((input) => input.checked).map((input) => input.value);
+    const label = saveBtn.querySelector("strong");
+    saveBtn.disabled = true;
+    if (label) label.textContent = "SAVING...";
+    try {
+      await saveFileVisibility(selectedFile.name, hiddenFor);
+      showNotification(`${selectedFile.name} visibility updated.`, "success");
+      renderFileList();
+      if (returnView === "group-controls") showGroupControls(activeSessionId);
+      else if (returnView === "session") showSessionDetails(activeSessionId);
+      else closeModal();
+    } catch (error) {
+      saveBtn.disabled = false;
+      if (label) label.textContent = "SAVE VISIBILITY";
+      showNotification(error?.message || "Failed to update file visibility.", "error");
+    }
+  };
+  const backBtn = document.getElementById("fileVisibilityBackBtn");
+  if (backBtn) backBtn.onclick = () => {
+    if (returnView === "group-controls") showGroupControls(activeSessionId);
+    else if (returnView === "session") showSessionDetails(activeSessionId);
+    else closeModal();
+  };
+}
+
 function showParticipantFileAccessEditor(targetName) {
   if (!canUseCoHostTools()) return;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) return;
-  const currentSet = new Set(Array.isArray(participant.allowedFiles) ? participant.allowedFiles : []);
+  const hiddenSet = new Set(
+    projectFiles
+      .filter((file) => participantCannotSeeFile(participant, file.name))
+      .map((file) => file.name),
+  );
   const options = projectFiles
     .map((file) => `
       <label class="file-access-option">
         <span class="file-access-check">
-          <input type="checkbox" value="${escapeHtml(file.name)}" ${currentSet.has(file.name) ? "checked" : ""}>
+          <input type="checkbox" value="${escapeHtml(file.name)}" ${hiddenSet.has(file.name) ? "checked" : ""}>
           <span class="file-access-box" aria-hidden="true"></span>
         </span>
         <span class="file-access-name">${escapeHtml(file.name)}</span>
@@ -13559,37 +14054,67 @@ function showParticipantFileAccessEditor(targetName) {
     .join("");
   collabModalView = "participant-actions";
   setCollabCloseButtonVisible(true);
-  modalTitle.innerHTML = "<strong>ALLOW FILE ACCESS</strong>";
+  modalTitle.innerHTML = "<strong>HIDE FILE</strong>";
   modalBody.innerHTML = `
     <p style="margin: 8px 0 12px; color: var(--text-primary);">
-      Choose which files <strong>${escapeHtml(participant.name)}</strong> can edit.
+      Checked files will be hidden from <strong>${escapeHtml(participant.name)}</strong>'s Files tab.
     </p>
+    <label class="file-access-option file-access-select-all">
+      <span class="file-access-check">
+        <input id="participantFilesSelectAll" type="checkbox">
+        <span class="file-access-box" aria-hidden="true"></span>
+      </span>
+      <span class="file-access-name"><strong>SELECT ALL FILES</strong></span>
+    </label>
     <div id="participantFileAccessList" class="participant-file-access-list" style="text-align:left;max-height:220px;overflow:auto;border:1px solid var(--border-color);border-radius:8px;padding:10px;background:var(--bg-primary);">
       ${options || `<div style="color:var(--text-muted);">No files available.</div>`}
     </div>
   `;
   setModalActions(`
     <button id="participantFileAccessSaveBtn" class="run-button"><strong>SAVE</strong></button>
-    <button id="participantFileAccessResetBtn" class="run-button"><strong>RESET ACCESS</strong></button>
+    <button id="participantFileAccessResetBtn" class="run-button"><strong>SHOW ALL FILES</strong></button>
     <button id="participantFileAccessBackBtn" class="run-button"><strong>BACK</strong></button>
   `);
   const saveBtn = document.getElementById("participantFileAccessSaveBtn");
   const resetBtn = document.getElementById("participantFileAccessResetBtn");
   const backBtn = document.getElementById("participantFileAccessBackBtn");
+  const selectAll = document.getElementById("participantFilesSelectAll");
+  const fileInputs = () => Array.from(document.querySelectorAll("#participantFileAccessList input[type='checkbox']"));
+  const syncSelectAll = () => {
+    if (!selectAll) return;
+    const inputs = fileInputs();
+    selectAll.checked = inputs.length > 0 && inputs.every((input) => input.checked);
+    selectAll.indeterminate = inputs.some((input) => input.checked) && !selectAll.checked;
+  };
+  fileInputs().forEach((input) => input.addEventListener("change", syncSelectAll));
+  syncSelectAll();
+  if (selectAll) selectAll.onchange = () => fileInputs().forEach((input) => { input.checked = selectAll.checked; });
   if (saveBtn) {
-    saveBtn.onclick = () => {
-      const inputs = Array.from(
-        document.querySelectorAll("#participantFileAccessList input[type='checkbox']:checked"),
-      );
-      updateParticipantAllowedFiles(
+    saveBtn.onclick = async () => {
+      const hiddenFiles = fileInputs().filter((input) => input.checked).map((input) => input.value);
+      const allowedFiles = projectFiles.map((file) => file.name).filter((name) => !hiddenFiles.includes(name));
+      const label = saveBtn.querySelector("strong");
+      saveBtn.disabled = true;
+      if (resetBtn) resetBtn.disabled = true;
+      if (label) label.textContent = "SAVING...";
+      const saved = await updateParticipantAllowedFiles(
         participant.name,
-        inputs.map((input) => input.value),
+        allowedFiles,
         false,
       );
+      if (!saved && document.body.contains(saveBtn)) {
+        saveBtn.disabled = false;
+        if (resetBtn) resetBtn.disabled = false;
+        if (label) label.textContent = "SAVE";
+      }
     };
   }
   if (resetBtn) {
-    resetBtn.onclick = () => updateParticipantAllowedFiles(participant.name, [], true);
+    resetBtn.onclick = async () => {
+      resetBtn.disabled = true;
+      const saved = await updateParticipantAllowedFiles(participant.name, [], true);
+      if (!saved && document.body.contains(resetBtn)) resetBtn.disabled = false;
+    };
   }
   if (backBtn) backBtn.onclick = () => showParticipantActions(targetName);
   collabModal.style.display = "flex";
@@ -14063,7 +14588,7 @@ function showParticipantActions(targetName) {
         ${renderCollabControlButton({ id: "participantMessageBtn", icon: "fa-solid fa-message", title: "Message", desc: "Open private chat." })}
         ${renderCollabControlButton({ id: "participantMuteChatBtn", icon: "fa-solid fa-comment-slash", title: participant.mutedChat ? "Unmute Chat" : "Mute Chat", desc: participant.mutedChat ? "Chat is currently muted." : "Stop this user from chatting.", active: participant.mutedChat, tone: "warning" })}
         ${renderCollabControlButton({ id: "participantFreezeBtn", icon: "fa-solid fa-snowflake", title: participant.frozenEditing ? "Unfreeze Editing" : "Freeze Editing", desc: participant.frozenEditing ? "Editing is currently frozen." : "Stop this user from editing.", active: participant.frozenEditing, tone: "blue" })}
-        ${renderCollabControlButton({ id: "participantFileAccessBtn", icon: "fa-solid fa-folder-tree", title: "File Access", desc: Array.isArray(participant.allowedFiles) ? `${participant.allowedFiles.length} allowed file(s).` : "Using room file access.", active: Array.isArray(participant.allowedFiles) })}
+        ${renderCollabControlButton({ id: "participantFileAccessBtn", icon: "fa-solid fa-eye-slash", title: "Hide File", desc: Array.isArray(participant.allowedFiles) ? `${projectFiles.filter((file) => participantCannotSeeFile(participant, file.name)).length} hidden file(s).` : "All files are visible.", active: Array.isArray(participant.allowedFiles) })}
         ${renderCollabControlButton({ id: "participantResetAccessBtn", icon: "fa-solid fa-unlock", title: "Reset Access", desc: "Remove private file limits." })}
         ${renderCollabControlButton({ id: "participantFollowBtn", icon: "fa-solid fa-location-arrow", title: participant.name === followedParticipantName ? "Stop Following" : "Follow User", desc: participant.currentFile || "No active file yet.", active: participant.name === followedParticipantName })}
         ${renderCollabControlButton({ id: "participantViewDetailsBtn", icon: "fa-solid fa-circle-info", title: "View Details", desc: "See role, access, and status." })}
@@ -14349,6 +14874,23 @@ function ensureCollabSocket() {
     }
     previousParticipantCount = nextParticipants.length;
     collabParticipants = nextParticipants;
+    const meAfterParticipantUpdate = getMyParticipant();
+    if (
+      activeSessionId &&
+      meAfterParticipantUpdate &&
+      !["host", "co-host"].includes(String(meAfterParticipantUpdate.role || "participant")) &&
+      Array.isArray(meAfterParticipantUpdate.allowedFiles)
+    ) {
+      const allowed = new Set(
+        meAfterParticipantUpdate.allowedFiles.map((name) => String(name || "").trim().toLowerCase()),
+      );
+      const hasNewlyHiddenFile = projectFiles.some(
+        (file) => !allowed.has(String(file?.name || "").trim().toLowerCase()),
+      );
+      if (hasNewlyHiddenFile) {
+        applyRemoteSessionState(projectFiles, activeFile?.name || "", false);
+      }
+    }
     const hostFromParticipants = collabParticipants.find((p) => p.role === "host")?.name;
     if (hostFromParticipants) {
       collabHostName = hostFromParticipants;
@@ -14602,13 +15144,46 @@ function ensureCollabSocket() {
 }
 
 function applyRemoteSessionState(files, activeFileName, preferRemoteActive = false) {
-  if (!Array.isArray(files) || !files.length) return;
+  if (!Array.isArray(files)) return;
   isApplyingRemoteState = true;
   try {
+    const me = getMyParticipant();
+    const shouldFilterPersonalFiles = Boolean(
+      activeSessionId &&
+        me &&
+        !["host", "co-host"].includes(String(me.role || "participant")) &&
+        Array.isArray(me.allowedFiles),
+    );
+    const allowedFileNames = shouldFilterPersonalFiles
+      ? new Set(me.allowedFiles.map((name) => String(name || "").trim().toLowerCase()))
+      : null;
+    const visibleFiles = allowedFileNames
+      ? files.filter((file) => allowedFileNames.has(String(file?.name || "").trim().toLowerCase()))
+      : files;
     const requestedActiveName = normalizeProjectFileName(activeFileName || "");
     const currentActiveName = activeFile ? normalizeProjectFileName(activeFile.name) : null;
-    projectFiles = files;
+    projectFiles = visibleFiles;
     normalizeProjectFileNamesInPlace(projectFiles);
+    if (!projectFiles.length) {
+      activeFile = null;
+      const emptyEditor = document.getElementById("activeEditor");
+      if (emptyEditor) {
+        emptyEditor.value = "";
+        emptyEditor.readOnly = true;
+        emptyEditor.title = "No collaboration files are visible to you.";
+        updateLineNumbers(emptyEditor);
+        resetAllEditorHistory(emptyEditor);
+      }
+      if (highlightLayer) highlightLayer.innerHTML = " ";
+      if (iframe) {
+        iframe.removeAttribute("src");
+        iframe.srcdoc = `<!doctype html><html><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f8fa;color:#57606a;font:14px system-ui,sans-serif;"><p>No collaboration files are visible to you.</p></body></html>`;
+      }
+      renderFileList();
+      enforceCollabPermissionsUI();
+      renderRemoteCursors();
+      return;
+    }
     const nextActive =
       (preferRemoteActive ? projectFiles.find((f) => f.name === requestedActiveName) : null) ||
       projectFiles.find((f) => f.name === currentActiveName) ||
@@ -14912,7 +15487,48 @@ function emitCursorFromClientCoords(clientX, clientY) {
 function announceCursorPosition(event) {
   lastPointerClientX = event.clientX;
   lastPointerClientY = event.clientY;
+  updateLocalCollabCursor(event);
   emitCursorFromClientCoords(event.clientX, event.clientY);
+}
+
+function hideLocalCollabCursor() {
+  if (localCollabCursor) localCollabCursor.hidden = true;
+  document.getElementById("activeEditor")?.classList.remove("collab-custom-cursor-active");
+}
+
+function updateLocalCollabCursor(event) {
+  const editor = document.getElementById("activeEditor");
+  const wrapper = editor?.closest(".editor-wrapper");
+  if (
+    !localCollabCursor ||
+    !localCollabCursorIcon ||
+    !editor ||
+    !wrapper ||
+    !activeSessionId ||
+    !myInfo.name ||
+    (event.pointerType && !["mouse", "pen"].includes(event.pointerType))
+  ) {
+    hideLocalCollabCursor();
+    return;
+  }
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const left = Math.max(0, Math.min(wrapperRect.width - 24, event.clientX - wrapperRect.left));
+  const top = Math.max(0, Math.min(wrapperRect.height - 26, event.clientY - wrapperRect.top));
+  const cursorColor = /^#[0-9a-f]{6}$/i.test(String(myInfo.theme || ""))
+    ? myInfo.theme
+    : "#4CAF50";
+  const cursorStyle = normalizeCollabCursorStyle(myInfo.cursorStyle);
+
+  localCollabCursor.style.left = `${left}px`;
+  localCollabCursor.style.top = `${top}px`;
+  localCollabCursor.style.setProperty("--cursor-color", cursorColor);
+  localCollabCursor.dataset.cursorStyle = cursorStyle;
+  localCollabCursor.classList.toggle("is-near-top", top < 30);
+  localCollabCursor.classList.toggle("is-near-right", left > wrapperRect.width - 92);
+  localCollabCursorIcon.className = `local-collab-cursor-icon ${getCollabCursorIconClass(cursorStyle)}`;
+  localCollabCursor.hidden = false;
+  editor.classList.add("collab-custom-cursor-active");
 }
 
 window.addEventListener(
@@ -16288,6 +16904,12 @@ window.addEventListener("beforeunload", function (e) {
 });
 
 newFileBtn.addEventListener("click", createNewFile);
+if (collabFileVisibilityBtn) {
+  collabFileVisibilityBtn.addEventListener("click", () => {
+    if (!activeSessionId || !canUseCoHostTools() || !activeFile) return;
+    showFileVisibilityEditor(activeFile.name, "quick");
+  });
+}
 if (newProjectBtn) {
   newProjectBtn.addEventListener("click", handleNewProject);
 }
@@ -16960,6 +17582,8 @@ const tutorialSteps = [
 let currentStep = 0;
 let tutorialActive = false;
 let tutorialOpenedMoreMenu = false;
+let tutorialDemoCompleteTimer = null;
+let tutorialDemoReplayTimer = null;
 
 // Create tutorial modal HTML
 const tutorialModalHTML = `
@@ -17008,6 +17632,18 @@ const tutorialModalHTML = `
         margin-bottom: 20px;
         white-space: pre-line;
       "></p>
+      <div id="tutorialLiveDemo" class="tutorial-live-demo" role="group" aria-labelledby="tutorialDemoTitle">
+        <div class="tutorial-demo-label">
+          <span class="tutorial-live-dot"></span>
+          <strong id="tutorialDemoTitle">LIVE PREVIEW</strong>
+          <button id="tutorialReplayDemoBtn" class="tutorial-demo-replay" type="button" aria-label="Replay this demonstration" title="Replay animation">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="tutorialDemoStage" class="tutorial-demo-stage" aria-hidden="true"></div>
+        <div class="tutorial-demo-result" aria-hidden="true"><i class="fa-solid fa-circle-check"></i><span>Demonstration complete</span></div>
+        <div class="tutorial-demo-timeline"><i></i></div>
+      </div>
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span id="tutorialProgress" style="color: var(--text-muted); font-size: 13px;"></span>
         <div style="display: flex; gap: 10px;">
@@ -17031,7 +17667,9 @@ const tutorialModalHTML = `
     "></div>
     <div id="tutorialToolPointer" class="tutorial-tool-pointer" aria-hidden="true">
       <i id="tutorialToolPointerIcon" class="fa-solid fa-arrow-pointer"></i>
-      <span></span>
+      <span class="tutorial-pointer-ring"></span>
+      <b class="tutorial-pointer-click"></b>
+      <small id="tutorialToolPointerAction">Click</small>
     </div>
   </div>
 `;
@@ -17067,8 +17705,13 @@ const tutorialCard = document.getElementById("tutorialCard");
 const tutorialIcon = document.getElementById("tutorialIcon");
 const tutorialTitle = document.getElementById("tutorialTitle");
 const tutorialDescription = document.getElementById("tutorialDescription");
+const tutorialLiveDemo = document.getElementById("tutorialLiveDemo");
+const tutorialDemoTitle = document.getElementById("tutorialDemoTitle");
+const tutorialDemoStage = document.getElementById("tutorialDemoStage");
+const tutorialReplayDemoBtn = document.getElementById("tutorialReplayDemoBtn");
 const tutorialToolPointer = document.getElementById("tutorialToolPointer");
 const tutorialToolPointerIcon = document.getElementById("tutorialToolPointerIcon");
+const tutorialToolPointerAction = document.getElementById("tutorialToolPointerAction");
 const tutorialProgress = document.getElementById("tutorialProgress");
 const tutorialHighlight = document.getElementById("tutorialHighlight");
 const tutorialNextBtn = document.getElementById("tutorialNextBtn");
@@ -17096,18 +17739,178 @@ function startTutorial() {
   }
 }
 
+function getTutorialDemo(step) {
+  const target = String(step?.target || "");
+  if (target.includes("Toggle auto-run")) {
+    return {
+      type: "toggle",
+      label: "AUTO-RUN FLOW",
+      markup: '<div class="tutorial-demo-toggle"><span>AUTO-RUN</span><i></i><b>ON</b></div>',
+    };
+  }
+  if (target.includes("Show/hide console")) {
+    return {
+      type: "terminal",
+      label: "CONSOLE OUTPUT",
+      markup: '<div class="tutorial-demo-terminal"><b>$</b><span>npm run dev</span><b>›</b><em>Ready on :3000</em><i></i></div>',
+    };
+  }
+  if (target === "#collabBtn") {
+    return {
+      type: "collab",
+      label: "LIVE COLLABORATION",
+      markup: '<div class="tutorial-demo-collab"><div class="demo-connection-line"></div><span class="demo-avatar one">U1</span><span class="demo-avatar two">U2</span><i class="demo-cursor one"></i><i class="demo-cursor two"></i><b>2 online</b></div>',
+    };
+  }
+  if (target === "#previewFullscreenBtn") {
+    return {
+      type: "fullscreen",
+      label: "FULLSCREEN PREVIEW",
+      markup: '<div class="tutorial-demo-frame"><span class="demo-frame-bar"><i></i><i></i><i></i></span><main><b></b><em></em><em></em></main><i class="fa-solid fa-expand"></i></div>',
+    };
+  }
+  if (target === "#settingsBtn") {
+    return {
+      type: "settings",
+      label: "EDITOR SETTINGS",
+      markup: '<div class="tutorial-demo-settings"><i class="fa-solid fa-gear"></i><label>FONT SIZE</label><span><b></b></span><label>EDITOR COLOR</label><span><b></b></span></div>',
+    };
+  }
+  if (target === "#addMediaBtn") {
+    return {
+      type: "media",
+      label: "MEDIA UPLOAD",
+      markup: '<div class="tutorial-demo-media"><i class="fa-regular fa-image"></i><em class="fa-solid fa-arrow-down"></em><span><b></b><i></i><i></i></span><small>hero-image.png</small></div>',
+    };
+  }
+  if (target === "#helpPageBtn") {
+    return {
+      type: "help",
+      label: "HELP GUIDE",
+      markup: '<div class="tutorial-demo-help"><i class="fa-solid fa-circle-question"></i><strong>Quick guide</strong><span></span><span></span><span></span></div>',
+    };
+  }
+  if (target === "#headerMoreBtn") {
+    return {
+      type: "menu",
+      label: "MORE TOOLS",
+      markup: '<div class="tutorial-demo-menu"><span><i class="fa-solid fa-layer-group"></i> Templates</span><span><i class="fa-solid fa-cloud-arrow-up"></i> Publish</span><span><i class="fa-solid fa-icons"></i> Get Icons</span></div>',
+    };
+  }
+  if (target === "#newFileBtn") {
+    return {
+      type: "file",
+      label: "CREATE A FILE",
+      markup: '<div class="tutorial-demo-file"><i class="fa-brands fa-html5"></i><span>landing-page.html</span><b><i class="fa-solid fa-check"></i></b></div>',
+    };
+  }
+  if (target === "#fileList") {
+    return {
+      type: "explorer",
+      label: "FILE EXPLORER",
+      markup: '<div class="tutorial-demo-explorer"><span><i class="fa-brands fa-html5"></i> index.html</span><span><i class="fa-brands fa-css3-alt"></i> style.css</span><span><i class="fa-brands fa-js"></i> script.js</span></div>',
+    };
+  }
+  if (target === "#activeEditor") {
+    return {
+      type: "code",
+      label: "SMART CODE EDITOR",
+      markup: '<div class="tutorial-demo-code"><span><b>&lt;main</b> <em>class</em>=<q>"app"</q><b>&gt;</b></span><span>&nbsp;&nbsp;<b>&lt;h1&gt;</b>Hello CodX<b>&lt;/h1&gt;</b></span><span><b>&lt;/main&gt;</b><i></i></span></div>',
+    };
+  }
+  if (target === "#undoEditorBtn" || target === "#redoEditorBtn") {
+    const isRedo = target === "#redoEditorBtn";
+    return {
+      type: isRedo ? "redo" : "undo",
+      label: isRedo ? "RESTORE CHANGE" : "UNDO CHANGE",
+      markup: `<div class="tutorial-demo-history${isRedo ? " redo" : ""}"><i class="fa-solid fa-rotate-${isRedo ? "right" : "left"}"></i><span class="removed">color: tomato;</span><span class="restored">color: #22c55e;</span></div>`,
+    };
+  }
+  if (target === "#runPreviewBtn") {
+    return {
+      type: "run",
+      label: "BUILD PREVIEW",
+      markup: '<div class="tutorial-demo-run"><i class="fa-solid fa-play"></i><div><span></span><b><i class="fa-solid fa-circle-check"></i> Preview ready</b></div></div>',
+    };
+  }
+  if (target.includes("Export project as ZIP") || target.includes("Import ZIP file")) {
+    const isImport = target.includes("Import ZIP file");
+    return {
+      type: isImport ? "import" : "export",
+      label: isImport ? "IMPORT PROJECT" : "EXPORT PROJECT",
+      markup: `<div class="tutorial-demo-transfer${isImport ? " import" : ""}"><i class="fa-solid fa-file-zipper"></i><span><i class="fa-solid fa-arrow-${isImport ? "up" : "down"}"></i></span><div><b>codx-project.zip</b><small>${isImport ? "Files restored" : "Download ready"}</small></div></div>`,
+    };
+  }
+  if (target === "#output") {
+    return {
+      type: "preview",
+      label: "LIVE WEBSITE PREVIEW",
+      markup: '<div class="tutorial-demo-preview"><header><i></i><i></i><i></i><small>localhost</small></header><main><b></b><span></span><span></span><em></em></main></div>',
+    };
+  }
+  return {
+    type: "generic",
+    label: "LIVE TOOL PREVIEW",
+    markup: `<div class="tutorial-demo-generic"><i class="${step?.icon || "fa-solid fa-wand-magic-sparkles"}"></i><strong>${escapeHtml(step?.title || "CodX Editor")}</strong></div>`,
+  };
+}
+
+function clearTutorialDemoTimers() {
+  clearTimeout(tutorialDemoCompleteTimer);
+  clearTimeout(tutorialDemoReplayTimer);
+  tutorialDemoCompleteTimer = null;
+  tutorialDemoReplayTimer = null;
+}
+
+function runTutorialDemoCycle() {
+  if (!tutorialLiveDemo || !tutorialActive) return;
+  clearTutorialDemoTimers();
+  tutorialLiveDemo.classList.remove("is-playing", "is-complete");
+  void tutorialLiveDemo.offsetWidth;
+  tutorialLiveDemo.classList.add("is-playing");
+
+  tutorialDemoCompleteTimer = setTimeout(() => {
+    if (tutorialActive) tutorialLiveDemo.classList.add("is-complete");
+  }, 2500);
+  tutorialDemoReplayTimer = setTimeout(() => {
+    if (tutorialActive) runTutorialDemoCycle();
+  }, 5200);
+}
+
+function playTutorialLiveDemo(step) {
+  if (!tutorialLiveDemo || !tutorialDemoStage) return;
+  const demo = getTutorialDemo(step);
+  tutorialLiveDemo.dataset.demo = demo.type;
+  if (tutorialDemoTitle) tutorialDemoTitle.textContent = demo.label;
+  tutorialDemoStage.innerHTML = demo.markup;
+  runTutorialDemoCycle();
+}
+
+tutorialReplayDemoBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  runTutorialDemoCycle();
+});
+
 function playTutorialToolPointer(target, step) {
   if (!tutorialToolPointer || !target) return;
   const rect = target.getBoundingClientRect();
-  const endX = Math.max(8, Math.min(window.innerWidth - 34, rect.left + rect.width * 0.58));
-  const endY = Math.max(8, Math.min(window.innerHeight - 40, rect.top + rect.height * 0.52));
+  const isEditorTarget = step?.target === "#activeEditor";
+  const isPreviewTarget = step?.target === "#output";
+  const isClickableTarget = Boolean(target.matches?.("button, [role='button'], input, select, a"));
+  const endX = Math.max(10, Math.min(window.innerWidth - 46, rect.left + rect.width * (isEditorTarget ? 0.34 : 0.58)));
+  const endY = Math.max(10, Math.min(window.innerHeight - 48, rect.top + rect.height * (isEditorTarget ? 0.38 : 0.52)));
   const startsFromRight = String(step?.position || "").includes("left");
-  const startX = endX + (startsFromRight ? 76 : -76);
-  const startY = Math.max(8, Math.min(window.innerHeight - 40, endY + 54));
-  const pointerKind = step?.target === "#activeEditor"
+  const startX = Math.max(10, Math.min(window.innerWidth - 46, endX + (startsFromRight ? 112 : -112)));
+  const startY = Math.max(10, Math.min(window.innerHeight - 48, endY + 72));
+  const midX = Math.max(10, Math.min(window.innerWidth - 46, (startX + endX) / 2 + (startsFromRight ? -18 : 18)));
+  const midY = Math.max(10, Math.min(window.innerHeight - 48, Math.min(startY, endY) - 28));
+  const pointerKind = isEditorTarget
     ? "text"
-    : step?.target === "#output"
+    : isPreviewTarget
       ? "inspect"
+      : isClickableTarget
+        ? "hand"
       : "pointer";
 
   tutorialToolPointer.dataset.kind = pointerKind;
@@ -17116,15 +17919,30 @@ function playTutorialToolPointer(target, step) {
       ? "fa-solid fa-i-cursor"
       : pointerKind === "inspect"
         ? "fa-solid fa-crosshairs"
-        : "fa-solid fa-arrow-pointer";
+        : pointerKind === "hand"
+          ? "fa-solid fa-hand-pointer"
+          : "fa-solid fa-arrow-pointer";
+  }
+  if (tutorialToolPointerAction) {
+    tutorialToolPointerAction.textContent = pointerKind === "text"
+      ? "Type here"
+      : pointerKind === "inspect"
+        ? "Preview"
+        : pointerKind === "hand"
+          ? "Click"
+          : "Explore";
   }
   tutorialToolPointer.style.setProperty("--tutorial-pointer-start-x", `${startX}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-start-y", `${startY}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-mid-x", `${midX}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-mid-y", `${midY}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-end-x", `${endX}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-end-y", `${endY}px`);
   tutorialToolPointer.classList.remove("is-playing");
+  tutorialHighlight?.classList.remove("is-pointer-playing");
   void tutorialToolPointer.offsetWidth;
   tutorialToolPointer.classList.add("is-playing");
+  tutorialHighlight?.classList.add("is-pointer-playing");
 }
 
 function prepareTutorialTarget(step, targetElement) {
@@ -17162,6 +17980,7 @@ function showTutorialStep(stepIndex) {
   tutorialIcon.className = step.icon;
   tutorialTitle.textContent = step.title;
   tutorialDescription.textContent = step.description;
+  playTutorialLiveDemo(step);
   tutorialProgress.textContent = `Step ${stepIndex + 1} of ${
     tutorialSteps.length
   }`;
@@ -17170,7 +17989,7 @@ function showTutorialStep(stepIndex) {
     targetElement.scrollIntoView({
       block: "nearest",
       inline: "nearest",
-      behavior: "smooth",
+      behavior: "auto",
     });
   }
 
@@ -17327,8 +18146,11 @@ closeTutorialBtn.addEventListener("click", async () => {
 // Complete tutorial
 function completeTutorial() {
   tutorialActive = false;
+  clearTutorialDemoTimers();
   tutorialModal.style.display = "none";
   tutorialToolPointer?.classList.remove("is-playing");
+  tutorialLiveDemo?.classList.remove("is-playing", "is-complete");
+  tutorialHighlight?.classList.remove("is-pointer-playing");
   if (tutorialOpenedMoreMenu) {
     setHeaderMoreMenuOpen(false);
     tutorialOpenedMoreMenu = false;
