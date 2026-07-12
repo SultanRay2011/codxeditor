@@ -44,6 +44,7 @@ const newFileBtn = document.getElementById("newFileBtn");
 const collabFileVisibilityBtn = document.getElementById("collabFileVisibilityBtn");
 const fileList = document.getElementById("fileList");
 const collabBtn = document.getElementById("collabBtn");
+const collabMessageBadge = document.getElementById("collabMessageBadge");
 const collabModal = document.getElementById("collabModal");
 const modalTitle = document.getElementById("modalTitle");
 const modalBody = document.getElementById("modalBody");
@@ -154,6 +155,7 @@ if (headerMoreBtn && headerMorePanel) {
       setHeaderMoreMenuOpen(false);
     });
   });
+
 }
 
 let githubConnectionState = {
@@ -2310,6 +2312,8 @@ let collabGroupMessages = [];
 let collabPrivateMessages = [];
 let collabChatMode = "group";
 let collabChatTarget = "";
+let collabUnreadGroupMessages = 0;
+let collabUnreadPrivateMessages = {};
 let remoteCursorState = {};
 let remoteTypingState = {};
 let lastCursorEmitAt = 0;
@@ -3029,6 +3033,7 @@ function resetTransientCollabUiState() {
   currentTypingIndicator = null;
   remoteCursorState = {};
   remoteTypingState = {};
+  resetCollabUnreadMessages();
   hideLocalCollabCursor();
   followedParticipantName = "";
   lastAnnouncementText = "";
@@ -3494,6 +3499,7 @@ function showGitHubUploadSourcePicker() {
     document.getElementById("githubUploadFromCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false, source: null }));
     setTimeout(() => document.getElementById("githubUploadFromProjectBtn")?.focus(), 0);
   });
+
 }
 
 function showHelpChoiceDialog() {
@@ -14221,6 +14227,105 @@ function getPrivateChatCandidates() {
   return collabParticipants.filter((p) => p.name !== myInfo.name);
 }
 
+function formatCollabUnreadCount(count) {
+  const value = Math.max(0, Number(count) || 0);
+  return value > 99 ? "99+" : String(value);
+}
+
+function getPrivateUnreadKey(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function getPrivateUnreadCount(name) {
+  return Math.max(0, Number(collabUnreadPrivateMessages[getPrivateUnreadKey(name)]) || 0);
+}
+
+function getTotalPrivateUnreadCount() {
+  return Object.values(collabUnreadPrivateMessages).reduce(
+    (total, count) => total + Math.max(0, Number(count) || 0),
+    0,
+  );
+}
+
+function getTotalCollabUnreadCount() {
+  return Math.max(0, Number(collabUnreadGroupMessages) || 0) + getTotalPrivateUnreadCount();
+}
+
+function isViewingCollabChat(mode, targetName = "") {
+  if (
+    !collabModal ||
+    collabModal.style.display !== "flex" ||
+    collabModalView !== "session" ||
+    !document.getElementById("collabChatMessages")
+  ) {
+    return false;
+  }
+  if (mode === "group") return collabChatMode === "group";
+  return (
+    collabChatMode === "private" &&
+    getPrivateUnreadKey(collabChatTarget) === getPrivateUnreadKey(targetName)
+  );
+}
+
+function updateCollabUnreadBadges() {
+  const totalUnread = getTotalCollabUnreadCount();
+  const label = formatCollabUnreadCount(totalUnread);
+  if (collabMessageBadge) {
+    collabMessageBadge.textContent = label;
+    collabMessageBadge.hidden = totalUnread === 0;
+    collabMessageBadge.setAttribute(
+      "aria-label",
+      `${totalUnread} unread collaboration message${totalUnread === 1 ? "" : "s"}`,
+    );
+  }
+  collabBtn?.classList.toggle("has-unread-messages", totalUnread > 0);
+
+  const dropdownBadge = document.getElementById("collabChatDropdownBadge");
+  if (dropdownBadge) {
+    dropdownBadge.textContent = label;
+    dropdownBadge.hidden = totalUnread === 0;
+    dropdownBadge.setAttribute("aria-label", `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}`);
+  }
+
+  const modeEl = document.getElementById("collabChatMode");
+  if (modeEl) {
+    const groupOption = modeEl.querySelector('option[value="group"]');
+    const privateOption = modeEl.querySelector('option[value="private"]');
+    const groupDisabled = collabPermissions.disableGroupChat || collabPermissions.disableAllChat;
+    if (groupOption) {
+      groupOption.textContent = `Group Chat${collabUnreadGroupMessages ? ` (${formatCollabUnreadCount(collabUnreadGroupMessages)})` : ""}${groupDisabled ? " (disabled)" : ""}`;
+    }
+    const privateUnread = getTotalPrivateUnreadCount();
+    if (privateOption) {
+      privateOption.textContent = `Private Chat${privateUnread ? ` (${formatCollabUnreadCount(privateUnread)})` : ""}`;
+    }
+  }
+
+  const targetEl = document.getElementById("collabChatTarget");
+  if (targetEl) {
+    Array.from(targetEl.options).forEach((option) => {
+      const unread = getPrivateUnreadCount(option.value);
+      option.textContent = `${option.value}${unread ? ` (${formatCollabUnreadCount(unread)})` : ""}`;
+    });
+  }
+}
+
+function markCurrentCollabChatRead() {
+  if (!isViewingCollabChat(collabChatMode, collabChatTarget)) return;
+  if (collabChatMode === "group") {
+    collabUnreadGroupMessages = 0;
+  } else if (collabChatTarget) {
+    delete collabUnreadPrivateMessages[getPrivateUnreadKey(collabChatTarget)];
+  }
+  updateCollabUnreadBadges();
+}
+
+function resetCollabUnreadMessages() {
+  collabUnreadGroupMessages = 0;
+  collabUnreadPrivateMessages = {};
+  updateCollabUnreadBadges();
+}
+
 function getCurrentChatMessages() {
   if (collabChatMode === "private") {
     const target = collabChatTarget;
@@ -14299,10 +14404,13 @@ function buildCollabChatPanelHtml() {
     <hr style="border-color:var(--border-color);margin:15px 0;">
     <h4 style="text-align:left;margin:0 0 10px;">Chat</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-      <select id="collabChatMode" style="flex:1;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;">
-        ${groupOption}
-        ${privateOption}
-      </select>
+      <div class="collab-chat-dropdown-wrap">
+        <select id="collabChatMode" style="width:100%;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;">
+          ${groupOption}
+          ${privateOption}
+        </select>
+        <span id="collabChatDropdownBadge" class="collab-chat-dropdown-badge" aria-label="0 unread messages" hidden>0</span>
+      </div>
       <select id="collabChatTarget" style="flex:1;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;${collabChatMode === "private" ? "" : "display:none;"}">
         ${privateOptions}
       </select>
@@ -14320,7 +14428,11 @@ function bindCollabChatControls() {
   const targetEl = document.getElementById("collabChatTarget");
   const inputEl = document.getElementById("collabChatInput");
   const sendBtn = document.getElementById("collabChatSendBtn");
+  const messagesEl = document.getElementById("collabChatMessages");
   if (!modeEl || !inputEl || !sendBtn) return;
+
+  modeEl.addEventListener("pointerdown", markCurrentCollabChatRead);
+  messagesEl?.addEventListener("pointerdown", markCurrentCollabChatRead);
 
   modeEl.onchange = () => {
     collabChatMode = modeEl.value;
@@ -14332,12 +14444,14 @@ function bindCollabChatControls() {
       collabChatTarget = targetEl.value || collabChatTarget;
     }
     renderCollabChatMessages();
+    markCurrentCollabChatRead();
   };
 
   if (targetEl) {
     targetEl.onchange = () => {
       collabChatTarget = targetEl.value || "";
       renderCollabChatMessages();
+      markCurrentCollabChatRead();
     };
   }
 
@@ -15055,6 +15169,10 @@ function ensureCollabSocket() {
     if (senderName) {
       addTimelineEntry(`${senderName} sent a group message.`, "chat");
       if (senderName !== String(myInfo.name)) {
+        if (!isViewingCollabChat("group")) {
+          collabUnreadGroupMessages += 1;
+        }
+        updateCollabUnreadBadges();
         if (!collabModal || collabModal.style.display !== "flex" || collabModalView !== "session") {
           showNotificationHtml(
             `<strong>${escapeHtml(senderName)}</strong> has sent a message publicly.`,
@@ -15078,6 +15196,11 @@ function ensureCollabSocket() {
       message.from &&
       message.from !== myInfo.name
     ) {
+      if (!isViewingCollabChat("private", message.from)) {
+        const privateKey = getPrivateUnreadKey(message.from);
+        collabUnreadPrivateMessages[privateKey] = getPrivateUnreadCount(message.from) + 1;
+      }
+      updateCollabUnreadBadges();
       showNotificationHtml(
         `<strong>${escapeHtml(message.from)}</strong> has sent a message to you privately.`,
         "info",
@@ -15088,7 +15211,9 @@ function ensureCollabSocket() {
   collabSocket.on("collab:chat:cleared", (payload) => {
     if (payload?.mode === "group") {
       collabGroupMessages = [];
+      collabUnreadGroupMessages = 0;
       renderCollabChatMessages();
+      updateCollabUnreadBadges();
       showNotification("Group chat was cleared.", "info");
       addTimelineEntry("Group chat was cleared.", "moderation");
     }
@@ -17887,6 +18012,7 @@ function getTutorialDemo(step) {
     label: "LIVE TOOL PREVIEW",
     markup: `<div class="tutorial-demo-generic"><i class="${step?.icon || "fa-solid fa-wand-magic-sparkles"}"></i><strong>${escapeHtml(step?.title || "CodX Editor")}</strong></div>`,
   };
+  updateCollabUnreadBadges();
 }
 
 function clearTutorialDemoTimers() {
