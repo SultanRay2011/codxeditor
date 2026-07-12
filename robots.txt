@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /adminprivate.html
-Disallow: /welcome.html
-Disallow: /node-preview.html
-Disallow: /404-for-preview.html
-
-Sitemap: https://codxeditor.up.railway.app/sitemap.xml
