@@ -3366,6 +3366,7 @@ function showAppPrompt(title, message, inputValue = "", inputPlaceholder = "") {
 function showPublishActionPrompt() {
   return new Promise((resolve) => {
     activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "publish-choice";
     if (appDialogTitle) appDialogTitle.textContent = "PUBLISH PROJECT";
     if (appDialogMessage) {
       appDialogMessage.innerHTML =
@@ -3374,9 +3375,15 @@ function showPublishActionPrompt() {
     if (appDialogInput) appDialogInput.style.display = "none";
     if (appDialogActions) {
       appDialogActions.innerHTML = `
-        <button type="button" id="publishCreateLinkBtn" class="run-button"><i class="fa-solid fa-plus"></i> <strong>CREATE A LINK</strong></button>
-        <button type="button" id="publishUpdateLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-solid fa-pen-to-square"></i> <strong>UPDATE A LINK</strong></button>
-        <button type="button" id="publishCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+        <button type="button" id="publishCreateLinkBtn" class="collab-choice-card publish-choice-card">
+          <i class="fa-solid fa-plus"></i>
+          <span>Create a link</span>
+        </button>
+        <button type="button" id="publishUpdateLinkBtn" class="collab-choice-card publish-choice-card">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span>Update a link</span>
+        </button>
+        <button type="button" id="publishCancelBtn" class="run-button publish-choice-cancel" style="background:#6b7280;"><strong>CANCEL</strong></button>
       `;
     }
     if (appDialog) appDialog.style.display = "flex";
@@ -3389,21 +3396,22 @@ function showPublishActionPrompt() {
 
 function showPublishUrlPrompt(action = "create") {
   const publishBase = `${window.location.origin}/published/`;
-  const defaultSlug = "my-project";
+  const exampleSlug = "my-custom-link";
   const isUpdate = action === "update";
   const dialog = showAppDialog({
     title: isUpdate ? "UPDATE A LINK" : "CREATE A LINK",
-    messageHtml: `${isUpdate ? "Type the custom link you want to update." : "Choose the end of your published link."}<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + defaultSlug)}</code>`,
+    messageHtml: `${isUpdate ? "Type the custom link you want to update." : "Choose the end of your published link."}<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + exampleSlug)}</code>`,
     input: true,
-    inputValue: defaultSlug,
-    inputPlaceholder: "my-project",
+    inputValue: "",
+    inputPlaceholder: "Type your custom link",
     okText: isUpdate ? "NEXT" : "CREATE LINK",
     cancelText: "CANCEL",
   });
   const updatePreview = () => {
     const preview = document.getElementById("publishUrlPreview");
     if (!preview || !appDialogInput) return;
-    preview.textContent = publishBase + encodeURIComponent(appDialogInput.value.trim());
+    const typedSlug = appDialogInput.value.trim();
+    preview.textContent = publishBase + encodeURIComponent(typedSlug || exampleSlug);
   };
   if (appDialogInput) appDialogInput.addEventListener("input", updatePreview, { once: false });
   return dialog.finally(() => {

@@ -4406,6 +4406,59 @@ iframe {
   .help-choice-button { min-height: 92px; }
 }
 
+#appDialog[data-dialog-kind="publish-choice"] > div {
+  width: min(560px, 94vw) !important;
+}
+
+#appDialog[data-dialog-kind="publish-choice"] #appDialogActions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px !important;
+  margin-top: 18px;
+}
+
+.publish-choice-card {
+  --publish-choice-color: var(--accent-color);
+  min-width: 0;
+  color: #fff;
+  border-color: color-mix(in srgb, var(--publish-choice-color) 82%, #fff 18%);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 255, 255, .2), transparent 58%),
+    var(--publish-choice-color);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--publish-choice-color) 30%, transparent);
+}
+
+#publishUpdateLinkBtn { --publish-choice-color: #2563eb; }
+
+.publish-choice-card i {
+  color: #fff;
+  background: rgba(255, 255, 255, .17);
+}
+
+.publish-choice-card:hover {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--publish-choice-color) 70%, #fff 30%);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 255, 255, .28), transparent 58%),
+    color-mix(in srgb, var(--publish-choice-color) 91%, #fff 9%);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--publish-choice-color) 38%, transparent);
+}
+
+.publish-choice-card:focus-visible {
+  outline: 2px solid var(--publish-choice-color);
+  outline-offset: 3px;
+}
+
+#appDialogActions .publish-choice-cancel {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+@media (max-width: 560px) {
+  #appDialog[data-dialog-kind="publish-choice"] #appDialogActions { grid-template-columns: 1fr; }
+  .publish-choice-card { min-height: 126px; }
+}
+
 #developerConsoleModal > div { border-radius: 18px !important; }
 .github-repo-dialog, .icon-catalog-dialog { border-radius: 18px !important; }
 .github-repo-header, .icon-catalog-header { background: color-mix(in srgb, var(--bg-tertiary) 68%, transparent); }
