@@ -3277,6 +3277,14 @@ header {
   gap: 10px;
 }
 
+.collab-participant-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .collab-participant-color {
   width: 12px;
   height: 12px;
@@ -3717,8 +3725,13 @@ header {
   }
 
   .collab-pending-actions,
-  .collab-participant-row .run-button {
+  .collab-participant-row-actions {
     width: 100%;
+  }
+
+  .collab-participant-row-actions .run-button {
+    flex: 1 1 120px;
+    justify-content: center;
   }
 }
 

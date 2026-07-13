@@ -12598,6 +12598,19 @@ function canModerateParticipant(participant) {
   return false;
 }
 
+function isMyCollabParticipant(participant) {
+  return Boolean(
+    participant &&
+      String(participant.name || "").trim().toLowerCase() ===
+        String(myInfo.name || "").trim().toLowerCase(),
+  );
+}
+
+function canRenameParticipant(participant) {
+  if (isMyCollabParticipant(participant)) return !participant.renameDisabled;
+  return canModerateParticipant(participant);
+}
+
 function normalizeCollabPermissions(raw) {
   const next = {
     ...defaultCollabPermissions,
@@ -13956,6 +13969,7 @@ function showParticipantDetails(targetName) {
       <p><strong>Joined:</strong> ${escapeHtml(formatParticipantJoinedAt(participant.joinedAt))}</p>
       <p><strong>Chat:</strong> ${participant.mutedChat ? "Muted" : "Enabled"}</p>
       <p><strong>Editing:</strong> ${participant.frozenEditing ? "Frozen" : "Enabled"}</p>
+      <p><strong>Self-renaming:</strong> ${participant.renameDisabled ? "Disabled" : "Enabled"}</p>
       <p><strong>Priority:</strong> ${participant.priority ? "Marked" : "Normal"}</p>
       <p><strong>Hidden files:</strong> ${escapeHtml(allowedText)}</p>
     </div>
@@ -14645,6 +14659,55 @@ function openPrivateChatWithParticipant(targetName) {
   }, 0);
 }
 
+async function requestParticipantRename(targetName) {
+  if (!collabSocket || !activeSessionId) return;
+  const participant = getParticipantByName(targetName);
+  if (!participant || !canRenameParticipant(participant)) {
+    showNotification("You do not have permission to rename this participant.", "error");
+    return;
+  }
+
+  const currentName = String(participant.name || "").trim();
+  const dialog = await showAppPrompt(
+    "RENAME USER",
+    isMyCollabParticipant(participant)
+      ? "Choose the name everyone will see for you in this collaboration session."
+      : `Choose a new name for ${currentName}.`,
+    currentName,
+    "Participant name",
+  );
+  if (!dialog?.ok) return;
+
+  const nextName = String(dialog.value || "").trim().replace(/\s+/g, " ");
+  const validation = validateUsername(nextName);
+  if (!validation.valid) {
+    showNotification(validation.error, "error");
+    return;
+  }
+
+  try {
+    const res = await emitCollabWithAck(
+      "collab:rename-participant",
+      { sessionId: activeSessionId, targetName: currentName, newName: nextName },
+      6000,
+    );
+    if (!res?.ok) {
+      showNotification(res?.error || "Failed to rename participant.", "error");
+      return;
+    }
+    if (res.unchanged) {
+      showNotification("The participant name is already up to date.", "info");
+    }
+  } catch (error) {
+    showNotification(
+      error?.code === "ACK_TIMEOUT"
+        ? "Rename timed out. Restart the collaboration server and try again."
+        : error?.message || "Failed to rename participant.",
+      "error",
+    );
+  }
+}
+
 function showParticipantActions(targetName) {
   if (!canUseCoHostTools()) return;
   const safeName = String(targetName || "").trim();
@@ -14721,6 +14784,8 @@ function showParticipantActions(targetName) {
       <div class="collab-control-grid">
         ${hostView ? renderCollabControlButton({ id: "participantRoleBtn", icon: "fa-solid fa-user-shield", title: participant.role === "co-host" ? "Remove Co-Host" : "Make Co-Host", desc: "Change helper permissions.", active: participant.role === "co-host", tone: "purple" }) : ""}
         ${hostView ? renderCollabControlButton({ id: "participantTransferHostBtn", icon: "fa-solid fa-crown", title: "Transfer Host", desc: "Give this user room ownership.", tone: "warning" }) : ""}
+        ${renderCollabControlButton({ id: "participantRenameBtn", icon: "fa-solid fa-pen", title: "Rename", desc: "Change this participant's display name." })}
+        ${renderCollabControlButton({ id: "participantSelfRenameBtn", icon: "fa-solid fa-user-pen", title: participant.renameDisabled ? "Allow Self-Rename" : "Disable Self-Rename", desc: participant.renameDisabled ? "This user cannot rename themselves." : "Prevent this user from renaming themselves.", active: participant.renameDisabled, tone: "warning" })}
         ${renderCollabControlButton({ id: "participantMessageBtn", icon: "fa-solid fa-message", title: "Message", desc: "Open private chat." })}
         ${renderCollabControlButton({ id: "participantMuteChatBtn", icon: "fa-solid fa-comment-slash", title: participant.mutedChat ? "Unmute Chat" : "Mute Chat", desc: participant.mutedChat ? "Chat is currently muted." : "Stop this user from chatting.", active: participant.mutedChat, tone: "warning" })}
         ${renderCollabControlButton({ id: "participantFreezeBtn", icon: "fa-solid fa-snowflake", title: participant.frozenEditing ? "Unfreeze Editing" : "Freeze Editing", desc: participant.frozenEditing ? "Editing is currently frozen." : "Stop this user from editing.", active: participant.frozenEditing, tone: "blue" })}
@@ -14743,6 +14808,8 @@ function showParticipantActions(targetName) {
 
   const roleBtn = document.getElementById("participantRoleBtn");
   const transferHostBtn = document.getElementById("participantTransferHostBtn");
+  const renameBtn = document.getElementById("participantRenameBtn");
+  const selfRenameBtn = document.getElementById("participantSelfRenameBtn");
   const messageBtn = document.getElementById("participantMessageBtn");
   const muteChatBtn = document.getElementById("participantMuteChatBtn");
   const freezeBtn = document.getElementById("participantFreezeBtn");
@@ -14763,6 +14830,19 @@ function showParticipantActions(targetName) {
   }
   if (hostView && transferHostBtn) {
     transferHostBtn.onclick = () => showTransferHostConfirmation(safeName);
+  }
+  if (renameBtn) {
+    renameBtn.onclick = () => requestParticipantRename(safeName);
+  }
+  if (selfRenameBtn) {
+    selfRenameBtn.onclick = () =>
+      updateParticipantFlags(
+        safeName,
+        { renameDisabled: !participant.renameDisabled },
+        participant.renameDisabled
+          ? `${safeName} can rename themselves again.`
+          : `${safeName} can no longer rename themselves.`,
+      );
   }
   if (messageBtn) {
     messageBtn.onclick = () => openPrivateChatWithParticipant(safeName);
@@ -14991,6 +15071,53 @@ function ensureCollabSocket() {
 
   collabSocket.on("collab:typing", (indicator) => {
     updateTypingIndicatorUI(indicator);
+  });
+
+  collabSocket.on("collab:participant-renamed", (payload) => {
+    const oldName = String(payload?.oldName || "").trim();
+    const newName = String(payload?.newName || "").trim();
+    if (!oldName || !newName) return;
+    const oldKey = oldName.toLowerCase();
+    const matchesOldName = (value) => String(value || "").trim().toLowerCase() === oldKey;
+    const renamedMe = matchesOldName(myInfo.name);
+
+    if (renamedMe) myInfo.name = newName;
+    if (matchesOldName(collabHostName)) collabHostName = newName;
+    if (matchesOldName(collabChatTarget)) collabChatTarget = newName;
+    if (matchesOldName(followedParticipantName)) followedParticipantName = newName;
+    if (matchesOldName(activeParticipantActionName)) activeParticipantActionName = newName;
+
+    collabParticipants = collabParticipants.map((participant) =>
+      matchesOldName(participant?.name) ? { ...participant, name: newName } : participant,
+    );
+    [...collabGroupMessages, ...collabPrivateMessages].forEach((message) => {
+      if (matchesOldName(message?.from)) message.from = newName;
+      if (matchesOldName(message?.to)) message.to = newName;
+    });
+
+    const migrateLiveState = (state) => {
+      const previousKey = Object.keys(state).find((key) => matchesOldName(key));
+      if (!previousKey) return;
+      const previousValue = state[previousKey];
+      delete state[previousKey];
+      state[newName] = { ...previousValue, name: newName };
+    };
+    migrateLiveState(remoteCursorState);
+    migrateLiveState(remoteTypingState);
+    if (currentTypingIndicator && matchesOldName(currentTypingIndicator.name)) {
+      currentTypingIndicator = { ...currentTypingIndicator, name: newName };
+    }
+
+    const previousSnapshot = lastParticipantsSnapshot.get(oldKey);
+    if (previousSnapshot) {
+      lastParticipantsSnapshot.delete(oldKey);
+      lastParticipantsSnapshot.set(newName.toLowerCase(), { ...previousSnapshot, name: newName });
+    }
+    addTimelineEntry(`${oldName} was renamed to ${newName}.`);
+    showNotification(
+      renamedMe ? `Your collaboration name is now ${newName}.` : `${oldName} is now ${newName}.`,
+      "success",
+    );
   });
 
   collabSocket.on("collab:participants", (participants) => {
@@ -16395,10 +16522,17 @@ function showSessionDetails(sid) {
       const moreButton = canManage
         ? `<button class="run-button participant-more-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><strong>MORE</strong></button>`
         : "";
+      const renameButton = canRenameParticipant(p)
+        ? `<button class="run-button participant-rename-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><i class="fa-solid fa-pen" aria-hidden="true"></i><strong>RENAME</strong></button>`
+        : "";
+      const rowActions = moreButton || renameButton
+        ? `<div class="collab-participant-row-actions">${renameButton}${moreButton}</div>`
+        : "";
       const statusParts = [
         p.currentFile || "No active file",
         p.mutedChat ? "muted" : "",
         p.frozenEditing ? "frozen" : "",
+        p.renameDisabled ? "self-rename disabled" : "",
         p.priority ? "priority" : "",
       ].filter(Boolean);
       return `<div class="collab-participant-row">
@@ -16409,7 +16543,7 @@ function showSessionDetails(sid) {
             <div class="collab-participant-meta">${escapeHtml(statusParts.join(" · "))}</div>
           </div>
         </div>
-        ${moreButton}
+        ${rowActions}
       </div>`;
     })
     .join("");
@@ -16481,6 +16615,12 @@ function showSessionDetails(sid) {
       });
     });
   }
+  modalBody.querySelectorAll(".participant-rename-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetName = btn.getAttribute("data-name") || "";
+      requestParticipantRename(targetName);
+    });
+  });
   bindCollabChatControls();
   requestCollabChatHistory();
 }
