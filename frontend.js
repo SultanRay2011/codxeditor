@@ -66,6 +66,11 @@ const previewZoomValue = document.getElementById("previewZoomValue");
 const previewZoomOutBtn = document.getElementById("previewZoomOutBtn");
 const previewZoomInBtn = document.getElementById("previewZoomInBtn");
 const previewZoomResetBtn = document.getElementById("previewZoomResetBtn");
+const previewViewportStage = document.getElementById("previewViewportStage");
+const previewDeviceShell = document.getElementById("previewDeviceShell");
+const previewDeviceFrame = document.getElementById("previewDeviceFrame");
+const previewDeviceBadge = document.getElementById("previewDeviceBadge");
+const previewBreakpointIndicator = document.getElementById("previewBreakpointIndicator");
 const errorMsgEl = document.getElementById("errorMsg");
 const zenModeBtn = document.getElementById("zenModeBtn");
 const zenExitBtn = document.getElementById("zenExitBtn");
@@ -84,6 +89,7 @@ const developerConsoleInput = document.getElementById("developerConsoleInput");
 const runDeveloperCommandBtn = document.getElementById("runDeveloperCommandBtn");
 const clearDeveloperConsoleBtn = document.getElementById("clearDeveloperConsoleBtn");
 const closeDeveloperConsoleBtn = document.getElementById("closeDeveloperConsoleBtn");
+const developerConsoleShortcutButtons = document.querySelectorAll("[data-developer-command]");
 const saveProjectBtn = document.getElementById("saveProjectBtn");
 const projectStatusSaveBtn = document.getElementById("projectStatusSaveBtn");
 const newProjectBtn = document.getElementById("newProjectBtn");
@@ -583,6 +589,20 @@ if (appDialog) {
     }
   });
 }
+const developerCommandHistory = [];
+let developerCommandHistoryIndex = 0;
+const developerCommandSuggestions = [
+  "help", "state", "diagnostics", "files", "file list", "file open ",
+  "participants", "permissions", "errors", "device list", "device responsive",
+  "device phone", "device tablet", "device laptop", "device desktop", "viewport ",
+  "rotate", "zoom reset", "zoom in", "zoom out", "preview status",
+  "preview refresh", "preview fullscreen", "preview inspect", "preview screenshot",
+  "grid toggle", "grid on", "grid off", "scheme toggle", "scheme system",
+  "scheme light", "scheme dark", "breakpoints toggle", "breakpoints on",
+  "breakpoints off", "editor goto ", "editor format",
+  "editor wrap on", "editor wrap off", "editor font ", "editor tabsize ",
+  "tools reset", "clear", "close",
+];
 if (developerConsoleModal) {
   developerConsoleModal.addEventListener("click", (e) => {
     if (e.target === developerConsoleModal) {
@@ -605,6 +625,12 @@ if (runDeveloperCommandBtn) {
     developerConsoleInput.focus();
   };
 }
+developerConsoleShortcutButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    runDeveloperCommand(button.dataset.developerCommand || "");
+    developerConsoleInput?.focus();
+  });
+});
 if (developerConsoleInput) {
   developerConsoleInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -614,6 +640,30 @@ if (developerConsoleInput) {
     if (e.key === "Escape") {
       e.preventDefault();
       closeDeveloperConsole();
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const direction = e.key === "ArrowUp" ? -1 : 1;
+      developerCommandHistoryIndex = Math.max(
+        0,
+        Math.min(developerCommandHistory.length, developerCommandHistoryIndex + direction),
+      );
+      developerConsoleInput.value = developerCommandHistory[developerCommandHistoryIndex] || "";
+      developerConsoleInput.setSelectionRange(
+        developerConsoleInput.value.length,
+        developerConsoleInput.value.length,
+      );
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const typed = developerConsoleInput.value.trimStart().toLowerCase();
+      const matches = developerCommandSuggestions.filter((item) => item.startsWith(typed));
+      if (matches.length === 1) {
+        developerConsoleInput.value = matches[0];
+        developerConsoleInput.setSelectionRange(matches[0].length, matches[0].length);
+      } else if (matches.length > 1) {
+        appendDeveloperConsoleLine(`Suggestions: ${matches.join(", ")}`);
+      }
     }
   });
 }
@@ -3171,7 +3221,7 @@ function setDeveloperChordArmed(value) {
     developerChordTimer = setTimeout(() => {
       developerChordArmed = false;
       developerChordTimer = null;
-    }, 1400);
+    }, 3000);
   }
 }
 
@@ -3180,6 +3230,11 @@ function getDeveloperStateSummary() {
     activeFile: activeFile ? activeFile.name : null,
     projectFileCount: projectFiles.length,
     previewTarget: currentPreviewTarget,
+    previewDevice: getPreviewDeviceSummary(),
+    previewZoom: previewZoomPercent,
+    previewGrid: previewGridEnabled,
+    previewBreakpoints: previewBreakpointIndicatorEnabled,
+    previewColorScheme: previewColorSchemeMode,
     autoRun: Boolean(autoRunCheckbox?.checked),
     consoleVisible: Boolean(showConsoleCheckbox?.checked),
     zenMode: Boolean(isZenMode),
@@ -3191,45 +3246,272 @@ function getDeveloperStateSummary() {
 }
 
 function runDeveloperCommand(rawCommand, echoCommand = true) {
-  const command = String(rawCommand || "").trim().toLowerCase();
+  const raw = String(rawCommand || "").trim();
+  const command = raw.toLowerCase();
   if (!command) return;
   if (echoCommand) {
-    appendDeveloperConsoleLine(`> ${command}`);
+    appendDeveloperConsoleLine(`> ${raw}`);
+    if (developerCommandHistory.at(-1) !== raw) developerCommandHistory.push(raw);
+    if (developerCommandHistory.length > 50) developerCommandHistory.shift();
+    developerCommandHistoryIndex = developerCommandHistory.length;
   }
+
+  const printJson = (value) => appendDeveloperConsoleLine(JSON.stringify(value, null, 2));
+  const printFiles = () => printJson(
+    projectFiles.map((file) => ({
+      name: file.name,
+      type: file.type,
+      active: Boolean(file.active),
+      length: String(file.content || "").length,
+    })),
+  );
+
+  if (command.startsWith("device ")) {
+    const requestedDevice = command.slice(7).trim();
+    if (requestedDevice === "list") {
+      printJson({
+        responsive: "Fluid preview pane",
+        ...Object.fromEntries(
+          Object.entries(PREVIEW_DEVICE_PRESETS).map(([key, value]) => [
+            key,
+            `${value.width}×${value.height}`,
+          ]),
+        ),
+      });
+    } else if (setPreviewDevicePreset(requestedDevice)) {
+      appendDeveloperConsoleLine(`Viewport set to ${previewDeviceBadge?.textContent || requestedDevice}.`);
+    } else {
+      appendDeveloperConsoleLine(`Unknown device: ${requestedDevice}`);
+      appendDeveloperConsoleLine("Use: device list");
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("viewport ")) {
+    if (command === "viewport prompt") {
+      promptForCustomPreviewViewport();
+      return;
+    }
+    const match = command.match(/^viewport\s+(\d+)\s*(?:x|×|\s)\s*(\d+)$/);
+    if (match && setCustomPreviewViewport(match[1], match[2])) {
+      appendDeveloperConsoleLine(`Custom viewport set to ${match[1]}×${match[2]}.`);
+    } else {
+      appendDeveloperConsoleLine("Usage: viewport <width> <height>");
+      appendDeveloperConsoleLine("Allowed range: 240–3840 by 240–2160 pixels.");
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "rotate") {
+    appendDeveloperConsoleLine(
+      rotatePreviewDevice()
+        ? `Viewport rotated to ${previewDeviceState.width}×${previewDeviceState.height}.`
+        : "Choose a device or custom viewport before rotating.",
+    );
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("zoom ")) {
+    const value = command.slice(5).trim();
+    if (value === "in") setPreviewZoom(previewZoomPercent + 25);
+    else if (value === "out") setPreviewZoom(previewZoomPercent - 25);
+    else if (value === "reset") setPreviewZoom(100);
+    else if (/^\d+%?$/.test(value)) setPreviewZoom(Number.parseInt(value, 10));
+    else {
+      appendDeveloperConsoleLine("Usage: zoom <50-200>, zoom in, zoom out, or zoom reset");
+      appendDeveloperConsoleLine("");
+      return;
+    }
+    appendDeveloperConsoleLine(`Preview zoom: ${previewZoomPercent}%`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "preview refresh") {
+    refreshPreviewPane();
+    appendDeveloperConsoleLine("Preview refreshed.");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+  if (command === "preview screenshot") {
+    appendDeveloperConsoleLine("Capturing the current preview...");
+    capturePreviewScreenshot()
+      .then((message) => {
+        appendDeveloperConsoleLine(`${message}\n`);
+        showNotification(message, "success");
+      })
+      .catch((error) => {
+        const message = String(error?.message || "The preview screenshot failed.");
+        appendDeveloperConsoleLine(`${message}\n`);
+        showNotification(message, "error");
+      });
+    return;
+  }
+  if (command === "preview fullscreen") {
+    togglePreviewFullscreen();
+    appendDeveloperConsoleLine("Fullscreen preview toggled.");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+  if (command.startsWith("preview inspect")) {
+    const mode = command.slice("preview inspect".length).trim();
+    const enabled = mode === "on" ? true : mode === "off" ? false : !isPreviewInspecting;
+    setPreviewInspecting(enabled);
+    appendDeveloperConsoleLine(`Preview inspector ${enabled ? "enabled" : "disabled"}.`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "grid toggle" || command === "grid on" || command === "grid off") {
+    const enabled = command === "grid on" ? true : command === "grid off" ? false : !previewGridEnabled;
+    setPreviewGridEnabled(enabled);
+    appendDeveloperConsoleLine(`Layout grid ${enabled ? "enabled" : "disabled"}.\n`);
+    return;
+  }
+
+  if (command === "breakpoints toggle" || command === "breakpoints on" || command === "breakpoints off") {
+    const enabled = command === "breakpoints on"
+      ? true
+      : command === "breakpoints off"
+        ? false
+        : !previewBreakpointIndicatorEnabled;
+    setPreviewBreakpointIndicatorEnabled(enabled);
+    appendDeveloperConsoleLine(`Breakpoint indicator ${enabled ? "enabled" : "disabled"}.\n`);
+    return;
+  }
+
+  if (command === "scheme toggle") {
+    appendDeveloperConsoleLine(`Preview color scheme: ${cyclePreviewColorScheme()}.\n`);
+    return;
+  }
+  if (command.startsWith("scheme ")) {
+    const mode = command.slice(7).trim();
+    if (setPreviewColorScheme(mode)) appendDeveloperConsoleLine(`Preview color scheme: ${mode}.`);
+    else appendDeveloperConsoleLine("Usage: scheme <system|light|dark>");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("file open ")) {
+    const requestedName = raw.slice("file open ".length).trim();
+    const file = projectFiles.find(
+      (item) => String(item.name || "").toLowerCase() === requestedName.toLowerCase(),
+    );
+    if (!file) appendDeveloperConsoleLine(`File not found: ${requestedName}`);
+    else {
+      switchFile(file.name);
+      appendDeveloperConsoleLine(`Opened ${file.name}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("editor goto ")) {
+    const match = command.match(/^editor goto\s+(\d+)(?:\s+(\d+))?$/);
+    if (!match || !activeFile) appendDeveloperConsoleLine("Usage: editor goto <line> [column]");
+    else {
+      jumpToEditorLocation(activeFile.name, Number(match[1]), Number(match[2] || 1));
+      appendDeveloperConsoleLine(`Moved to line ${match[1]}, column ${match[2] || 1}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "editor wrap on" || command === "editor wrap off") {
+    const enabled = command.endsWith("on");
+    editorTextarea.wrap = enabled ? "soft" : "off";
+    editorTextarea.style.whiteSpace = enabled ? "pre-wrap" : "pre";
+    syncSyntaxLayerStyle(editorTextarea);
+    renderSyntaxHighlight(editorTextarea);
+    appendDeveloperConsoleLine(`Editor line wrapping ${enabled ? "enabled" : "disabled"}.`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("editor font ")) {
+    const size = Number(command.slice("editor font ".length).trim());
+    if (!Number.isFinite(size) || size < 10 || size > 32) {
+      appendDeveloperConsoleLine("Usage: editor font <10-32>");
+    } else {
+      editorTextSizeInput.value = String(size);
+      textSizeValue.textContent = `${size}px`;
+      applySettingsToEditors();
+      appendDeveloperConsoleLine(`Editor font size set to ${size}px.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("editor tabsize ")) {
+    const size = Number(command.slice("editor tabsize ".length).trim());
+    if (![2, 4, 8].includes(size)) appendDeveloperConsoleLine("Usage: editor tabsize <2|4|8>");
+    else {
+      editorTextarea.style.tabSize = String(size);
+      syncSyntaxLayerStyle(editorTextarea);
+      appendDeveloperConsoleLine(`Editor tab display size set to ${size}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "editor format") {
+    const result = formatActiveEditorCode();
+    appendDeveloperConsoleLine(`${result.message}\n`);
+    showNotification(result.message, result.ok ? "success" : "error");
+    return;
+  }
+
+  if (command === "tools reset") {
+    resetDeveloperToolControls();
+    appendDeveloperConsoleLine("Developer Tool controls reset to their normal editor defaults.\n");
+    showNotification("Developer Tool controls reset.", "success");
+    return;
+  }
+
   switch (command) {
     case "help":
-      appendDeveloperConsoleLine("Commands:");
-      appendDeveloperConsoleLine("help");
-      appendDeveloperConsoleLine("state");
-      appendDeveloperConsoleLine("files");
-      appendDeveloperConsoleLine("participants");
-      appendDeveloperConsoleLine("permissions");
-      appendDeveloperConsoleLine("errors");
-      appendDeveloperConsoleLine("preview");
-      appendDeveloperConsoleLine("clear");
-      appendDeveloperConsoleLine("close");
+      appendDeveloperConsoleLine("Preview controls:");
+      appendDeveloperConsoleLine("  device list | responsive | phone | tablet | laptop | desktop");
+      appendDeveloperConsoleLine("  viewport <width> <height>   rotate   zoom <50-200|in|out|reset>");
+      appendDeveloperConsoleLine("  preview status | refresh | fullscreen | inspect [on|off] | screenshot");
+      appendDeveloperConsoleLine("  grid <on|off|toggle>   breakpoints <on|off|toggle>");
+      appendDeveloperConsoleLine("  scheme <system|light|dark|toggle>");
+      appendDeveloperConsoleLine("Editor controls:");
+      appendDeveloperConsoleLine("  file list   file open <name>   editor goto <line> [column]");
+      appendDeveloperConsoleLine("  editor format   editor wrap <on|off>   editor font <10-32>");
+      appendDeveloperConsoleLine("  editor tabsize <2|4|8>   tools reset");
+      appendDeveloperConsoleLine("Diagnostics:");
+      appendDeveloperConsoleLine("  state   diagnostics   participants   permissions   errors");
+      appendDeveloperConsoleLine("Console: clear   close");
       break;
     case "state":
-      appendDeveloperConsoleLine(JSON.stringify(getDeveloperStateSummary(), null, 2));
+      printJson(getDeveloperStateSummary());
       break;
+    case "diagnostics": {
+      const content = String(activeFile?.content || "");
+      printJson({
+        ...getDeveloperStateSummary(),
+        activeFileLines: content ? content.split("\n").length : 0,
+        activeFileCharacters: content.length,
+        editorSelection: {
+          start: editorTextarea.selectionStart,
+          end: editorTextarea.selectionEnd,
+        },
+        previewInspecting: isPreviewInspecting,
+        browserOnline: navigator.onLine,
+      });
+      break;
+    }
     case "files":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          projectFiles.map((file) => ({
-            name: file.name,
-            type: file.type,
-            active: Boolean(file.active),
-            length: String(file.content || "").length,
-          })),
-          null,
-          2,
-        ),
-      );
+    case "file list":
+      printFiles();
       break;
     case "participants":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          collabParticipants.map((participant) => ({
+      printJson(
+        collabParticipants.map((participant) => ({
             name: participant.name,
             role: participant.role || "participant",
             currentFile: participant.currentFile || null,
@@ -3237,37 +3519,26 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
             frozenEditing: Boolean(participant.frozenEditing),
             priority: Boolean(participant.priority),
           })),
-          null,
-          2,
-        ),
       );
       break;
     case "permissions":
-      appendDeveloperConsoleLine(JSON.stringify(collabPermissions, null, 2));
+      printJson(collabPermissions);
       break;
     case "errors":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          {
+      printJson({
             counts: fileErrorCounts,
             locations: fileErrorLocations,
-          },
-          null,
-          2,
-        ),
-      );
+          });
       break;
     case "preview":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          {
+    case "preview status":
+      printJson({
             target: currentPreviewTarget,
             title: previewTitleEl ? previewTitleEl.textContent : "",
-          },
-          null,
-          2,
-        ),
-      );
+            device: getPreviewDeviceSummary(),
+            zoom: previewZoomPercent,
+            inspecting: isPreviewInspecting,
+          });
       break;
     case "clear":
       clearDeveloperConsoleOutput();
@@ -3369,6 +3640,132 @@ function showAppPrompt(title, message, inputValue = "", inputPlaceholder = "") {
     inputPlaceholder,
     okText: "OK",
     cancelText: "CANCEL",
+  });
+}
+
+function showUnsavedProjectOpenDialog(projectName) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED PROJECT";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <span>
+            <strong>Save your current project before opening another one?</strong>
+            <small>Opening <b>${escapeHtml(projectName || "this saved project")}</b> will replace the project currently in the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedProjectSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; OPEN</strong></button>
+        <button type="button" id="unsavedProjectDiscardBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-trash-can"></i><strong>DISCARD &amp; OPEN</strong></button>
+        <button type="button" id="unsavedProjectCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedProjectSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedProjectDiscardBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "discard" });
+    });
+    document.getElementById("unsavedProjectCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedProjectSaveBtn")?.focus(), 0);
+  });
+}
+
+function showUnsavedNewFileDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED CHANGES";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-file-circle-plus"></i></span>
+          <span>
+            <strong>Save the current project before creating a new file?</strong>
+            <small>You can save first, continue without saving, or cancel and return to the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedFileSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; CREATE</strong></button>
+        <button type="button" id="unsavedFileContinueBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-file-circle-plus"></i><strong>CREATE WITHOUT SAVING</strong></button>
+        <button type="button" id="unsavedFileCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedFileSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedFileContinueBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "continue" });
+    });
+    document.getElementById("unsavedFileCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedFileSaveBtn")?.focus(), 0);
+  });
+}
+
+function showUnsavedNewProjectDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED PROJECT";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <span>
+            <strong>Save the current project before starting a new one?</strong>
+            <small>Starting a new project will replace all current files in the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedProjectNewSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; START NEW</strong></button>
+        <button type="button" id="unsavedProjectNewDiscardBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-trash-can"></i><strong>DISCARD &amp; START NEW</strong></button>
+        <button type="button" id="unsavedProjectNewCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedProjectNewSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedProjectNewDiscardBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "discard" });
+    });
+    document.getElementById("unsavedProjectNewCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedProjectNewSaveBtn")?.focus(), 0);
   });
 }
 
@@ -4098,6 +4495,21 @@ let currentPreviewTarget = {
   mode: "html",
   fileName: "index.html",
 };
+const PREVIEW_DEVICE_PRESETS = Object.freeze({
+  phone: { label: "Phone", width: 390, height: 844 },
+  tablet: { label: "Tablet", width: 768, height: 1024 },
+  laptop: { label: "Laptop", width: 1440, height: 900 },
+  desktop: { label: "Desktop", width: 1920, height: 1080 },
+});
+let previewDeviceState = {
+  key: "responsive",
+  label: "Responsive",
+  width: null,
+  height: null,
+};
+let previewGridEnabled = false;
+let previewBreakpointIndicatorEnabled = false;
+let previewColorSchemeMode = "system";
 let isPreviewInspecting = false;
 let previewZoomPercent = 100;
 let previewZoomLastFocusedElement = null;
@@ -4108,6 +4520,432 @@ let roomIndicatorInterval = null;
 let isPointerInsideEditor = false;
 let lastPointerClientX = null;
 let lastPointerClientY = null;
+
+function getPreviewDeviceSummary() {
+  return {
+    mode: previewDeviceState.key,
+    label: previewDeviceState.label,
+    width: previewDeviceState.width,
+    height: previewDeviceState.height,
+    orientation:
+      previewDeviceState.width && previewDeviceState.height
+        ? previewDeviceState.width >= previewDeviceState.height
+          ? "landscape"
+          : "portrait"
+        : "fluid",
+  };
+}
+
+function updatePreviewDeviceScale() {
+  if (!previewViewportStage || !previewDeviceShell || !previewDeviceFrame) return;
+  const { width, height } = previewDeviceState;
+  if (!width || !height) {
+    previewViewportStage.classList.add("is-responsive");
+    previewDeviceShell.style.removeProperty("width");
+    previewDeviceShell.style.removeProperty("height");
+    previewDeviceFrame.style.removeProperty("width");
+    previewDeviceFrame.style.removeProperty("height");
+    previewDeviceFrame.style.removeProperty("transform");
+    updatePreviewBreakpointIndicator();
+    return;
+  }
+
+  previewViewportStage.classList.remove("is-responsive");
+  const availableWidth = Math.max(1, previewViewportStage.clientWidth - 36);
+  const availableHeight = Math.max(1, previewViewportStage.clientHeight - 36);
+  const scale = Math.max(0.08, Math.min(1, availableWidth / width, availableHeight / height));
+  previewDeviceShell.style.width = `${Math.round(width * scale)}px`;
+  previewDeviceShell.style.height = `${Math.round(height * scale)}px`;
+  previewDeviceFrame.style.width = `${width}px`;
+  previewDeviceFrame.style.height = `${height}px`;
+  previewDeviceFrame.style.transform = `scale(${scale})`;
+  updatePreviewBreakpointIndicator();
+}
+
+function applyPreviewDeviceState() {
+  updatePreviewDeviceScale();
+  const { label, width, height } = previewDeviceState;
+  const detail = width && height ? `${label} · ${width}×${height}` : label;
+  if (previewDeviceBadge) {
+    previewDeviceBadge.textContent = detail;
+    previewDeviceBadge.title = `Preview viewport: ${detail}`;
+  }
+  try {
+    iframe.contentWindow?.dispatchEvent(new Event("resize"));
+  } catch (_err) {
+    // The browser will still resize the iframe viewport.
+  }
+}
+
+function setPreviewDevicePreset(name) {
+  const key = String(name || "").toLowerCase();
+  if (key === "responsive") {
+    previewDeviceState = { key, label: "Responsive", width: null, height: null };
+    applyPreviewDeviceState();
+    return true;
+  }
+  const preset = PREVIEW_DEVICE_PRESETS[key];
+  if (!preset) return false;
+  previewDeviceState = { key, ...preset };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function setCustomPreviewViewport(width, height) {
+  const safeWidth = Math.round(Number(width));
+  const safeHeight = Math.round(Number(height));
+  if (
+    !Number.isFinite(safeWidth) ||
+    !Number.isFinite(safeHeight) ||
+    safeWidth < 240 ||
+    safeWidth > 3840 ||
+    safeHeight < 240 ||
+    safeHeight > 2160
+  ) {
+    return false;
+  }
+  previewDeviceState = {
+    key: "custom",
+    label: "Custom",
+    width: safeWidth,
+    height: safeHeight,
+  };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function rotatePreviewDevice() {
+  if (!previewDeviceState.width || !previewDeviceState.height) return false;
+  previewDeviceState = {
+    ...previewDeviceState,
+    width: previewDeviceState.height,
+    height: previewDeviceState.width,
+  };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function setDeveloperShortcutPressed(command, pressed) {
+  const button = Array.from(developerConsoleShortcutButtons).find(
+    (item) => item.dataset.developerCommand === command,
+  );
+  button?.setAttribute("aria-pressed", pressed ? "true" : "false");
+}
+
+function setPreviewGridEnabled(enabled) {
+  previewGridEnabled = Boolean(enabled);
+  previewDeviceFrame?.classList.toggle("show-layout-grid", previewGridEnabled);
+  setDeveloperShortcutPressed("grid toggle", previewGridEnabled);
+}
+
+function getPreviewBreakpoint(width) {
+  if (width < 480) return "Phone";
+  if (width < 768) return "Small tablet";
+  if (width < 1024) return "Tablet";
+  if (width < 1440) return "Laptop";
+  return "Wide desktop";
+}
+
+function updatePreviewBreakpointIndicator() {
+  if (!previewBreakpointIndicator) return;
+  const width = Math.round(previewDeviceState.width || iframe.clientWidth || 0);
+  previewBreakpointIndicator.hidden = !previewBreakpointIndicatorEnabled;
+  if (previewBreakpointIndicatorEnabled) {
+    previewBreakpointIndicator.textContent = `${getPreviewBreakpoint(width)} breakpoint · ${width}px`;
+  }
+}
+
+function setPreviewBreakpointIndicatorEnabled(enabled) {
+  previewBreakpointIndicatorEnabled = Boolean(enabled);
+  setDeveloperShortcutPressed("breakpoints toggle", previewBreakpointIndicatorEnabled);
+  updatePreviewBreakpointIndicator();
+}
+
+function collectPreferredColorSchemeRules(ruleList, mode, output) {
+  Array.from(ruleList || []).forEach((rule) => {
+    const condition = String(rule.conditionText || "").toLowerCase();
+    if (condition.includes("prefers-color-scheme")) {
+      if (condition.includes(`prefers-color-scheme: ${mode}`) || condition.includes(`prefers-color-scheme:${mode}`)) {
+        Array.from(rule.cssRules || []).forEach((nestedRule) => output.push(nestedRule.cssText));
+      }
+      return;
+    }
+    if (rule.cssRules) collectPreferredColorSchemeRules(rule.cssRules, mode, output);
+  });
+}
+
+function applyPreviewColorSchemeSimulation() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    return;
+  }
+  if (!previewDoc?.documentElement) return;
+  previewDoc.getElementById("__codx-color-scheme-simulation")?.remove();
+  if (previewColorSchemeMode === "system") return;
+
+  const overrideRules = [];
+  Array.from(previewDoc.styleSheets || []).forEach((sheet) => {
+    if (sheet.ownerNode?.id === "__codx-color-scheme-simulation") return;
+    try {
+      collectPreferredColorSchemeRules(sheet.cssRules, previewColorSchemeMode, overrideRules);
+    } catch (_err) {
+      // Cross-origin stylesheets cannot be inspected, but color-scheme still applies.
+    }
+  });
+  const style = previewDoc.createElement("style");
+  style.id = "__codx-color-scheme-simulation";
+  style.textContent = `:root { color-scheme: ${previewColorSchemeMode} !important; }\n${overrideRules.join("\n")}`;
+  (previewDoc.head || previewDoc.documentElement).appendChild(style);
+}
+
+function setPreviewColorScheme(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  if (!["system", "light", "dark"].includes(normalized)) return false;
+  previewColorSchemeMode = normalized;
+  applyPreviewColorSchemeSimulation();
+  const button = Array.from(developerConsoleShortcutButtons).find(
+    (item) => item.dataset.developerCommand === "scheme toggle",
+  );
+  if (button) {
+    button.setAttribute("aria-pressed", normalized === "system" ? "false" : "true");
+    button.title = `Preview color scheme: ${normalized}`;
+  }
+  return true;
+}
+
+function cyclePreviewColorScheme() {
+  const next = previewColorSchemeMode === "system"
+    ? "light"
+    : previewColorSchemeMode === "light"
+      ? "dark"
+      : "system";
+  setPreviewColorScheme(next);
+  return next;
+}
+
+async function promptForCustomPreviewViewport() {
+  const previousZIndex = appDialog?.style.zIndex || "";
+  if (appDialog) appDialog.style.zIndex = "1300";
+  try {
+    const currentSize = previewDeviceState.width && previewDeviceState.height
+      ? `${previewDeviceState.width} x ${previewDeviceState.height}`
+      : "390 x 844";
+    const result = await showAppPrompt(
+      "CUSTOM PREVIEW SIZE",
+      "Enter width and height in pixels, for example 390 x 844.",
+      currentSize,
+      "390 x 844",
+    );
+    if (!result?.ok) {
+      appendDeveloperConsoleLine("Custom viewport cancelled.\n");
+      return;
+    }
+    const match = String(result.value || "").match(/^(\d+)\s*(?:x|×|\s)\s*(\d+)$/i);
+    if (!match || !setCustomPreviewViewport(match[1], match[2])) {
+      appendDeveloperConsoleLine("Invalid size. Use 240-3840 x 240-2160 pixels.\n");
+      showNotification("Enter a valid preview width and height.", "error");
+      return;
+    }
+    appendDeveloperConsoleLine(`Custom viewport set to ${match[1]} x ${match[2]}.\n`);
+  } finally {
+    if (appDialog) appDialog.style.zIndex = previousZIndex;
+    developerConsoleInput?.focus();
+  }
+}
+
+function downloadDeveloperToolBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function capturePreviewScreenshot() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    throw new Error("The preview cannot be captured because it is cross-origin.");
+  }
+  if (!previewDoc?.documentElement) throw new Error("The preview is not ready yet.");
+
+  const width = Math.max(1, Math.round(previewDeviceState.width || iframe.clientWidth));
+  const height = Math.max(1, Math.round(previewDeviceState.height || iframe.clientHeight));
+  const clone = previewDoc.documentElement.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  const base = previewDoc.createElement("base");
+  base.href = previewDoc.baseURI;
+  clone.querySelector("head")?.prepend(base);
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const image = new Image();
+
+  try {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("The browser could not render the preview capture."));
+      image.src = svgUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = getComputedStyle(iframe).backgroundColor || "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    const pngBlob = await new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG creation failed.")), "image/png");
+      } catch (error) {
+        reject(error);
+      }
+    });
+    downloadDeveloperToolBlob(pngBlob, `codx-preview-${width}x${height}.png`);
+    return `Screenshot saved at ${width} x ${height}.`;
+  } catch (_error) {
+    downloadDeveloperToolBlob(svgBlob, `codx-preview-${width}x${height}.svg`);
+    return `SVG screenshot saved at ${width} x ${height}; PNG export was blocked by a preview resource.`;
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function countStructuralBraces(line, state) {
+  let delta = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (state.mode === "block-comment") {
+      if (char === "*" && next === "/") {
+        state.mode = "normal";
+        index += 1;
+      }
+      continue;
+    }
+    if (state.mode !== "normal") {
+      if (char === "\\") index += 1;
+      else if (char === state.mode) state.mode = "normal";
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      state.mode = "block-comment";
+      index += 1;
+    } else if (char === "/" && next === "/") {
+      break;
+    } else if (char === "'" || char === '"' || char === "`") {
+      state.mode = char;
+    } else if (char === "{") delta += 1;
+    else if (char === "}") delta -= 1;
+  }
+  return delta;
+}
+
+function formatBraceCode(content) {
+  const state = { mode: "normal" };
+  let depth = 0;
+  return content.split("\n").map((line) => {
+    const startsInsideString = state.mode !== "normal" && state.mode !== "block-comment";
+    if (startsInsideString) {
+      depth = Math.max(0, depth + countStructuralBraces(line, state));
+      return line;
+    }
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    const leadingClose = trimmed.startsWith("}") ? 1 : 0;
+    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    depth = Math.max(0, depth + countStructuralBraces(trimmed, state));
+    return formatted;
+  }).join("\n");
+}
+
+function formatHtmlCode(content) {
+  if (/<(pre|textarea|script|style)\b[^>]*>[\s\S]*\n[\s\S]*<\/\1>/i.test(content)) return null;
+  const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+  let depth = 0;
+  return content.split("\n").map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    const leadingClose = /^<\//.test(trimmed) ? 1 : 0;
+    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    let delta = 0;
+    for (const match of trimmed.matchAll(/<\/?([a-z][\w:-]*)\b[^>]*>/gi)) {
+      const tag = match[1].toLowerCase();
+      const token = match[0];
+      if (token.startsWith("</")) delta -= 1;
+      else if (!token.endsWith("/>") && !voidTags.has(tag)) delta += 1;
+    }
+    depth = Math.max(0, depth + delta);
+    return formatted;
+  }).join("\n");
+}
+
+function formatActiveEditorCode() {
+  if (!activeFile || !editorTextarea) return { ok: false, message: "There is no active file to format." };
+  if (editorTextarea.readOnly || !canCurrentUserEditFile(activeFile.name)) {
+    return { ok: false, message: "You do not currently have permission to edit this file." };
+  }
+  const original = editorTextarea.value;
+  const type = String(activeFile.type || getFileType(activeFile.name) || "").toLowerCase();
+  let formatted;
+  try {
+    if (type === "json") formatted = JSON.stringify(JSON.parse(original), null, 4);
+    else if (["jsonc", "js", "mjs", "cjs", "jsx", "ts", "tsx", "css", "scss", "less"].includes(type)) {
+      formatted = formatBraceCode(original);
+    } else if (["html", "htm", "xml", "svg"].includes(type)) {
+      formatted = formatHtmlCode(original);
+      if (formatted === null) {
+        return { ok: false, message: "Formatting was skipped to protect whitespace inside a multiline script, style, or preformatted block." };
+      }
+    } else return { ok: false, message: `Formatting is not available for .${type || "text"} files.` };
+  } catch (error) {
+    return { ok: false, message: `Formatting failed: ${error.message}` };
+  }
+  if (formatted === original) return { ok: true, message: `${activeFile.name} is already formatted.` };
+  const selectionStart = editorTextarea.selectionStart;
+  const selectionEnd = editorTextarea.selectionEnd;
+  beginEditorHistoryCapture(editorTextarea);
+  editorTextarea.value = formatted;
+  editorTextarea.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    inputType: "insertReplacementText",
+    data: null,
+  }));
+  editorTextarea.setSelectionRange(
+    Math.min(selectionStart, formatted.length),
+    Math.min(selectionEnd, formatted.length),
+  );
+  return { ok: true, message: `${activeFile.name} formatted. Use Undo to restore the previous version.` };
+}
+
+function resetDeveloperToolControls() {
+  setPreviewDevicePreset("responsive");
+  setPreviewZoom(100);
+  setPreviewInspecting(false);
+  setPreviewGridEnabled(false);
+  setPreviewBreakpointIndicatorEnabled(false);
+  setPreviewColorScheme("system");
+  editorTextarea.wrap = "off";
+  editorTextarea.style.whiteSpace = "pre";
+  editorTextarea.style.removeProperty("tab-size");
+  loadSettings();
+  syncSyntaxLayerStyle(editorTextarea);
+  renderSyntaxHighlight(editorTextarea);
+}
+
+if (previewViewportStage && typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(() => updatePreviewDeviceScale()).observe(previewViewportStage);
+} else {
+  window.addEventListener("resize", updatePreviewDeviceScale);
+}
+requestAnimationFrame(applyPreviewDeviceState);
 
 function getPreviewTargetForFile(rawHref) {
   const normalizedHref = String(rawHref || "").trim().replace(/^\.\/+/, "");
@@ -4531,6 +5369,8 @@ iframe.addEventListener("load", () => {
   bindPreviewNavigationHandlers();
   bindPreviewInspector();
   applyPreviewZoom();
+  applyPreviewColorSchemeSimulation();
+  updatePreviewBreakpointIndicator();
 });
 let activeFile = projectFiles[0];
 
@@ -4955,8 +5795,59 @@ function getSuggestedProjectName() {
   return baseName || "codx-project";
 }
 
+async function saveCurrentProjectBeforeOpeningAnother() {
+  if (activeSessionId && isGroupFeatureRestrictedUser()) {
+    const me = getMyParticipant();
+    const personalDisabledFeatures = new Set(
+      Array.isArray(me?.disabledFeatures) ? me.disabledFeatures : [],
+    );
+    if (
+      collabPermissions.disableSaveProject ||
+      personalDisabledFeatures.has("saveProject")
+    ) {
+      showNotification("The host disabled saving projects for participants.", "error");
+      return false;
+    }
+  }
+
+  if (activeSavedProjectName) {
+    return saveCurrentProjectToLibrary(activeSavedProjectName);
+  }
+  const saveDialog = await showAppPrompt(
+    "SAVE PROJECT",
+    "Choose a name for this saved project:",
+    getSuggestedProjectName(),
+    "codx-project",
+  );
+  if (!saveDialog?.ok) return false;
+  return saveCurrentProjectToLibrary(saveDialog.value);
+}
+
+async function openSavedProjectFromLibrary(projectId) {
+  let project = getSavedProjects().find((entry) => entry.id === projectId);
+  if (!project?.snapshot) return;
+
+  if (hasUnsavedChanges) {
+    const decision = await showUnsavedProjectOpenDialog(project.name);
+    if (!decision?.ok) return;
+    if (decision.action === "save") {
+      const saved = await saveCurrentProjectBeforeOpeningAnother();
+      if (!saved) return;
+      project = getSavedProjects().find((entry) => entry.id === projectId) || project;
+    } else if (decision.action !== "discard") {
+      return;
+    }
+  }
+
+  if (!applyProjectState(project.snapshot, "saved project")) return;
+  activeSavedProjectName = project.name;
+  closeProjectLibrary();
+  updateProjectStatusUI();
+}
+
 async function startFreshProject() {
   applyProjectState(getFreshProjectState(), "new project");
+  activeSavedProjectName = null;
   document.title = "CodX Editor";
   clearConsole();
   showNotification("Started a fresh HTML starter project.", "success");
@@ -4971,22 +5862,14 @@ async function handleNewProject() {
     await startFreshProject();
     return;
   }
-  const confirmSave = await showAppConfirm(
-    "SAVE CURRENT PROJECT",
-    "You have unsaved changes. Save this project before starting a new one?",
-    "SAVE PROJECT",
-    "CANCEL",
-  );
-  if (!confirmSave?.ok) return;
-  const saveDialog = await showAppPrompt(
-    "SAVE PROJECT",
-    "Choose a name for this saved project:",
-    getSuggestedProjectName(),
-    "codx-project",
-  );
-  if (!saveDialog?.ok) return;
-  const saved = saveCurrentProjectToLibrary(saveDialog.value);
-  if (!saved) return;
+  const decision = await showUnsavedNewProjectDialog();
+  if (!decision?.ok) return;
+  if (decision.action === "save") {
+    const saved = await saveCurrentProjectBeforeOpeningAnother();
+    if (!saved) return;
+  } else if (decision.action !== "discard") {
+    return;
+  }
   await startFreshProject();
 }
 
@@ -5170,14 +6053,7 @@ function renderProjectLibrary(mode = "saved") {
   if (templateTabBtn) templateTabBtn.onclick = () => renderProjectLibrary("templates");
 
   document.querySelectorAll(".open-saved-project-btn").forEach((btn) => {
-    btn.onclick = () => {
-      const project = savedProjects.find((entry) => entry.id === btn.dataset.projectId);
-      if (!project?.snapshot) return;
-      applyProjectState(project.snapshot, "saved project");
-      activeSavedProjectName = project.name;
-      closeProjectLibrary();
-      updateProjectStatusUI();
-    };
+    btn.onclick = () => openSavedProjectFromLibrary(btn.dataset.projectId);
   });
 
   document.querySelectorAll(".delete-saved-project-btn").forEach((btn) => {
@@ -5188,7 +6064,7 @@ function renderProjectLibrary(mode = "saved") {
     btn.onclick = () => {
       const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
       if (!template) return;
-      applyProjectState(
+      const applied = applyProjectState(
         {
           files: template.files,
           activeFileName: template.files[0]?.name || "",
@@ -5196,6 +6072,8 @@ function renderProjectLibrary(mode = "saved") {
         },
         "template",
       );
+      if (!applied) return;
+      activeSavedProjectName = null;
       closeProjectLibrary();
       showNotification(`Template "${template.name}" loaded.`, "success");
     };
@@ -5622,12 +6500,34 @@ async function createNewFile() {
   const cursorPos = getHtmlStarterCursorPosition(newFile.content);
   editor.focus();
   editor.setSelectionRange(cursorPos, cursorPos);
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
   renderFileList();
   scheduleProjectAutosave();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
   document.title = "CodX Editor";
   showNotification(`File ${trimmedName} created`, "success");
+}
+
+async function handleCreateNewFileRequest() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableNewFile) {
+    showNotification("The host disabled creating new files for participants.", "error");
+    return;
+  }
+  if (!hasUnsavedChanges) {
+    await createNewFile();
+    return;
+  }
+  const decision = await showUnsavedNewFileDialog();
+  if (!decision?.ok) return;
+  if (decision.action === "save") {
+    const saved = await saveCurrentProjectBeforeOpeningAnother();
+    if (!saved) return;
+  } else if (decision.action !== "continue") {
+    return;
+  }
+  await createNewFile();
 }
 
 async function renameFile(oldName) {
@@ -12001,6 +12901,22 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
+  // Keep the hidden developer chord available wherever focus currently sits.
+  // The copy action remains untouched; only the second Ctrl/Cmd + X is captured.
+  if (mod && key === "c" && !e.shiftKey && !e.altKey) {
+    setDeveloperChordArmed(true);
+  } else if (developerChordArmed && mod && key === "x" && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    setDeveloperChordArmed(false);
+    openDeveloperConsole();
+    return;
+  } else if (
+    developerChordArmed &&
+    !["control", "meta", "shift", "alt"].includes(key)
+  ) {
+    setDeveloperChordArmed(false);
+  }
+
   // Prevent shortcuts from firing while suggestion box is open
   if (suggestionPopup.style.display === "block") {
     if (
@@ -12013,15 +12929,6 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (isTypingIntoFormControl) {
-    return;
-  }
-
-  if (mod && key === "c") {
-    setDeveloperChordArmed(true);
-  } else if (developerChordArmed && mod && key === "x") {
-    e.preventDefault();
-    setDeveloperChordArmed(false);
-    openDeveloperConsole();
     return;
   }
 
@@ -12041,7 +12948,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (mod && key === "q") {
     e.preventDefault();
-    createNewFile();
+    handleCreateNewFileRequest();
   }
   if (mod && e.shiftKey && key === "c") {
     e.preventDefault();
@@ -12060,12 +12967,6 @@ document.addEventListener("visibilitychange", () => {
   pruneRemoteCursors();
   applyRoomIndicators();
   resumeCollabSession();
-});
-
-document.addEventListener("keyup", (e) => {
-  if (e.key === "Control" || e.key === "Meta") {
-    setDeveloperChordArmed(false);
-  }
 });
 
 document.addEventListener("mousedown", (e) => {
@@ -17319,7 +18220,7 @@ window.addEventListener("beforeunload", function (e) {
   }
 });
 
-newFileBtn.addEventListener("click", createNewFile);
+newFileBtn.addEventListener("click", handleCreateNewFileRequest);
 if (collabFileVisibilityBtn) {
   collabFileVisibilityBtn.addEventListener("click", () => {
     if (!activeSessionId || !canUseCoHostTools() || !activeFile) return;

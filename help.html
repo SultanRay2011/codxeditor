@@ -738,6 +738,7 @@
                 <h3><i class="fa-solid fa-folder-tree"></i> File Explorer</h3>
                 <ul>
                   <li>Create project files for markup, styling, scripts, and environment-style notes.</li>
+                  <li>If the project has unsaved changes, New File offers Save &amp; Create, Create Without Saving, and Cancel.</li>
                   <li>Switch between files from the explorer.</li>
                   <li>Rename or delete files when your project structure changes.</li>
                   <li>Duplicate file names are blocked where the editor needs unique names.</li>
@@ -751,6 +752,8 @@
                 <ul>
                   <li>Save projects inside your browser with a custom project name.</li>
                   <li>Open saved projects from the project library.</li>
+                  <li>If the current project has unsaved changes, opening another saved project shows Save &amp; Open, Discard &amp; Open, and Cancel choices.</li>
+                  <li>The New project control shows Save &amp; Start New, Discard &amp; Start New, and Cancel when the current project is unsaved.</li>
                   <li>Autosave keeps a draft while you work and can restore it after a reload.</li>
                   <li>The project status badge tells you whether the current work is saved or unsaved.</li>
                 </ul>
@@ -1131,9 +1134,17 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
                 <ul>
-                  <li>Use the hidden inspection panel for quick internal checks while testing the editor.</li>
-                  <li>It can inspect state, files, participants, permissions, errors, preview information, and clear its output.</li>
-                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd>.</li>
+                  <li>Use Developer Tools as a power-control panel for the preview and code editor.</li>
+                  <li>Emulate a phone, tablet, laptop, or desktop viewport; switch back to a fluid responsive pane; set a custom size with <code>viewport &lt;width&gt; &lt;height&gt;</code>; or use <code>rotate</code> to change orientation.</li>
+                  <li>Control preview zoom, refresh, fullscreen, and element inspection from commands or the device shortcut buttons.</li>
+                  <li>Use Custom Size for an exact viewport, save a preview Screenshot, or toggle an 8-pixel Grid Overlay while checking alignment.</li>
+                  <li>Color Scheme cycles through system, light, and dark simulation. Breakpoints displays the current viewport category and exact CSS width.</li>
+                  <li>Open a project file, jump to a line and column, toggle editor wrapping, or temporarily change the editor font and tab display size.</li>
+                  <li>Format Code safely reindents supported files and remains undoable. It skips whitespace-sensitive HTML blocks instead of risking their content.</li>
+                  <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, wrapping, font, and tab display to normal defaults.</li>
+                  <li>Use <code>state</code> or <code>diagnostics</code> to inspect preview, editor, project, error, connection, and collaboration details without changing project code.</li>
+                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
+                  <li>Type <code>help</code> for the complete command list, use <kbd>↑</kbd>/<kbd>↓</kbd> for command history, and press <kbd>Tab</kbd> to complete a command.</li>
                 </ul>
               </article>
               <article class="feature-item">
