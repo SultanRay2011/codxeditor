@@ -2317,6 +2317,9 @@ let collabUnreadPrivateMessages = {};
 let remoteCursorState = {};
 let remoteTypingState = {};
 let lastCursorEmitAt = 0;
+let lastSessionSyncAt = 0;
+let collabRevisionCacheContent = null;
+let collabRevisionCacheValue = "";
 let fileErrorCounts = {};
 let fileErrorLocations = {};
 let collabOfflineNoticeLastAt = 0;
@@ -3030,9 +3033,15 @@ button:hover {
 ];
 
 function resetTransientCollabUiState() {
+  clearTimeout(sessionSyncTimeout);
+  sessionSyncTimeout = null;
+  lastSessionSyncAt = 0;
   currentTypingIndicator = null;
   remoteCursorState = {};
   remoteTypingState = {};
+  const editor = document.getElementById("activeEditor");
+  editor?.classList.remove("collab-live-typing-caret");
+  editor?.style.removeProperty("--local-collab-caret-color");
   resetCollabUnreadMessages();
   hideLocalCollabCursor();
   followedParticipantName = "";
@@ -5368,9 +5377,20 @@ function debouncedUpdatePreview() {
 
 function scheduleSessionUpdate() {
   clearTimeout(sessionSyncTimeout);
-  sessionSyncTimeout = setTimeout(() => {
+  const syncInterval = 72;
+  const now = performance.now();
+  const elapsed = now - lastSessionSyncAt;
+  if (elapsed >= syncInterval) {
+    sessionSyncTimeout = null;
+    lastSessionSyncAt = now;
     emitSessionUpdate();
-  }, 120);
+    return;
+  }
+  sessionSyncTimeout = setTimeout(() => {
+    sessionSyncTimeout = null;
+    lastSessionSyncAt = performance.now();
+    emitSessionUpdate();
+  }, syncInterval - elapsed);
 }
 
 function renderFileList() {
@@ -15515,10 +15535,30 @@ function emitSessionUpdate() {
   });
 }
 
+function getCollabDocumentRevision(content) {
+  const value = String(content || "");
+  if (value === collabRevisionCacheContent) return collabRevisionCacheValue;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  collabRevisionCacheContent = value;
+  collabRevisionCacheValue = `${value.length.toString(36)}-${(hash >>> 0).toString(36)}`;
+  return collabRevisionCacheValue;
+}
+
 function announceTyping(activeEditorId) {
   if (!collabSocket || !activeSessionId || !myInfo.name) return;
   clearTimeout(typingTimer);
   const editor = document.getElementById("activeEditor");
+  const localCaretColor = /^#[0-9a-f]{6}$/i.test(String(myInfo.theme || ""))
+    ? myInfo.theme
+    : "var(--accent-color)";
+  if (editor) {
+    editor.style.setProperty("--local-collab-caret-color", localCaretColor);
+    editor.classList.add("collab-live-typing-caret");
+  }
   collabSocket.emit("collab:typing", {
     sessionId: activeSessionId,
     indicator: {
@@ -15527,10 +15567,12 @@ function announceTyping(activeEditorId) {
       editor: activeEditorId,
       fileName: activeFile ? activeFile.name : null,
       caretPos: editor ? editor.selectionStart : 0,
+      documentRevision: getCollabDocumentRevision(editor ? editor.value : ""),
     },
   });
 
   typingTimer = setTimeout(() => {
+    editor?.classList.remove("collab-live-typing-caret");
     if (!collabSocket || !activeSessionId) return;
     collabSocket.emit("collab:typing", {
       sessionId: activeSessionId,
@@ -15581,7 +15623,7 @@ function getVisibleCursorParticipants() {
   );
 }
 
-function getVisibleTypingParticipants() {
+function getActiveTypingParticipants() {
   return Object.values(remoteTypingState).filter(
     (entry) =>
       entry &&
@@ -15590,6 +15632,87 @@ function getVisibleTypingParticipants() {
       entry.fileName === (activeFile ? activeFile.name : "") &&
       Date.now() - Number(entry.ts || 0) < 1800,
   );
+}
+
+function getVisibleTypingParticipants(entries = getActiveTypingParticipants()) {
+  const activeRevision = getCollabDocumentRevision(activeFile ? activeFile.content : "");
+  return entries.filter(
+    (entry) => !entry.documentRevision || entry.documentRevision === activeRevision,
+  );
+}
+
+function ensureRemotePresenceLayer(className) {
+  let layer = Array.from(remoteCursorLayer.children).find(
+    (child) => child.classList && child.classList.contains(className),
+  );
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = className;
+    remoteCursorLayer.appendChild(layer);
+  }
+  return layer;
+}
+
+function renderRemoteTypingCarets(layer, editor, entries, retainedNames = new Set()) {
+  const existingCarets = new Map(
+    Array.from(layer.children).map((caret) => [caret.dataset.participantName || "", caret]),
+  );
+  const visibleNames = new Set();
+
+  entries.forEach((entry) => {
+    const name = String(entry.name || "User");
+    visibleNames.add(name);
+    let caret = existingCarets.get(name);
+    let isNew = false;
+    if (!caret) {
+      isNew = true;
+      caret = document.createElement("div");
+      caret.className = "remote-typing-caret";
+      caret.dataset.participantName = name;
+
+      const line = document.createElement("span");
+      line.className = "remote-typing-caret-line";
+      const label = document.createElement("span");
+      label.className = "remote-typing-label";
+      caret.append(line, label);
+      layer.appendChild(caret);
+    }
+
+    const caretPos = Math.max(0, Math.min(Number(entry.caretPos || 0), editor.value.length));
+    const coords = getCaretCoordinates(editor, caretPos);
+    const left = Number.isFinite(coords.left) ? coords.left : 0;
+    const top = Number.isFinite(coords.top) ? coords.top : 0;
+    const lineHeight = Math.max(16, Number(coords.lineHeight || 20));
+    const isOffscreen =
+      left < -4 ||
+      top < -lineHeight ||
+      left > editor.clientWidth ||
+      top > editor.clientHeight;
+
+    caret.hidden = isOffscreen;
+    caret.style.height = `${lineHeight}px`;
+    caret.style.setProperty("--typing-color", String(entry.theme || "#4CAF50"));
+    caret.classList.toggle("is-near-top", top < 24);
+    caret.classList.toggle("is-near-right", left > editor.clientWidth - 118);
+    const label = caret.querySelector(".remote-typing-label");
+    if (label) label.textContent = `${name} typing`;
+
+    if (isNew) caret.style.transition = "none";
+    caret.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    if (isNew) {
+      requestAnimationFrame(() => {
+        if (!caret.isConnected) return;
+        caret.style.removeProperty("transition");
+        caret.classList.add("is-ready");
+      });
+    } else {
+      caret.classList.add("is-ready");
+    }
+  });
+
+  existingCarets.forEach((caret, name) => {
+    if (!visibleNames.has(name) && !retainedNames.has(name)) caret.remove();
+  });
 }
 
 function renderRemoteCursors() {
@@ -15636,28 +15759,14 @@ function renderRemoteCursors() {
       }
     }
   }
-  const typingHtml = editor
-    ? getVisibleTypingParticipants()
-        .map((entry) => {
-          const caretPos = Math.max(0, Math.min(Number(entry.caretPos || 0), editor.value.length));
-          const coords = getCaretCoordinates(editor, caretPos);
-          const nextPos = Math.min(editor.value.length, caretPos + 1);
-          const nextCoords = getCaretCoordinates(editor, nextPos);
-          const left = Math.max(0, coords.left);
-          const top = Math.max(0, coords.top);
-          const charWidth =
-            nextCoords && nextCoords.top === coords.top
-              ? Math.max(8, Math.min(26, Math.round(nextCoords.left - coords.left)))
-              : Math.max(8, Math.round((coords.lineHeight || 20) * 0.6));
-          const widthPx = charWidth;
-          const heightPx = Math.max(16, Math.round((coords.lineHeight || 20) * 0.9));
-          return `<div class="remote-typing-highlight" style="left:${left}px;top:${top}px;width:${widthPx}px;height:${heightPx}px;--typing-color:${escapeHtml(entry.theme || "#4CAF50")};">
-            <span class="remote-typing-label">${escapeHtml(entry.name || "User")} typing</span>
-          </div>`;
-        })
-        .join("")
-    : "";
+  const activeTypingEntries = editor ? getActiveTypingParticipants() : [];
+  const typingEntries = editor ? getVisibleTypingParticipants(activeTypingEntries) : [];
+  const typingNames = new Set(activeTypingEntries.map((entry) => String(entry.name || "")));
+  const typingLayer = ensureRemotePresenceLayer("remote-typing-layer");
+  const pointerLayer = ensureRemotePresenceLayer("remote-pointer-layer");
+  renderRemoteTypingCarets(typingLayer, editor, typingEntries, typingNames);
   const cursorHtml = getVisibleCursorParticipants()
+    .filter((entry) => !typingNames.has(String(entry.name || "")))
     .map((entry) => {
       const scrollLeft = editor ? editor.scrollLeft : 0;
       const scrollTop = editor ? editor.scrollTop : 0;
@@ -15681,7 +15790,7 @@ function renderRemoteCursors() {
       </div>`;
     })
     .join("");
-  remoteCursorLayer.innerHTML = typingHtml + cursorHtml;
+  pointerLayer.innerHTML = cursorHtml;
 }
 
 function pruneRemoteCursors() {

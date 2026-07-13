@@ -27,7 +27,7 @@
     />
     <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-12","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-13","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
     </script>
     <style>
       * {
@@ -679,7 +679,7 @@
                   <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
                   <li>CSS and JavaScript inside HTML blocks receive their own highlighting, while JSON keys, Node globals, and environment keys use dedicated colors.</li>
                   <li>Tabs insert four spaces for tidy indentation.</li>
-                  <li>Remote cursors and typing indicators appear in the editor during collaboration.</li>
+                  <li>During collaboration, every host, co-host, and participant gets a participant-colored text caret at their live typing position.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -930,6 +930,7 @@
             <h2>Publishing</h2>
             <p class="section-copy">
               Publishing turns the current project into a shareable page. You can create a custom link or update a link you already own with its verification key.
+              The publish dialog presents these as large action cards: green for creating a link and blue for updating one.
             </p>
             <div class="feature-grid">
               <article class="feature-item">
@@ -938,7 +939,8 @@
                   <li>Press Publish / Share from the More menu.</li>
                   <li>Choose Create a Link.</li>
                   <li>Type the ending you want for the published link.</li>
-                  <li>The dialog previews the full link as you type.</li>
+                  <li>The empty form displays <code>published/my-custom-link</code> as a preview example without placing it in the typing area.</li>
+                  <li>Once you type, the preview changes to show your custom link.</li>
                   <li>Only letters, numbers, and hyphens are accepted for the custom ending.</li>
                 </ul>
               </article>
@@ -1062,6 +1064,7 @@
                 <h3><i class="fa-solid fa-arrow-pointer"></i> Presence</h3>
                 <ul>
                   <li>See where collaborators are typing.</li>
+                  <li>While someone types, their pointer becomes a colored text caret positioned directly before the next character without jumping between document versions.</li>
                   <li>Choose a pointer, hand, mouse, crosshair, pen, or text cursor for other collaborators to see.</li>
                   <li>See live cursors in participant colors.</li>
                   <li>Follow a participant to stay on their file and cursor location.</li>

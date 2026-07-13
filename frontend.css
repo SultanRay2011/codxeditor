@@ -587,8 +587,22 @@ body.zen-mode #zenExitBtn {
   z-index: 4;
 }
 
+.remote-typing-layer,
+.remote-pointer-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.remote-typing-layer { z-index: 2; }
+.remote-pointer-layer { z-index: 1; }
+
 #activeEditor.collab-custom-cursor-active {
   cursor: none !important;
+}
+
+#activeEditor.collab-live-typing-caret {
+  caret-color: var(--local-collab-caret-color, var(--accent-color));
 }
 
 .local-collab-cursor {
@@ -662,22 +676,42 @@ body.zen-mode #zenExitBtn {
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
 }
 
-.remote-typing-highlight {
+.remote-typing-caret {
   position: absolute;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--typing-color, var(--accent-color)) 28%, transparent);
-  border: 1px solid color-mix(in srgb, var(--typing-color, var(--accent-color)) 72%, #ffffff 8%);
+  top: 0;
+  left: 0;
+  width: 3px;
+  min-height: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  transform-origin: top left;
+  transition:
+    transform 90ms cubic-bezier(.22, 1, .36, 1),
+    height 90ms ease,
+    opacity 120ms ease;
+  will-change: transform;
+}
+
+.remote-typing-caret.is-ready { opacity: 1; }
+.remote-typing-caret[hidden] { display: none; }
+
+.remote-typing-caret-line {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--typing-color, var(--accent-color));
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--typing-color, var(--accent-color)) 22%, transparent),
-    0 8px 20px color-mix(in srgb, var(--typing-color, var(--accent-color)) 20%, transparent);
-  animation: remoteTypingPulse 0.95s ease-in-out infinite alternate;
-  transition: left 0.08s linear, top 0.08s linear, width 0.08s linear, height 0.08s linear;
+    0 0 0 1px color-mix(in srgb, var(--typing-color, var(--accent-color)) 64%, #fff 25%),
+    0 0 8px color-mix(in srgb, var(--typing-color, var(--accent-color)) 72%, transparent);
+  animation: remoteCursorBlink 1.05s steps(1, end) infinite;
 }
 
 .remote-typing-label {
   position: absolute;
-  top: -22px;
-  left: 0;
+  top: -21px;
+  left: -1px;
   padding: 2px 6px;
   border-radius: 999px;
   background: var(--typing-color, var(--accent-color));
@@ -689,16 +723,8 @@ body.zen-mode #zenExitBtn {
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
 }
 
-@keyframes remoteTypingPulse {
-  from {
-    transform: scale(0.98);
-    opacity: 0.72;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
+.remote-typing-caret.is-near-top .remote-typing-label { top: calc(100% + 3px); }
+.remote-typing-caret.is-near-right .remote-typing-label { right: -1px; left: auto; }
 
 @keyframes remoteCursorBlink {
   0%, 45% {
@@ -707,6 +733,11 @@ body.zen-mode #zenExitBtn {
   46%, 100% {
     opacity: 0.18;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-typing-caret { transition: none; }
+  .remote-typing-caret-line { animation: none; }
 }
 
 #highlightLayer {

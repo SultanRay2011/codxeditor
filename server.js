@@ -3109,6 +3109,7 @@ io.on("connection", (socket) => {
       editor: rawIndicator?.editor || null,
       fileName: rawIndicator?.fileName || member.currentFile || null,
       caretPos: Number(rawIndicator?.caretPos || 0),
+      documentRevision: String(rawIndicator?.documentRevision || "").trim().slice(0, 80),
       stopped,
       ts: Date.now(),
     });
