@@ -807,6 +807,19 @@
         /* each header specifies its own width/height inline */
       }
 
+      .col-logo-wrap img.codx-comparison-logo {
+        width: 116px;
+        height: 60px;
+        display: block;
+        max-width: none;
+        object-fit: cover;
+        object-position: center;
+        filter: brightness(0) invert(1);
+      }
+
+      .comparison-product-logo { width: 42px; height: 38px; }
+      .comparison-product-logo.logo-codepen { width: 82px; }
+
       .col-label {
         font-weight: 800;
         font-size: 0.95em;
@@ -871,6 +884,24 @@
       .partial-text { color: #f57c00; font-size: 0.82em; font-weight: 700; }
       .speed-val { font-weight: 700; }
       .codx-speed { color: #2e7d32; font-size: 1.08em; }
+
+      .feature-value {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        max-width: 150px;
+        color: #4c5960;
+        font-size: 0.78em;
+        font-weight: 750;
+        line-height: 1.3;
+        text-wrap: balance;
+      }
+
+      .feature-value i { flex: 0 0 auto; }
+      .feature-value.yes { color: #25833a; }
+      .feature-value.limited { color: #a45a08; }
+      .feature-value.neutral { color: #58636a; }
 
       @media (max-width: 900px) {
         .feature-showcase,
@@ -1301,7 +1332,7 @@
         <div class="comparison-section">
           <h3 class="section-title">How CodX Editor Compares</h3>
           <p style="color:#555;font-size:0.93em;margin-bottom:18px;text-align:left;">
-            See how CodX Editor stacks up against the most popular online code editors.
+            A practical comparison of documented project workflows, runtime options, collaboration, and project portability.
           </p>
           <div class="comparison-wrapper">
             <table class="comparison-table">
@@ -1312,7 +1343,7 @@
                   <!-- CodX Editor — highlighted -->
                   <th class="col-codx">
                     <div class="col-logo-wrap">
-                      <img src="cx.png" alt="CodX Editor" width="44" height="44" style="filter:brightness(0) invert(1);" />
+                      <img class="codx-comparison-logo" src="cx.png" alt="CodX Editor logo" />
                       <span class="col-label">CodX Editor</span>
                       <a href="welcome.html" class="col-codx-btn">Open Editor</a>
                     </div>
@@ -1321,10 +1352,7 @@
                   <!-- CodePen -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://cpwebassets.codepen.io/assets/favicon/favicon-aec34940fbc1a6e787974dcd360f2c6b63348d4dccd4e6e2c4a1468d073fc2 87.png"
-                           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-                           alt="CodePen" width="36" height="36" style="border-radius:8px;" />
-                      <span style="display:none;width:36px;height:36px;background:#1e1f26;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:1em;">CP</span>
+                      <img class="comparison-product-logo logo-codepen" src="assets/comparison-logos/codepen.svg" alt="CodePen logo" />
                       <span class="col-label">CodePen</span>
                     </div>
                   </th>
@@ -1332,9 +1360,7 @@
                   <!-- JSFiddle -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://jsfiddle.net/img/favicon.png"
-                           onerror="this.style.display='none';"
-                           alt="JSFiddle" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/jsfiddle.png" alt="JSFiddle logo" />
                       <span class="col-label">JSFiddle</span>
                     </div>
                   </th>
@@ -1342,9 +1368,7 @@
                   <!-- StackBlitz -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://c.staticblitz.com/assets/favicon_sb-861fe1b85c0dc928750c62de15fed96fc75e57ee366bd937bad9a76f2cf1c4f.png"
-                           onerror="this.style.display='none';"
-                           alt="StackBlitz" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/stackblitz.svg" alt="StackBlitz logo" />
                       <span class="col-label">StackBlitz</span>
                     </div>
                   </th>
@@ -1352,9 +1376,7 @@
                   <!-- Replit -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://replit.com/public/icons/favicon-196.png"
-                           onerror="this.style.display='none';"
-                           alt="Replit" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/replit.svg" alt="Replit logo" />
                       <span class="col-label">Replit</span>
                     </div>
                   </th>
@@ -1362,90 +1384,65 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>Instant live preview</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td>Web preview</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Live or manual</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Integrated preview</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Run / Result panel</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Integrated preview</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Live preview</span></td>
                 </tr>
                 <tr>
-                  <td>100% Free</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Free tier</span></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Free tier</span></td>
-                  <td><span class="partial-text">Free tier</span></td>
+                  <td>Multi-file projects</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Included</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-half-stroke"></i> Plan-limited; 3 files on Free</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-table-columns"></i> 3 fixed code panels</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> File tree</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> File tree</span></td>
                 </tr>
                 <tr>
-                  <td>No account needed</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>Node.js development</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-brands fa-node-js"></i> Optional browser runtime</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-globe"></i> Front-end packages; no Node runtime</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-globe"></i> Browser code only</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-node-js"></i> WebContainers runtime</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-terminal"></i> Cloud runtime and shell</span></td>
                 </tr>
                 <tr>
                   <td>Real-time collaboration</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Pro only</span></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Included sessions</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-lock"></i> Owner needs PRO</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-info"></i> Listed; limits unclear</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-info"></i> Team editing; live presence not documented</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-users"></i> Core / Pro seats</span></td>
                 </tr>
                 <tr>
-                  <td>Built-in chat</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>Collaboration controls &amp; communication</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-comments"></i> Roles, host controls, group + private chat</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-user-pen"></i> Viewer / editor roles</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-question"></i> Not detailed in docs</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-user-shield"></i> Team roles and access</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-arrow-pointer"></i> Cursor presence; external team chat</span></td>
                 </tr>
                 <tr>
-                  <td>Live collaborator cursors</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>ZIP project transfer</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-file-zipper"></i> Import + export</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-download"></i> Export; sign-in required</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-question"></i> Not documented</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-download"></i> Download in non-Codeflow projects</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-file-zipper"></i> Import + export</span></td>
                 </tr>
                 <tr>
-                  <td>Error jump &amp; highlights</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><span class="partial-text">Partial</span></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>ZIP import / export</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Export only</span></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>Zen / focus mode</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>Custom fonts tool</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>GitHub workflow</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-brands fa-github"></i> Browse, edit, upload + commit</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-info"></i> No repo editing in current docs</span></td>
+                  <td><span class="feature-value limited"><i class="fa-brands fa-github"></i> Display from repo / Gist</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-github"></i> Connect + commit</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-github"></i> Import, sync + push</span></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-        <p class="page-footer-note">Third-party products and plan features change over time. Verify a competitor's current documentation before choosing a tool for a specific requirement.</p>
         <!-- ── /Comparison Table ── -->
 
         <h3 class="section-title">Why CodX Editor Feels Better</h3>
