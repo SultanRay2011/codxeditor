@@ -1,0 +1,22 @@
+{
+  "watch": [
+    "server.js",
+    "frontend.js",
+    "node-runtime.js",
+    "*.html",
+    "*.css",
+    ".env"
+  ],
+  "ext": "js,mjs,cjs,json,html,css,env",
+  "ignore": [
+    ".git/**",
+    "node_modules/**",
+    "public/**",
+    "published-projects.json",
+    ".codx-github-sessions.enc",
+    ".codx-github-sessions.enc.tmp",
+    "*.log"
+  ],
+  "delay": 350,
+  "verbose": true
+}

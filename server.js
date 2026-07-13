@@ -1661,6 +1661,7 @@ function sanitizeParticipant(p) {
     role: p.role || "participant",
     mutedChat: Boolean(p.mutedChat),
     frozenEditing: Boolean(p.frozenEditing),
+    renameDisabled: Boolean(p.renameDisabled),
     priority: Boolean(p.priority),
     currentFile: p.currentFile || null,
     joinedAt: p.joinedAt || Date.now(),
@@ -1701,6 +1702,65 @@ function normalizeDisabledFeatures(features) {
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeParticipantDisplayName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function validateParticipantDisplayName(value) {
+  const name = normalizeParticipantDisplayName(value);
+  if (name.length < 2) return { ok: false, error: "Name must be at least 2 characters." };
+  if (name.length > 20) return { ok: false, error: "Name cannot be longer than 20 characters." };
+  if (!/^[a-zA-Z0-9\s_-]+$/.test(name)) {
+    return { ok: false, error: "Use only letters, numbers, spaces, dashes, or underscores." };
+  }
+  return { ok: true, name };
+}
+
+function migrateParticipantNameState(session, participant, oldName, newName) {
+  const oldKey = normalizeName(oldName);
+  const newKey = normalizeName(newName);
+
+  participant.name = newName;
+  if (participant.socketId === session.hostSocketId) {
+    session.hostName = newName;
+  }
+
+  if (session.fileAccessByName && Object.prototype.hasOwnProperty.call(session.fileAccessByName, oldKey)) {
+    session.fileAccessByName[newKey] = session.fileAccessByName[oldKey];
+    if (newKey !== oldKey) delete session.fileAccessByName[oldKey];
+  }
+
+  if (session.chat) {
+    (session.chat.group || []).forEach((message) => {
+      if (normalizeName(message?.from) === oldKey) message.from = newName;
+    });
+
+    const nextPrivateThreads = {};
+    Object.entries(session.chat.private || {}).forEach(([threadKey, messages]) => {
+      const nextMessages = Array.isArray(messages) ? messages : [];
+      nextMessages.forEach((message) => {
+        if (normalizeName(message?.from) === oldKey) message.from = newName;
+        if (normalizeName(message?.to) === oldKey) message.to = newName;
+      });
+      const nextThreadKey = threadKey
+        .split("::")
+        .map((key) => (key === oldKey ? newKey : key))
+        .sort()
+        .join("::");
+      if (!nextPrivateThreads[nextThreadKey]) nextPrivateThreads[nextThreadKey] = [];
+      nextPrivateThreads[nextThreadKey].push(...nextMessages);
+    });
+    Object.values(nextPrivateThreads).forEach((messages) => {
+      messages.sort((a, b) => Number(a?.ts || 0) - Number(b?.ts || 0));
+      if (messages.length > 300) messages.splice(0, messages.length - 300);
+    });
+    session.chat.private = nextPrivateThreads;
+  }
+
+  const meta = socketMeta.get(participant.socketId);
+  if (meta) socketMeta.set(participant.socketId, { ...meta, name: newName });
 }
 
 function makePrivateThreadKey(a, b) {
@@ -1968,6 +2028,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     role: "participant",
     mutedChat: false,
     frozenEditing: false,
+    renameDisabled: false,
     priority: false,
     currentFile: session.activeFileName || null,
     joinedAt: Date.now(),
@@ -2037,6 +2098,7 @@ io.on("connection", (socket) => {
         role: "host",
         mutedChat: false,
         frozenEditing: false,
+        renameDisabled: false,
         priority: false,
         currentFile: activeFileName || null,
         joinedAt: Date.now(),
@@ -2157,6 +2219,7 @@ io.on("connection", (socket) => {
         role: "participant",
         mutedChat: false,
         frozenEditing: false,
+        renameDisabled: false,
         priority: false,
         currentFile: session.activeFileName || null,
         joinedAt: Date.now(),
@@ -2243,6 +2306,7 @@ io.on("connection", (socket) => {
           role: "participant",
           mutedChat: false,
           frozenEditing: false,
+          renameDisabled: false,
           priority: false,
           currentFile: session.activeFileName || null,
           joinedAt: Date.now(),
@@ -2442,6 +2506,72 @@ io.on("connection", (socket) => {
     emitSessionMeta(sessionId);
   });
 
+  socket.on("collab:rename-participant", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const access = canUseSession(sessionId, socket.id);
+      if (!access) {
+        ack?.({ ok: false, error: "Session not found." });
+        return;
+      }
+
+      const { session, member: actor } = access;
+      const targetName = normalizeName(payload?.targetName);
+      const target = session.participants.find((participant) => normalizeName(participant.name) === targetName);
+      if (!target) {
+        ack?.({ ok: false, error: "Participant not found." });
+        return;
+      }
+
+      const renamingSelf = target.socketId === socket.id;
+      if (renamingSelf && target.renameDisabled) {
+        ack?.({ ok: false, error: "A session moderator disabled self-renaming for you." });
+        return;
+      }
+      if (!renamingSelf && !canModerateTarget(session, socket.id, target)) {
+        ack?.({ ok: false, error: "You do not have permission to rename this participant." });
+        return;
+      }
+
+      const validation = validateParticipantDisplayName(payload?.newName);
+      if (!validation.ok) {
+        ack?.({ ok: false, error: validation.error });
+        return;
+      }
+      const newName = validation.name;
+      const oldName = target.name;
+      const duplicate = session.participants.some(
+        (participant) => participant.socketId !== target.socketId && normalizeName(participant.name) === normalizeName(newName),
+      );
+      if (duplicate) {
+        ack?.({ ok: false, error: "That name is already being used in this session." });
+        return;
+      }
+      if (oldName === newName) {
+        ack?.({ ok: true, oldName, newName, unchanged: true });
+        return;
+      }
+
+      migrateParticipantNameState(session, target, oldName, newName);
+      const renamedBy = actor === target ? newName : actor.name;
+      io.to(sessionId).emit("collab:participant-renamed", {
+        oldName,
+        newName,
+        renamedBy,
+      });
+      logAdminEvent(
+        "Participant renamed",
+        `${oldName} was renamed to ${newName} by ${renamedBy} in session ${sessionId}.`,
+        sessionId,
+      );
+      emitParticipants(sessionId);
+      emitSessionMeta(sessionId);
+      ack?.({ ok: true, oldName, newName });
+    } catch {
+      ack?.({ ok: false, error: "Failed to rename participant." });
+    }
+  });
+
   socket.on("collab:set-role", (payload, ack) => {
     try {
       const sessionId = normalizeSessionId(payload?.sessionId);
@@ -2548,6 +2678,7 @@ io.on("connection", (socket) => {
       }
       if (typeof payload?.mutedChat === "boolean") target.mutedChat = payload.mutedChat;
       if (typeof payload?.frozenEditing === "boolean") target.frozenEditing = payload.frozenEditing;
+      if (typeof payload?.renameDisabled === "boolean") target.renameDisabled = payload.renameDisabled;
       if (typeof payload?.priority === "boolean") target.priority = payload.priority;
       logAdminEvent("Participant flags updated", `${target.name} was updated in session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
