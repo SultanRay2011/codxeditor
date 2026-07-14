@@ -9,6 +9,7 @@ const editorsPanel = document.querySelector(".editors");
 const previewPanel = document.querySelector(".preview");
 const lineNumbers = document.getElementById("lineNumbers");
 const highlightLayer = document.getElementById("highlightLayer");
+const pairSelectionHighlight = document.getElementById("pairSelectionHighlight");
 const remoteCursorLayer = document.getElementById("remoteCursorLayer");
 const localCollabCursor = document.getElementById("localCollabCursor");
 const localCollabCursorIcon = document.getElementById("localCollabCursorIcon");
@@ -90,6 +91,9 @@ const runDeveloperCommandBtn = document.getElementById("runDeveloperCommandBtn")
 const clearDeveloperConsoleBtn = document.getElementById("clearDeveloperConsoleBtn");
 const closeDeveloperConsoleBtn = document.getElementById("closeDeveloperConsoleBtn");
 const developerConsoleShortcutButtons = document.querySelectorAll("[data-developer-command]");
+const pairDock = document.getElementById("pairDock");
+const pairDockContent = document.getElementById("pairDockContent");
+const pairVoiceAudio = document.getElementById("pairVoiceAudio");
 const saveProjectBtn = document.getElementById("saveProjectBtn");
 const projectStatusSaveBtn = document.getElementById("projectStatusSaveBtn");
 const newProjectBtn = document.getElementById("newProjectBtn");
@@ -2374,6 +2378,15 @@ let fileErrorCounts = {};
 let fileErrorLocations = {};
 let collabOfflineNoticeLastAt = 0;
 let collabOfflineNoticeActive = false;
+let collabResumeInFlight = false;
+let collabResumeRetryTimer = null;
+let collabResumeFailureCount = 0;
+let collabHostRecoveryInFlight = false;
+let collabHeartbeatInterval = null;
+let collabHeartbeatAckTimer = null;
+let collabHasConnectedOnce = false;
+let collabPendingLocalSync = false;
+let collabLocalSyncRevision = 0;
 const defaultCollabPermissions = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -2388,6 +2401,7 @@ const defaultCollabPermissions = {
   disableNewFile: false,
   disableRunCode: false,
   disableConsoleAccess: false,
+  disablePairing: false,
   readOnlyAll: false,
   roomLocked: false,
   pauseCollab: false,
@@ -2408,6 +2422,24 @@ let collabPendingJoins = [];
 let collabShareLink = "";
 let collabSessionPin = "";
 let collabBans = [];
+let activePairState = null;
+let pairOverview = [];
+let pairFollowEnabled = false;
+let pairFollowSuspended = false;
+let pairPanelOpen = false;
+let pairPanelTab = "chat";
+let pairToolActivity = { chat: false, suggestions: false, tasks: false };
+let pairLastPresenceEmitAt = 0;
+let pairPresenceTimeout = null;
+let pairVoiceConnection = null;
+let pairVoiceStream = null;
+let pairVoiceStatus = "idle";
+let pairVoicePendingCandidates = [];
+let pairVoiceInitiator = false;
+let pairIgnoreLocalScrollUntil = 0;
+let pairFollowScrollTarget = null;
+let pairFollowAnimationFrame = 0;
+let pairPartnerPresence = null;
 let joinRequestContext = { sessionId: "", name: "" };
 let lastAnnouncementText = "";
 let activeDialogResolver = null;
@@ -3095,6 +3127,20 @@ function resetTransientCollabUiState() {
   resetCollabUnreadMessages();
   hideLocalCollabCursor();
   followedParticipantName = "";
+  stopCollabHeartbeat();
+  activePairState = null;
+  pairOverview = [];
+  pairPanelOpen = false;
+  pairToolActivity = { chat: false, suggestions: false, tasks: false };
+  pairFollowEnabled = false;
+  pairFollowSuspended = false;
+  pairPartnerPresence = null;
+  clearTimeout(pairPresenceTimeout);
+  pairPresenceTimeout = null;
+  stopPairFollowAnimation();
+  if (pairSelectionHighlight) pairSelectionHighlight.hidden = true;
+  stopPairVoice(false);
+  renderPairDock();
   lastAnnouncementText = "";
   if (announcementPopup) {
     announcementPopup.style.display = "none";
@@ -6254,6 +6300,10 @@ function debouncedUpdatePreview() {
 }
 
 function scheduleSessionUpdate() {
+  if (activeSessionId && !isApplyingRemoteState) {
+    collabPendingLocalSync = true;
+    collabLocalSyncRevision += 1;
+  }
   clearTimeout(sessionSyncTimeout);
   const syncInterval = 72;
   const now = performance.now();
@@ -6421,6 +6471,7 @@ function renderFileList() {
 }
 
 function switchFile(fileName) {
+  if (pairSelectionHighlight) pairSelectionHighlight.hidden = true;
   const previousPreviewTarget = { ...currentPreviewTarget };
   const normalizedFileName = String(fileName || "").trim().toLowerCase();
   projectFiles.forEach((file) => {
@@ -6447,6 +6498,7 @@ function switchFile(fileName) {
   refreshDiagnosticsState();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
+  emitPairPresenceSoon(true);
 }
 
 async function createNewFile() {
@@ -9591,7 +9643,12 @@ function initializeEditor() {
   // MODIFIED: Combined input listener
   editor.addEventListener("input", (e) => {
     if (!canCurrentUserEditFile(activeFile ? activeFile.name : "")) {
-      showNotification("You can only edit files selected by the host.", "error");
+      showNotification(
+        isPairNavigatorEditingLocked()
+          ? "You are the Navigator. Suggest a change or switch roles to edit."
+          : "You can only edit files selected by the host.",
+        "error",
+      );
       editor.value = activeFile.content;
       return;
     }
@@ -9599,6 +9656,7 @@ function initializeEditor() {
       lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo";
     hasUnsavedChanges = true;
     activeFile.content = editor.value;
+    emitPairPresenceSoon();
     __codxRescanProjectSuggestionCacheSoon();
     updateProjectStatusUI();
     updateLineNumbers(editor);
@@ -9628,6 +9686,7 @@ function initializeEditor() {
   // MODIFIED: Replaced Tab logic with comprehensive keydown handler
   editor.addEventListener("keydown", handleEditorKeyDown);
   editor.addEventListener("click", () => {
+    emitPairPresenceSoon();
     if (
       activeInlineHtmlCorrection &&
       getLineNumberFromIndex(editor.value, editor.selectionStart) === activeInlineHtmlCorrection.previewLine
@@ -9642,7 +9701,33 @@ function initializeEditor() {
   });
   editor.addEventListener("keyup", () => {
     syncInlineHtmlCorrectionDisplay(editor);
+    emitPairPresenceSoon();
   });
+  editor.addEventListener("scroll", () => {
+    syncScroll(editor);
+    if (
+      activePairState &&
+      pairFollowEnabled &&
+      Date.now() > pairIgnoreLocalScrollUntil
+    ) {
+      pairFollowEnabled = false;
+      pairFollowSuspended = true;
+      followedParticipantName = "";
+      stopPairFollowAnimation();
+      renderPairDock();
+    }
+    emitPairPresenceSoon();
+  }, { passive: true });
+  const suspendPairFollowForManualNavigation = () => {
+    if (!activePairState || !pairFollowEnabled) return;
+    pairFollowEnabled = false;
+    pairFollowSuspended = true;
+    followedParticipantName = "";
+    stopPairFollowAnimation();
+    renderPairDock();
+  };
+  editor.addEventListener("wheel", suspendPairFollowForManualNavigation, { passive: true });
+  editor.addEventListener("touchstart", suspendPairFollowForManualNavigation, { passive: true });
   editor.addEventListener("blur", () => {
     setTimeout(() => {
       const active = document.activeElement;
@@ -12966,6 +13051,11 @@ document.addEventListener("visibilitychange", () => {
   startBackgroundTimers();
   pruneRemoteCursors();
   applyRoomIndicators();
+  if (activeSessionId && !collabSocket?.connected) {
+    ensureCollabSocket();
+    return;
+  }
+  sendCollabHeartbeat();
   resumeCollabSession();
 });
 
@@ -13387,6 +13477,15 @@ function getParticipantByName(name) {
   return collabParticipants.find((p) => String(p.name || "").trim().toLowerCase() === safeName) || null;
 }
 
+function formatCollabDisplayName(name, fallback = "") {
+  const displayName = String(name || fallback || "").trim();
+  const myName = String(myInfo.name || "").trim();
+  if (!displayName || !myName) return displayName;
+  return displayName.toLowerCase() === myName.toLowerCase()
+    ? `${displayName} (you)`
+    : displayName;
+}
+
 function isGroupFeatureRestrictedUser() {
   return Boolean(activeSessionId) && !isHost();
 }
@@ -13563,6 +13662,7 @@ function isReadOnlyParticipant() {
 }
 
 function canCurrentUserEditFile(fileName) {
+  if (isPairNavigatorEditingLocked()) return false;
   if (!activeSessionId || isHost() || isCoHost()) return true;
   const me = getMyParticipant();
   if (me?.frozenEditing) return false;
@@ -13644,6 +13744,7 @@ function enforceCollabPermissionsUI() {
   const lockRun = participantRestricted && (collabPermissions.disableRunCode || personalDisabledFeatures.has("runCode"));
   const lockConsole = participantRestricted && (collabPermissions.disableConsoleAccess || personalDisabledFeatures.has("consoleAccess"));
   const globalReadOnly = activeSessionId && (collabPermissions.readOnlyAll || collabPermissions.pauseCollab);
+  const pairNavigatorLocked = isPairNavigatorEditingLocked();
   const lockEditor = globalReadOnly || !canCurrentUserEditFile(activeFile ? activeFile.name : "");
   const frozenEditing = participantRestricted && Boolean(me?.frozenEditing);
 
@@ -13718,6 +13819,8 @@ function enforceCollabPermissionsUI() {
         ? collabPermissions.pauseCollab
           ? "The host paused collaboration for the group."
           : "The host set the room to read-only."
+        : pairNavigatorLocked
+        ? "You are the Navigator. Request a role switch or use Live Pair Mode to edit."
         : frozenEditing
         ? "The host temporarily froze your editing access."
         : "The host allowed editing only on selected files."
@@ -14012,8 +14115,14 @@ function didParticipantFileAccessExpand(previousParticipant, nextParticipant) {
 
 function updateFileVisibilityQuickButton() {
   if (!collabFileVisibilityBtn) return;
-  const canManage = Boolean(activeSessionId && canUseCoHostTools() && activeFile);
+  const canManageSession = Boolean(activeSessionId && canUseCoHostTools());
+  const canManage = Boolean(canManageSession && activeFile);
   collabFileVisibilityBtn.hidden = !canManage;
+  collabFileVisibilityBtn.disabled = !canManage;
+  if (!canManageSession) {
+    collabFileVisibilityBtn.classList.remove("has-hidden-users");
+    document.querySelectorAll(".file-visibility-action").forEach((button) => button.remove());
+  }
   if (!canManage) return;
   const hiddenCount = getModeratableCollabParticipants().filter((participant) =>
     participantCannotSeeFile(participant, activeFile.name),
@@ -14483,6 +14592,16 @@ function showGroupControls(sessionId) {
         )
         .join("")
     : `<div class="collab-section-note">No banned devices in this session.</div>`;
+  const activePairsHtml = pairOverview.length
+    ? pairOverview.map((pair) => `
+        <div class="collab-pending-row">
+          <div class="collab-participant-text">
+            <div class="collab-participant-name">${escapeHtml((pair.members || []).map((name) => formatCollabDisplayName(name)).join(" + "))}${pair.helpRequested ? `<span class="pair-participant-badge">Needs help</span>` : ""}</div>
+            <div class="collab-participant-meta">${escapeHtml(pair.mode === "live" ? "Live Pair" : `Driver: ${formatCollabDisplayName(pair.driver)}`)} · ${escapeHtml(pair.status || "active")}</div>
+          </div>
+          <button class="run-button end-pair-btn" data-pair-id="${escapeHtml(pair.id)}" style="background:#b42318;"><strong>END PAIR</strong></button>
+        </div>`).join("")
+    : `<div class="collab-section-note">No active pairs.</div>`;
 
   collabModalView = "group-controls";
   setCollabCloseButtonVisible(true);
@@ -14501,6 +14620,10 @@ function showGroupControls(sessionId) {
         </div>
       </div>
     </div>
+    <div class="collab-section-card">
+      <h4 class="collab-section-title">Active Pairs</h4>
+      <div class="collab-participant-list">${activePairsHtml}</div>
+    </div>
     ${hostView ? `<div class="collab-section-card">
       <h4 class="collab-section-title">Room Permissions</h4>
       <div class="collab-control-grid">
@@ -14513,6 +14636,7 @@ function showGroupControls(sessionId) {
         ${renderCollabControlButton({ id: "groupDisablePublishBtn", icon: "fa-solid fa-share-nodes", title: `Publish (${countParticipantsWithDisabledFeature("publishShare")} affected)`, desc: "Pick who cannot publish.", active: collabPermissions.disablePublishShare || countParticipantsWithDisabledFeature("publishShare") > 0 })}
         ${renderCollabControlButton({ id: "groupDisableRunBtn", icon: "fa-solid fa-play", title: `Run (${countParticipantsWithDisabledFeature("runCode")} affected)`, desc: "Pick who cannot run preview.", active: collabPermissions.disableRunCode || countParticipantsWithDisabledFeature("runCode") > 0 })}
         ${renderCollabControlButton({ id: "groupDisableConsoleBtn", icon: "fa-solid fa-terminal", title: `Console (${countParticipantsWithDisabledFeature("consoleAccess")} affected)`, desc: "Pick who cannot use console.", active: collabPermissions.disableConsoleAccess || countParticipantsWithDisabledFeature("consoleAccess") > 0 })}
+        ${renderCollabControlButton({ id: "groupPairingBtn", icon: "fa-solid fa-code-compare", title: collabPermissions.disablePairing ? "Enable Pairing" : "Disable Pairing", desc: collabPermissions.disablePairing ? "Allow new participant pairs." : "End active pairs and block new invitations.", active: collabPermissions.disablePairing, tone: "purple" })}
       </div>
     </div>` : ""}
     <div class="collab-section-card">
@@ -14521,6 +14645,7 @@ function showGroupControls(sessionId) {
         ${renderCollabControlButton({ id: "groupManageMuteBtn", icon: "fa-solid fa-comment-slash", title: `Mute Chat (${countParticipantsWithFlag("mutedChat")} affected)`, desc: "Pick who cannot chat.", active: countParticipantsWithFlag("mutedChat") > 0, tone: "warning" })}
         ${renderCollabControlButton({ id: "groupManageFreezeBtn", icon: "fa-solid fa-snowflake", title: `Freeze Editing (${countParticipantsWithFlag("frozenEditing")} affected)`, desc: "Pick who cannot edit.", active: countParticipantsWithFlag("frozenEditing") > 0, tone: "blue" })}
         ${renderCollabControlButton({ id: "groupManagePriorityBtn", icon: "fa-solid fa-star", title: `Priority (${countParticipantsWithFlag("priority")} marked)`, desc: "Pick priority people.", active: countParticipantsWithFlag("priority") > 0, tone: "purple" })}
+        ${renderCollabControlButton({ id: "groupDisablePairBtn", icon: "fa-solid fa-code-compare", title: `Pair Access (${countParticipantsWithDisabledFeature("pairing")} blocked)`, desc: "Pick who cannot send or accept pair invitations.", active: countParticipantsWithDisabledFeature("pairing") > 0, tone: "purple" })}
         ${renderCollabControlButton({ id: "groupHideFilesBtn", icon: "fa-solid fa-eye-slash", title: "Hide Files", desc: "Choose who cannot see a file.", active: collabParticipants.some((participant) => Array.isArray(participant.allowedFiles)) })}
       </div>
     </div>
@@ -14575,9 +14700,16 @@ function showGroupControls(sessionId) {
   bind("groupDisablePublishBtn", () => showGroupFeatureAccessPicker("publishShare"));
   bind("groupDisableRunBtn", () => showGroupFeatureAccessPicker("runCode"));
   bind("groupDisableConsoleBtn", () => showGroupFeatureAccessPicker("consoleAccess"));
+  bind("groupPairingBtn", () =>
+    updateGroupPermission(
+      { disablePairing: !collabPermissions.disablePairing },
+      collabPermissions.disablePairing ? "Pairing enabled." : "Pairing disabled and active pairs ended.",
+    ),
+  );
   bind("groupManageMuteBtn", () => showGroupParticipantFlagPicker("mutedChat"));
   bind("groupManageFreezeBtn", () => showGroupParticipantFlagPicker("frozenEditing"));
   bind("groupManagePriorityBtn", () => showGroupParticipantFlagPicker("priority"));
+  bind("groupDisablePairBtn", () => showGroupFeatureAccessPicker("pairing"));
   bind("groupHideFilesBtn", () => showFileVisibilityEditor(activeFile ? activeFile.name : "", "group-controls"));
   bind("groupBringToFileBtn", bringEveryoneToFile);
   bind("groupPinFileBtn", async () => {
@@ -14654,6 +14786,12 @@ function showGroupControls(sessionId) {
     updateGroupPermission({ quietMode: !collabPermissions.quietMode }, collabPermissions.quietMode ? "Quiet mode disabled." : "Quiet mode enabled."),
   );
   bind("groupDoneBtn", () => showSessionDetails(sessionId));
+  modalBody.querySelectorAll(".end-pair-btn").forEach((button) => {
+    button.onclick = async () => {
+      const response = await emitPairEvent("collab:pair:end", { pairId: button.dataset.pairId });
+      if (!response?.ok) showNotification(response?.error || "Unable to end the pair.", "error");
+    };
+  });
 
   if (hostView) {
     modalBody.querySelectorAll(".approve-join-btn").forEach((btn) => {
@@ -14861,6 +14999,7 @@ const groupFeatureControlConfig = [
   { key: "publishShare", buttonId: "groupDisablePublishBtn", label: "DISABLE PUBLISH / SHARE" },
   { key: "runCode", buttonId: "groupDisableRunBtn", label: "DISABLE RUN" },
   { key: "consoleAccess", buttonId: "groupDisableConsoleBtn", label: "DISABLE CONSOLE" },
+  { key: "pairing", buttonId: "groupDisablePairBtn", label: "DISABLE PAIRING" },
 ];
 
 function getFeatureControlLabel(featureKey) {
@@ -15112,16 +15251,22 @@ function syncFollowedParticipantView() {
     return;
   }
   if (!participant.currentFile) return;
+  const pairViewSyncActive = isPairViewSyncActive();
   if (!activeFile || activeFile.name !== participant.currentFile) {
+    if (pairViewSyncActive) pairIgnoreLocalScrollUntil = Date.now() + 700;
     switchFile(participant.currentFile);
-    setTimeout(() => syncFollowedParticipantCursor(), 0);
+    if (!pairViewSyncActive) setTimeout(() => syncFollowedParticipantCursor(), 0);
     return;
   }
+  if (pairViewSyncActive) return;
   syncFollowedParticipantCursor();
 }
 
 function syncFollowedParticipantCursor(cursorOverride = null) {
   if (!followedParticipantName) return;
+  // Pair Sync View follows the partner's exact presence scroll. The general
+  // cursor-centering behavior would otherwise fight that position and flicker.
+  if (isPairViewSyncActive()) return;
   const participant = getParticipantByName(followedParticipantName);
   if (!participant || !participant.currentFile || !activeFile) return;
   if (activeFile.name !== participant.currentFile) return;
@@ -15311,7 +15456,7 @@ function renderCollabChatMessages() {
       const senderTheme = m.fromTheme || getParticipantThemeByName(m.from);
       return `<div style="margin-bottom:8px; padding:8px; border:1px solid var(--border-color); border-radius:8px; background:${mine ? "color-mix(in srgb, var(--accent-color) 15%, var(--bg-tertiary))" : "var(--bg-tertiary)"};">
         <div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text-muted);">
-          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeHtml(senderTheme)};margin-right:6px;vertical-align:middle;"></span><strong style="color:${escapeHtml(senderTheme)};">${escapeHtml(m.from)}</strong>${m.to ? ` to <strong>${escapeHtml(m.to)}</strong>` : ""}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeHtml(senderTheme)};margin-right:6px;vertical-align:middle;"></span><strong style="color:${escapeHtml(senderTheme)};">${escapeHtml(formatCollabDisplayName(m.from))}</strong>${m.to ? ` to <strong>${escapeHtml(formatCollabDisplayName(m.to))}</strong>` : ""}</span>
           <span>${escapeHtml(formatChatTime(m.ts || Date.now()))}</span>
         </div>
         <div style="margin-top:4px;color:var(--text-primary);white-space:pre-wrap;word-break:break-word;">${escapeHtml(m.text || "")}</div>
@@ -15444,6 +15589,686 @@ function requestCollabChatHistory() {
     collabPrivateMessages = Array.isArray(res.privateMessages) ? res.privateMessages : [];
     renderCollabChatMessages();
   });
+}
+
+function getPairOverviewForName(name) {
+  const key = String(name || "").trim().toLowerCase();
+  return pairOverview.find((pair) =>
+    Array.isArray(pair?.members) && pair.members.some((memberName) => String(memberName || "").trim().toLowerCase() === key),
+  ) || null;
+}
+
+function getPairPartnerName(pair = activePairState) {
+  const myKey = String(myInfo.name || "").trim().toLowerCase();
+  return (pair?.members || []).find((name) => String(name || "").trim().toLowerCase() !== myKey) || "";
+}
+
+function isCurrentPairDriver() {
+  return Boolean(
+    activePairState &&
+    String(activePairState.driver || "").trim().toLowerCase() === String(myInfo.name || "").trim().toLowerCase()
+  );
+}
+
+function isPairNavigatorEditingLocked() {
+  return Boolean(
+    activePairState &&
+    activePairState.status === "active" &&
+    activePairState.mode === "driver" &&
+    !isCurrentPairDriver()
+  );
+}
+
+function isPairViewSyncActive() {
+  return Boolean(
+    activePairState &&
+      pairFollowEnabled &&
+      !pairFollowSuspended &&
+      followedParticipantName &&
+      followedParticipantName.toLowerCase() === getPairPartnerName().toLowerCase(),
+  );
+}
+
+function resetPairToolActivity() {
+  pairToolActivity = { chat: false, suggestions: false, tasks: false };
+}
+
+function hasPairToolActivity() {
+  return Object.values(pairToolActivity).some(Boolean);
+}
+
+function markPairToolActivity(tab) {
+  if (!Object.prototype.hasOwnProperty.call(pairToolActivity, tab)) return;
+  if (pairPanelOpen && pairPanelTab === tab) return;
+  pairToolActivity[tab] = true;
+}
+
+function clearPairToolActivity(tab) {
+  if (Object.prototype.hasOwnProperty.call(pairToolActivity, tab)) {
+    pairToolActivity[tab] = false;
+  }
+}
+
+function getChangedPairToolTabs(previousPair, nextPair) {
+  const changed = new Set();
+  if (!previousPair || !nextPair || previousPair.id !== nextPair.id) return changed;
+
+  const previousSuggestions = new Map(
+    (previousPair.suggestions || []).map((suggestion) => [suggestion.id, suggestion]),
+  );
+  if ((nextPair.suggestions || []).some((suggestion) => {
+    const previous = previousSuggestions.get(suggestion.id);
+    return !previous || previous.status !== suggestion.status;
+  })) {
+    changed.add("suggestions");
+  }
+
+  const previousTasks = new Map(
+    (previousPair.tasks || []).map((task) => [task.id, task]),
+  );
+  if ((nextPair.tasks || []).some((task) => {
+    const previous = previousTasks.get(task.id);
+    return !previous || previous.done !== task.done;
+  })) {
+    changed.add("tasks");
+  }
+  return changed;
+}
+
+function renderPairPanelHtml() {
+  if (!activePairState || !pairPanelOpen) return "";
+  const tabs = [
+    ["chat", "Chat"],
+    ["suggestions", "Suggestions"],
+    ["tasks", "Tasks"],
+    ["activity", "Activity"],
+  ];
+  let body = "";
+  if (pairPanelTab === "chat") {
+    const messages = activePairState.chat || [];
+    body = `
+      <div class="pair-chat-list">
+        ${messages.length ? messages.map((message) => `
+          <div class="pair-chat-message ${message.from === myInfo.name ? "mine" : ""}">
+            <small>${escapeHtml(formatCollabDisplayName(message.from))} · ${escapeHtml(formatChatTime(message.ts))}</small>
+            ${escapeHtml(message.text)}
+          </div>`).join("") : `<div class="pair-empty">No pair messages yet.</div>`}
+      </div>
+      <div class="pair-compose">
+        <input id="pairChatInput" maxlength="1000" placeholder="Message your partner...">
+        <button id="pairChatSendBtn" type="button">SEND</button>
+      </div>`;
+  } else if (pairPanelTab === "suggestions") {
+    const suggestions = [...(activePairState.suggestions || [])].reverse();
+    body = `
+      <div class="pair-panel-tools"><button id="pairAddSuggestionBtn" type="button"><i class="fa-solid fa-lightbulb"></i> SUGGEST FROM SELECTION</button></div>
+      <div class="pair-list">
+        ${suggestions.length ? suggestions.map((suggestion) => `
+          <div class="pair-list-card ${suggestion.status !== "open" ? "is-done" : ""}">
+            <small>${escapeHtml(formatCollabDisplayName(suggestion.from))} · ${escapeHtml(suggestion.fileName)} · ${escapeHtml(suggestion.status)}</small>
+            ${suggestion.comment ? `<p>${escapeHtml(suggestion.comment)}</p>` : ""}
+            <p><strong>Replace:</strong> ${escapeHtml(suggestion.original || "(cursor position)")}</p>
+            <p><strong>With:</strong> ${escapeHtml(suggestion.replacement || "(remove)")}</p>
+            <div class="pair-panel-tools">
+              <button type="button" class="pair-view-suggestion" data-id="${escapeHtml(suggestion.id)}">VIEW</button>
+              ${suggestion.status === "open" ? `<button type="button" class="pair-apply-suggestion" data-id="${escapeHtml(suggestion.id)}">APPLY</button><button type="button" class="pair-resolve-suggestion" data-id="${escapeHtml(suggestion.id)}">RESOLVE</button><button type="button" class="pair-reject-suggestion" data-id="${escapeHtml(suggestion.id)}">REJECT</button>` : ""}
+            </div>
+          </div>`).join("") : `<div class="pair-empty">Select code and create a suggestion for your partner.</div>`}
+      </div>`;
+  } else if (pairPanelTab === "tasks") {
+    const tasks = activePairState.tasks || [];
+    body = `
+      <div class="pair-compose">
+        <input id="pairTaskInput" maxlength="300" placeholder="Add a pair task...">
+        <button id="pairTaskAddBtn" type="button">ADD</button>
+      </div>
+      <div class="pair-list" style="margin-top:10px;">
+        ${tasks.length ? tasks.map((task) => `
+          <label class="pair-list-card pair-task-row ${task.done ? "is-done" : ""}">
+            <input class="pair-task-toggle" type="checkbox" data-id="${escapeHtml(task.id)}" ${task.done ? "checked" : ""}>
+            <span><small>${escapeHtml(formatCollabDisplayName(task.createdBy, "Pair"))}</small>${escapeHtml(task.text)}</span>
+          </label>`).join("") : `<div class="pair-empty">No tasks yet.</div>`}
+      </div>`;
+  } else {
+    const activity = [...(activePairState.activity || [])].reverse();
+    body = `<div class="pair-list">
+      ${activity.length ? activity.map((entry) => `<div class="pair-list-card"><small>${escapeHtml(formatParticipantJoinedAt(entry.ts))}</small>${escapeHtml(entry.text)}</div>`).join("") : `<div class="pair-empty">No pair activity yet.</div>`}
+    </div>`;
+  }
+  return `
+    <div class="pair-panel">
+      <div class="pair-panel-tabs">
+        ${tabs.map(([key, label]) => {
+          const hasActivity = Boolean(pairToolActivity[key]);
+          return `<button type="button" class="pair-tab-btn pair-activity-target ${hasActivity ? "has-activity" : ""} ${pairPanelTab === key ? "active" : ""}" data-tab="${key}" aria-label="${label}${hasActivity ? ", new activity" : ""}">${label}${hasActivity ? '<span class="pair-activity-dot" aria-hidden="true"></span>' : ""}</button>`;
+        }).join("")}
+      </div>
+      <div class="pair-panel-body">
+        <div class="pair-panel-tools">
+          <select id="pairModeSelect" aria-label="Pair mode">
+            <option value="driver" ${activePairState.mode === "driver" ? "selected" : ""}>Driver Mode</option>
+            <option value="live" ${activePairState.mode === "live" ? "selected" : ""}>Live Pair Mode</option>
+          </select>
+          <button id="pairHelpBtn" type="button" class="${activePairState.helpRequested ? "active" : ""}"><i class="fa-solid fa-hand"></i> ${activePairState.helpRequested ? "HELP REQUESTED" : "ASK HOST"}</button>
+          <button id="pairSnapshotBtn" type="button"><i class="fa-solid fa-download"></i> SNAPSHOT</button>
+        </div>
+        ${body}
+      </div>
+    </div>`;
+}
+
+function renderPairDock() {
+  if (!pairDock || !pairDockContent) return;
+  if (!activePairState || !activeSessionId) {
+    pairDock.hidden = true;
+    pairDockContent.innerHTML = "";
+    return;
+  }
+  const partnerName = getPairPartnerName();
+  const role = isCurrentPairDriver() ? "Driver" : "Navigator";
+  const status = activePairState.status || "active";
+  const voiceActive = ["calling", "connecting", "connected"].includes(pairVoiceStatus);
+  const hasToolActivity = hasPairToolActivity();
+  pairDock.hidden = false;
+  pairDockContent.innerHTML = `
+    <div class="pair-dock-header">
+      <span class="pair-role-badge ${role === "Navigator" ? "navigator" : ""}">${role}</span>
+      <div class="pair-dock-identity">
+        <strong>Pairing with ${escapeHtml(partnerName)}</strong>
+        <span>${activePairState.mode === "live" ? "Live Pair Mode" : "Driver Mode"}</span>
+      </div>
+      <span class="pair-status-badge ${escapeHtml(status)}">${escapeHtml(status)}</span>
+    </div>
+    <div class="pair-dock-actions">
+      <button id="pairSyncViewBtn" type="button" class="${pairFollowEnabled && !pairFollowSuspended ? "active" : ""}" aria-pressed="${pairFollowEnabled && !pairFollowSuspended ? "true" : "false"}" title="Match your partner's current file and scroll position"><i class="fa-solid fa-arrows-to-eye"></i> SYNC VIEW</button>
+      <button id="pairSwitchBtn" type="button" ${status !== "active" ? "disabled" : ""}><i class="fa-solid fa-right-left"></i> SWITCH</button>
+      <button id="pairVoiceBtn" type="button" class="${voiceActive ? "active" : ""}"><i class="fa-solid fa-microphone${voiceActive ? "-slash" : ""}"></i> ${voiceActive ? "END VOICE" : "VOICE"}</button>
+      <button id="pairPanelBtn" type="button" class="pair-activity-target ${hasToolActivity ? "has-activity" : ""} ${pairPanelOpen ? "active" : ""}" aria-label="Pair tools${hasToolActivity ? ", new activity" : ""}"><i class="fa-solid fa-code-compare"></i> TOOLS${hasToolActivity ? '<span class="pair-activity-dot" aria-hidden="true"></span>' : ""}</button>
+      <button id="pairLeaveBtn" type="button" class="danger"><i class="fa-solid fa-xmark"></i> LEAVE</button>
+    </div>
+    ${renderPairPanelHtml()}
+  `;
+  bindPairDockControls();
+}
+
+async function emitPairEvent(eventName, payload = {}, timeout = 5000) {
+  try {
+    return await emitCollabWithAck(eventName, { sessionId: activeSessionId, ...payload }, timeout);
+  } catch (error) {
+    return { ok: false, error: error?.message || "The pair request timed out." };
+  }
+}
+
+function bindPairDockControls() {
+  const bind = (id, handler) => {
+    const element = document.getElementById(id);
+    if (element) element.onclick = handler;
+  };
+  bind("pairSyncViewBtn", () => {
+    const syncIsActive = pairFollowEnabled && !pairFollowSuspended;
+    pairFollowEnabled = !syncIsActive;
+    pairFollowSuspended = false;
+    followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+    if (pairFollowEnabled) {
+      syncFollowedParticipantView();
+      if (pairPartnerPresence) applyPairPartnerPresence(pairPartnerPresence);
+      requestPairPartnerPresence();
+      showNotification(`Sync View is on for ${followedParticipantName}.`, "success");
+    } else {
+      stopPairFollowAnimation();
+      showNotification("Sync View is off.", "info");
+    }
+    renderPairDock();
+  });
+  bind("pairSwitchBtn", async () => {
+    const response = await emitPairEvent("collab:pair:switch-request");
+    showNotification(response?.ok ? "Role switch requested." : response?.error || "Unable to request a role switch.", response?.ok ? "success" : "error");
+  });
+  bind("pairVoiceBtn", () => {
+    if (["calling", "connecting", "connected"].includes(pairVoiceStatus)) stopPairVoice(true);
+    else requestPairVoiceCall();
+  });
+  bind("pairPanelBtn", () => {
+    pairPanelOpen = !pairPanelOpen;
+    if (pairPanelOpen) clearPairToolActivity(pairPanelTab);
+    renderPairDock();
+  });
+  bind("pairLeaveBtn", async () => {
+    const confirmed = await showAppConfirm("LEAVE PAIR", "Leave your current pair? Pair chat, tasks, and unresolved suggestion pins will close.", "LEAVE", "STAY");
+    if (!confirmed?.ok) return;
+    const response = await emitPairEvent("collab:pair:leave");
+    if (!response?.ok) showNotification(response?.error || "Unable to leave the pair.", "error");
+  });
+  document.querySelectorAll(".pair-tab-btn").forEach((button) => {
+    button.onclick = () => {
+      pairPanelTab = button.dataset.tab || "chat";
+      clearPairToolActivity(pairPanelTab);
+      renderPairDock();
+    };
+  });
+  const modeSelect = document.getElementById("pairModeSelect");
+  if (modeSelect) modeSelect.onchange = async () => {
+    const response = await emitPairEvent("collab:pair:set-mode", { mode: modeSelect.value });
+    if (!response?.ok) showNotification(response?.error || "Unable to change pair mode.", "error");
+  };
+  bind("pairHelpBtn", async () => {
+    const response = await emitPairEvent("collab:pair:help", { requested: !activePairState?.helpRequested });
+    if (!response?.ok) showNotification(response?.error || "Unable to update the help request.", "error");
+  });
+  bind("pairSnapshotBtn", savePairSnapshot);
+  bindPairChatControls();
+  bindPairSuggestionControls();
+  bindPairTaskControls();
+}
+
+function bindPairChatControls() {
+  const input = document.getElementById("pairChatInput");
+  const button = document.getElementById("pairChatSendBtn");
+  if (!input || !button) return;
+  const send = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    const response = await emitPairEvent("collab:pair:chat", { text });
+    if (response?.ok) input.value = "";
+    else showNotification(response?.error || "Pair message failed.", "error");
+  };
+  button.onclick = send;
+  input.onkeydown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      send();
+    }
+  };
+}
+
+async function addPairSuggestionFromSelection() {
+  if (!activeFile || !editorTextarea) return;
+  const start = editorTextarea.selectionStart;
+  const end = editorTextarea.selectionEnd;
+  const original = editorTextarea.value.slice(start, end);
+  const replacementResult = await showAppPrompt(
+    "PAIR SUGGESTION",
+    original ? "Enter the replacement for the selected code." : "Enter code to insert at the cursor.",
+    original,
+    "Suggested code",
+  );
+  if (!replacementResult?.ok) return;
+  const commentResult = await showAppPrompt(
+    "SUGGESTION NOTE",
+    "Add a short explanation for your partner (optional).",
+    "",
+    "Why this change?",
+  );
+  if (!commentResult?.ok) return;
+  const response = await emitPairEvent("collab:pair:suggestion:add", {
+    fileName: activeFile.name,
+    start,
+    end,
+    original,
+    replacement: String(replacementResult.value || ""),
+    comment: String(commentResult.value || ""),
+  });
+  showNotification(response?.ok ? "Suggestion sent to your partner." : response?.error || "Suggestion failed.", response?.ok ? "success" : "error");
+}
+
+function getActivePairSuggestion(id) {
+  return (activePairState?.suggestions || []).find((suggestion) => suggestion.id === id) || null;
+}
+
+function viewPairSuggestion(suggestion) {
+  if (!suggestion) return;
+  const file = projectFiles.find((entry) => entry.name === suggestion.fileName);
+  if (!file) return showNotification("That suggestion file is unavailable.", "error");
+  switchFile(file.name);
+  const start = Math.min(Number(suggestion.start || 0), editorTextarea.value.length);
+  const end = Math.min(Math.max(start, Number(suggestion.end || start)), editorTextarea.value.length);
+  editorTextarea.focus();
+  editorTextarea.setSelectionRange(start, end);
+}
+
+async function applyPairSuggestion(suggestion) {
+  if (!suggestion) return;
+  viewPairSuggestion(suggestion);
+  if (editorTextarea.readOnly || !canCurrentUserEditFile(suggestion.fileName)) {
+    showNotification("You do not currently have permission to apply this suggestion.", "error");
+    return;
+  }
+  const start = Math.min(Number(suggestion.start || 0), editorTextarea.value.length);
+  const end = Math.min(Math.max(start, Number(suggestion.end || start)), editorTextarea.value.length);
+  const current = editorTextarea.value.slice(start, end);
+  if (current !== String(suggestion.original || "")) {
+    const confirm = await showAppConfirm(
+      "CODE CHANGED",
+      "The selected code changed after this suggestion was created. Apply it at the original position anyway?",
+      "APPLY",
+      "CANCEL",
+    );
+    if (!confirm?.ok) return;
+  }
+  beginEditorHistoryCapture(editorTextarea);
+  editorTextarea.value = `${editorTextarea.value.slice(0, start)}${suggestion.replacement || ""}${editorTextarea.value.slice(end)}`;
+  editorTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText" }));
+  const caret = start + String(suggestion.replacement || "").length;
+  editorTextarea.setSelectionRange(caret, caret);
+  await emitPairEvent("collab:pair:suggestion:update", { suggestionId: suggestion.id, status: "applied" });
+}
+
+function bindPairSuggestionControls() {
+  const addButton = document.getElementById("pairAddSuggestionBtn");
+  if (addButton) addButton.onclick = addPairSuggestionFromSelection;
+  document.querySelectorAll(".pair-view-suggestion").forEach((button) => {
+    button.onclick = () => viewPairSuggestion(getActivePairSuggestion(button.dataset.id));
+  });
+  document.querySelectorAll(".pair-apply-suggestion").forEach((button) => {
+    button.onclick = () => applyPairSuggestion(getActivePairSuggestion(button.dataset.id));
+  });
+  document.querySelectorAll(".pair-reject-suggestion").forEach((button) => {
+    button.onclick = () => emitPairEvent("collab:pair:suggestion:update", { suggestionId: button.dataset.id, status: "rejected" });
+  });
+  document.querySelectorAll(".pair-resolve-suggestion").forEach((button) => {
+    button.onclick = () => emitPairEvent("collab:pair:suggestion:update", { suggestionId: button.dataset.id, status: "resolved" });
+  });
+}
+
+function bindPairTaskControls() {
+  const input = document.getElementById("pairTaskInput");
+  const addButton = document.getElementById("pairTaskAddBtn");
+  const add = async () => {
+    const text = String(input?.value || "").trim();
+    if (!text) return;
+    const response = await emitPairEvent("collab:pair:task:add", { text });
+    if (response?.ok && input) input.value = "";
+    else if (!response?.ok) showNotification(response?.error || "Unable to add the task.", "error");
+  };
+  if (addButton) addButton.onclick = add;
+  if (input) input.onkeydown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      add();
+    }
+  };
+  document.querySelectorAll(".pair-task-toggle").forEach((checkbox) => {
+    checkbox.onchange = () => emitPairEvent("collab:pair:task:toggle", { taskId: checkbox.dataset.id, done: checkbox.checked });
+  });
+}
+
+async function savePairSnapshot() {
+  const response = await emitPairEvent("collab:pair:snapshot", {}, 8000);
+  if (!response?.ok || !response.snapshot) {
+    showNotification(response?.error || "Unable to save the pair snapshot.", "error");
+    return;
+  }
+  const blob = new Blob([JSON.stringify(response.snapshot, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `codx-pair-${activePairState?.id || "snapshot"}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  showNotification("Pair snapshot saved.", "success");
+}
+
+function showPairModeDialog(targetName) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    appDialogTitle.textContent = "START PAIR";
+    appDialogMessage.innerHTML = `Choose how you want to pair with <strong>${escapeHtml(targetName)}</strong>. Driver Mode lets one person edit; Live Pair lets both edit.`;
+    appDialogInput.style.display = "none";
+    appDialogActions.innerHTML = `
+      <button id="pairInviteCancelBtn" class="run-button" type="button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+      <button id="pairInviteLiveBtn" class="run-button" type="button" style="background:#2563eb;"><strong>LIVE PAIR</strong></button>
+      <button id="pairInviteDriverBtn" class="run-button" type="button"><strong>DRIVER MODE</strong></button>`;
+    appDialog.style.display = "flex";
+    document.getElementById("pairInviteCancelBtn").onclick = () => closeAppDialog({ ok: false });
+    document.getElementById("pairInviteLiveBtn").onclick = () => closeAppDialog({ ok: true, value: "live" });
+    document.getElementById("pairInviteDriverBtn").onclick = () => closeAppDialog({ ok: true, value: "driver" });
+  });
+}
+
+async function inviteParticipantToPair(targetName) {
+  if (collabPermissions.disablePairing) return showNotification("The host disabled pairing.", "error");
+  const modeResult = await showPairModeDialog(targetName);
+  if (!modeResult?.ok) return;
+  const response = await emitPairEvent("collab:pair:invite", {
+    targetName,
+    mode: modeResult.value,
+  });
+  showNotification(
+    response?.ok ? `Pair invitation sent to ${targetName}.` : response?.error || "Pair invitation failed.",
+    response?.ok ? "success" : "error",
+  );
+}
+
+async function handlePairInvitation(invite) {
+  const modeLabel = invite?.mode === "live" ? "Live Pair Mode (both can edit)" : "Driver Mode (inviter starts as Driver)";
+  const result = await showAppConfirmHtml(
+    "PAIR INVITATION",
+    `<strong>${escapeHtml(invite?.from || "A participant")}</strong> wants to pair with you.<br><br><strong>Mode:</strong> ${escapeHtml(modeLabel)}`,
+    "ACCEPT",
+    "DECLINE",
+  );
+  const response = await emitPairEvent("collab:pair:respond", { inviteId: invite?.id, accept: Boolean(result?.ok) });
+  if (!response?.ok) showNotification(response?.error || "Unable to answer the pair invitation.", "error");
+}
+
+function emitPairPresenceSoon(force = false) {
+  if (!activePairState || !activeSessionId || !collabSocket?.connected || !activeFile || document.hidden) return;
+  const elapsed = Date.now() - pairLastPresenceEmitAt;
+  if (!force && elapsed < 55) {
+    clearTimeout(pairPresenceTimeout);
+    pairPresenceTimeout = setTimeout(() => emitPairPresenceSoon(true), 55 - elapsed);
+    return;
+  }
+  pairLastPresenceEmitAt = Date.now();
+  collabSocket.emit("collab:pair:presence", {
+    sessionId: activeSessionId,
+    fileName: activeFile.name,
+    selectionStart: editorTextarea.selectionStart,
+    selectionEnd: editorTextarea.selectionEnd,
+    scrollTop: editorTextarea.scrollTop,
+    scrollLeft: editorTextarea.scrollLeft,
+  });
+}
+
+function requestPairPartnerPresence() {
+  if (!activePairState || !activeSessionId || !collabSocket?.connected) return;
+  // This is an optional optimization. Older or briefly busy servers may not
+  // implement it, so it must never be treated as a connection failure.
+  collabSocket.emit("collab:pair:presence-request", { sessionId: activeSessionId });
+}
+
+function renderPairPartnerSelection(payload) {
+  if (!pairSelectionHighlight || !editorTextarea || activeFile?.name !== payload?.fileName) return;
+  const start = Math.max(0, Math.min(editorTextarea.value.length, Number(payload.selectionStart || 0)));
+  const end = Math.max(start, Math.min(editorTextarea.value.length, Number(payload.selectionEnd || 0)));
+  if (end <= start) {
+    pairSelectionHighlight.hidden = true;
+    return;
+  }
+  const startCoords = getCaretCoordinates(editorTextarea, start);
+  const endCoords = getCaretCoordinates(editorTextarea, end);
+  pairSelectionHighlight.style.top = `${Math.max(0, startCoords.top)}px`;
+  pairSelectionHighlight.style.height = `${Math.max(startCoords.lineHeight, endCoords.top - startCoords.top + endCoords.lineHeight)}px`;
+  pairSelectionHighlight.querySelector("span").textContent = `${payload.from} highlighted`;
+  pairSelectionHighlight.hidden = false;
+}
+
+function stopPairFollowAnimation() {
+  if (pairFollowAnimationFrame) cancelAnimationFrame(pairFollowAnimationFrame);
+  pairFollowAnimationFrame = 0;
+  pairFollowScrollTarget = null;
+}
+
+function runPairFollowAnimation() {
+  pairFollowAnimationFrame = 0;
+  if (!pairFollowScrollTarget || !editorTextarea || !pairFollowEnabled || pairFollowSuspended) {
+    pairFollowScrollTarget = null;
+    return;
+  }
+  const topDelta = pairFollowScrollTarget.top - editorTextarea.scrollTop;
+  const leftDelta = pairFollowScrollTarget.left - editorTextarea.scrollLeft;
+  pairIgnoreLocalScrollUntil = Date.now() + 180;
+  if (Math.abs(topDelta) < 0.75 && Math.abs(leftDelta) < 0.75) {
+    editorTextarea.scrollTop = pairFollowScrollTarget.top;
+    editorTextarea.scrollLeft = pairFollowScrollTarget.left;
+    pairFollowScrollTarget = null;
+    return;
+  }
+  editorTextarea.scrollTop += topDelta * 0.38;
+  editorTextarea.scrollLeft += leftDelta * 0.38;
+  pairFollowAnimationFrame = requestAnimationFrame(runPairFollowAnimation);
+}
+
+function schedulePairFollowScroll(top, left) {
+  pairFollowScrollTarget = {
+    top: Math.max(0, Number(top || 0)),
+    left: Math.max(0, Number(left || 0)),
+  };
+  if (!pairFollowAnimationFrame) pairFollowAnimationFrame = requestAnimationFrame(runPairFollowAnimation);
+}
+
+function applyPairPartnerPresence(payload) {
+  if (!activePairState) return;
+  if (String(payload?.from || "").trim().toLowerCase() !== getPairPartnerName().toLowerCase()) return;
+  pairPartnerPresence = { ...payload };
+  const fileName = String(payload?.fileName || "").trim();
+  if (activeFile?.name === fileName) renderPairPartnerSelection(payload);
+  if (!pairFollowEnabled || pairFollowSuspended) return;
+  if (fileName && activeFile?.name !== fileName && projectFiles.some((file) => file.name === fileName)) {
+    pairIgnoreLocalScrollUntil = Date.now() + 650;
+    switchFile(fileName);
+  }
+  schedulePairFollowScroll(payload?.scrollTop, payload?.scrollLeft);
+  setTimeout(() => renderPairPartnerSelection(payload), 120);
+}
+
+function sendPairVoiceSignal(kind, data = null) {
+  if (!activeSessionId || !collabSocket) return Promise.resolve({ ok: false });
+  return emitPairEvent("collab:pair:voice", { kind, data }, 6000);
+}
+
+async function ensurePairVoiceMedia() {
+  if (pairVoiceStream) return pairVoiceStream;
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access is unavailable in this browser.");
+  pairVoiceStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    video: false,
+  });
+  return pairVoiceStream;
+}
+
+async function ensurePairVoiceConnection(initiator = false) {
+  if (pairVoiceConnection) return pairVoiceConnection;
+  pairVoiceInitiator = Boolean(initiator);
+  const stream = await ensurePairVoiceMedia();
+  pairVoiceConnection = new RTCPeerConnection({ iceServers: [] });
+  stream.getTracks().forEach((track) => pairVoiceConnection.addTrack(track, stream));
+  pairVoiceConnection.onicecandidate = (event) => {
+    if (event.candidate) sendPairVoiceSignal("ice", event.candidate.toJSON());
+  };
+  pairVoiceConnection.ontrack = (event) => {
+    if (pairVoiceAudio) pairVoiceAudio.srcObject = event.streams[0];
+  };
+  pairVoiceConnection.onconnectionstatechange = () => {
+    const state = pairVoiceConnection?.connectionState;
+    if (state === "connected") pairVoiceStatus = "connected";
+    if (["failed", "closed", "disconnected"].includes(state)) stopPairVoice(false);
+    renderPairDock();
+  };
+  return pairVoiceConnection;
+}
+
+async function requestPairVoiceCall() {
+  pairVoiceStatus = "calling";
+  renderPairDock();
+  const response = await sendPairVoiceSignal("invite");
+  if (!response?.ok) {
+    pairVoiceStatus = "idle";
+    renderPairDock();
+    showNotification(response?.error || "Unable to call your partner.", "error");
+  } else showNotification("Voice invitation sent. Microphone access is requested only if they accept.", "info");
+}
+
+async function handlePairVoiceSignal(payload) {
+  const kind = String(payload?.kind || "");
+  if (kind === "invite") {
+    if (pairVoiceStatus !== "idle") {
+      await sendPairVoiceSignal("response", { accepted: false });
+      return;
+    }
+    const result = await showAppConfirm("PAIR VOICE", `${payload.from} wants to start a private peer-to-peer voice call. Allow microphone access?`, "ACCEPT", "DECLINE");
+    pairVoiceStatus = result?.ok ? "connecting" : "idle";
+    renderPairDock();
+    await sendPairVoiceSignal("response", { accepted: Boolean(result?.ok) });
+    return;
+  }
+  if (kind === "response") {
+    if (pairVoiceStatus !== "calling") {
+      if (payload.data?.accepted) await sendPairVoiceSignal("hangup");
+      return;
+    }
+    if (!payload.data?.accepted) {
+      pairVoiceStatus = "idle";
+      renderPairDock();
+      showNotification("Your partner declined the voice call.", "info");
+      return;
+    }
+    try {
+      pairVoiceStatus = "connecting";
+      const connection = await ensurePairVoiceConnection(true);
+      const offer = await connection.createOffer();
+      await connection.setLocalDescription(offer);
+      await sendPairVoiceSignal("offer", connection.localDescription.toJSON());
+      renderPairDock();
+    } catch (error) {
+      stopPairVoice(true);
+      showNotification(error.message || "Microphone access failed.", "error");
+    }
+    return;
+  }
+  if (kind === "offer") {
+    try {
+      pairVoiceStatus = "connecting";
+      const connection = await ensurePairVoiceConnection(false);
+      await connection.setRemoteDescription(payload.data);
+      for (const candidate of pairVoicePendingCandidates.splice(0)) await connection.addIceCandidate(candidate);
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      await sendPairVoiceSignal("answer", connection.localDescription.toJSON());
+      renderPairDock();
+    } catch (error) {
+      stopPairVoice(true);
+      showNotification(error.message || "Voice connection failed.", "error");
+    }
+    return;
+  }
+  if (kind === "answer" && pairVoiceConnection) {
+    await pairVoiceConnection.setRemoteDescription(payload.data);
+    for (const candidate of pairVoicePendingCandidates.splice(0)) await pairVoiceConnection.addIceCandidate(candidate);
+    return;
+  }
+  if (kind === "ice" && payload.data) {
+    if (pairVoiceConnection?.remoteDescription) await pairVoiceConnection.addIceCandidate(payload.data);
+    else pairVoicePendingCandidates.push(payload.data);
+    return;
+  }
+  if (kind === "hangup") {
+    stopPairVoice(false);
+    showNotification("Pair voice call ended.", "info");
+  }
+}
+
+function stopPairVoice(notifyPartner = true) {
+  if (notifyPartner && activePairState && collabSocket?.connected) sendPairVoiceSignal("hangup");
+  pairVoiceConnection?.close();
+  pairVoiceConnection = null;
+  pairVoiceStream?.getTracks().forEach((track) => track.stop());
+  pairVoiceStream = null;
+  pairVoiceStatus = "idle";
+  pairVoicePendingCandidates = [];
+  pairVoiceInitiator = false;
+  if (pairVoiceAudio) pairVoiceAudio.srcObject = null;
+  renderPairDock();
 }
 
 // background timers now managed in startBackgroundTimers()
@@ -15663,6 +16488,8 @@ function showParticipantActions(targetName) {
           return collabPermissions.disableRunCode;
         case "consoleAccess":
           return collabPermissions.disableConsoleAccess;
+        case "pairing":
+          return collabPermissions.disablePairing;
         default:
           return false;
       }
@@ -15878,6 +16705,7 @@ function showKickConfirmation(targetName) {
 function showKickedOutModal() {
   resetTransientCollabUiState();
   activeSessionId = null;
+  collabPendingLocalSync = false;
   removeWaitingRoomPopup();
   collabParticipants = [];
   collabPendingJoins = [];
@@ -15906,25 +16734,115 @@ function showKickedOutModal() {
   }
 }
 
-function resumeCollabSession(successMessage) {
-  if (!collabSocket || !collabSocket.connected || !activeSessionId || !myInfo.name) return;
-  collabSocket.emit(
-    "collab:resume",
-    {
+function clearCollabResumeRetry() {
+  clearTimeout(collabResumeRetryTimer);
+  collabResumeRetryTimer = null;
+}
+
+function scheduleCollabResume(delayMs) {
+  if (!activeSessionId || !myInfo.name || collabResumeRetryTimer) return;
+  const fallbackDelay = Math.min(15000, 1000 * Math.max(1, 2 ** Math.min(4, collabResumeFailureCount)));
+  collabResumeRetryTimer = setTimeout(() => {
+    collabResumeRetryTimer = null;
+    if (!activeSessionId) return;
+    if (!collabSocket?.connected) {
+      ensureCollabSocket();
+      return;
+    }
+    resumeCollabSession();
+  }, Math.max(250, Number(delayMs) || fallbackDelay));
+}
+
+function recoverHostedCollabSession() {
+  if (collabHostRecoveryInFlight || !collabSocket?.connected || !activeSessionId || !isHost()) {
+    return Promise.resolve(false);
+  }
+  collabHostRecoveryInFlight = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      collabHostRecoveryInFlight = false;
+      if (!response?.ok) {
+        resolve(false);
+        return;
+      }
+      collabParticipants = response.participants || [{ ...myInfo, role: "host" }];
+      collabHostName = response.hostName || myInfo.name;
+      collabPermissions = normalizeCollabPermissions(response.permissions || collabPermissions);
+      collabShareLink = response.shareLink || collabShareLink;
+      collabSessionPin = response.sessionPin || collabSessionPin;
+      collabPendingLocalSync = false;
+      enforceCollabPermissionsUI();
+      updateCollabButtonState();
+      startCollabHeartbeat();
+      showNotification("Collaboration session restored after the server restarted.", "success");
+      resolve(true);
+    };
+    const timeout = setTimeout(() => finish(null), 10000);
+    collabSocket.emit("collab:create", {
       sessionId: activeSessionId,
       name: myInfo.name,
       theme: myInfo.theme || "#4CAF50",
       cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
       deviceId: getOrCreateDeviceId(),
-    },
-    (res) => {
+      files: projectFiles,
+      activeFileName: activeFile ? activeFile.name : null,
+      permissions: collabPermissions,
+      baseUrl: window.location.origin,
+    }, finish);
+  });
+}
+
+function resumeCollabSession(successMessage) {
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name || collabResumeInFlight) {
+    return Promise.resolve(false);
+  }
+  collabResumeInFlight = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = async (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       if (!res?.ok) {
-        showNotification(
-          (res && res.error) || "Collaboration reconnected, but session resume failed.",
-          "error",
-        );
+        collabResumeInFlight = false;
+        collabResumeFailureCount += 1;
+        const resumeError = String(res?.error || "");
+        const normalizedResumeError = resumeError.toLowerCase();
+        if (normalizedResumeError.includes("session was ended")) {
+          clearCollabResumeRetry();
+          collabResumeFailureCount = 0;
+          activeSessionId = null;
+          collabPendingLocalSync = false;
+          resetTransientCollabUiState();
+          collabParticipants = [];
+          collabPendingJoins = [];
+          collabShareLink = "";
+          collabSessionPin = "";
+          collabPermissions = { ...defaultCollabPermissions };
+          updateCollabButtonState();
+          resetCollabUrlToFreshState();
+          showNotification(resumeError || "This collaboration session was ended.", "warn");
+          resolve(false);
+          return;
+        }
+        const missingSession = normalizedResumeError.includes("session not found");
+        if (missingSession && await recoverHostedCollabSession()) {
+          clearCollabResumeRetry();
+          collabResumeFailureCount = 0;
+          resolve(true);
+          return;
+        }
+        maybeShowCollabOfflineNotice();
+        scheduleCollabResume();
+        resolve(false);
         return;
       }
+      clearCollabResumeRetry();
+      collabResumeFailureCount = 0;
       updateTimelineFromParticipants(res.participants || []);
       collabParticipants = res.participants || [];
       collabHostName =
@@ -15932,17 +16850,60 @@ function resumeCollabSession(successMessage) {
         res.hostName ||
         collabHostName;
       collabPermissions = normalizeCollabPermissions(res.permissions);
-      applyRemoteSessionState(res.files, res.activeFileName, true);
+      const restoreLocalChanges = collabPendingLocalSync;
+      if (!restoreLocalChanges) applyRemoteSessionState(res.files, res.activeFileName, true);
       enforceCollabPermissionsUI();
+      updateCollabButtonState();
       if (collabModal.style.display === "flex" && collabModalView === "session") {
         showSessionDetails(activeSessionId);
       }
       requestCollabChatHistory();
-      if (successMessage) {
-        showNotification(successMessage, "success");
+      collabResumeInFlight = false;
+      if (restoreLocalChanges) {
+        collabPendingLocalSync = false;
+        emitSessionUpdate();
       }
-    },
-  );
+      if (successMessage) showNotification(successMessage, "success");
+      resolve(true);
+    };
+    const timeout = setTimeout(() => finish({ ok: false, error: "Session resume timed out." }), 10000);
+    collabSocket.emit("collab:resume", {
+      sessionId: activeSessionId,
+      name: myInfo.name,
+      theme: myInfo.theme || "#4CAF50",
+      cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
+      deviceId: getOrCreateDeviceId(),
+    }, finish);
+  });
+}
+
+function stopCollabHeartbeat() {
+  clearInterval(collabHeartbeatInterval);
+  clearTimeout(collabHeartbeatAckTimer);
+  collabHeartbeatInterval = null;
+  collabHeartbeatAckTimer = null;
+}
+
+function sendCollabHeartbeat() {
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name || collabHeartbeatAckTimer) return;
+  collabHeartbeatAckTimer = setTimeout(() => {
+    // A late application acknowledgement is not proof that the transport died.
+    // Socket.IO owns transport liveness and reconnection; never force-close it here.
+    collabHeartbeatAckTimer = null;
+  }, 15000);
+  collabSocket.emit("collab:heartbeat", { sessionId: activeSessionId }, (res) => {
+    clearTimeout(collabHeartbeatAckTimer);
+    collabHeartbeatAckTimer = null;
+    if (res?.ok) return;
+    resumeCollabSession();
+  });
+}
+
+function startCollabHeartbeat() {
+  stopCollabHeartbeat();
+  if (!activeSessionId || !collabSocket?.connected) return;
+  collabHeartbeatInterval = setInterval(sendCollabHeartbeat, 30000);
+  sendCollabHeartbeat();
 }
 
 function resetCollabOfflineNoticeState() {
@@ -15955,7 +16916,7 @@ function maybeShowCollabOfflineNotice() {
   if (collabOfflineNoticeActive && now - collabOfflineNoticeLastAt < 60000) return;
   collabOfflineNoticeActive = true;
   collabOfflineNoticeLastAt = now;
-  showNotification("Unable to connect to collaboration server", "error");
+  showNotification("Collaboration is reconnecting automatically…", "warn");
 }
 
 function ensureCollabSocket() {
@@ -15965,9 +16926,33 @@ function ensureCollabSocket() {
     return false;
   }
 
-  collabSocket = io();
+  if (collabSocket) {
+    collabSocket.connect();
+    return true;
+  }
+
+  collabSocket = io({
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.3,
+    timeout: 20000,
+    transports: ["polling", "websocket"],
+    upgrade: true,
+  });
   collabSocket.on("connect", () => {
+    const isReconnect = collabHasConnectedOnce;
+    collabHasConnectedOnce = true;
     resetCollabOfflineNoticeState();
+    if (activeSessionId && myInfo.name) {
+      setTimeout(async () => {
+        await resumeCollabSession(isReconnect ? "Collaboration reconnected." : "");
+        startCollabHeartbeat();
+      }, 0);
+    } else {
+      startCollabHeartbeat();
+    }
   });
   collabSocket.on("connect_error", () => {
     maybeShowCollabOfflineNotice();
@@ -15975,14 +16960,12 @@ function ensureCollabSocket() {
   collabSocket.on("disconnect", () => {
     clearOwnSessionCursorBroadcast();
     resetTransientCollabUiState();
-    resetCollabOfflineNoticeState();
     if (activeSessionId) {
-      showNotification("Collaboration connection lost.", "warn");
+      maybeShowCollabOfflineNotice();
     }
   });
-  collabSocket.on("reconnect", () => {
-    resetCollabOfflineNoticeState();
-    resumeCollabSession("Collaboration reconnected.");
+  collabSocket.io.on("reconnect_attempt", () => {
+    if (activeSessionId) maybeShowCollabOfflineNotice();
   });
 
   collabSocket.on("collab:state", (payload) => {
@@ -16162,6 +17145,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:banned", () => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    collabPendingLocalSync = false;
     removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
@@ -16197,6 +17181,122 @@ function ensureCollabSocket() {
       showNotification(`${actorName} removed your co-host access.`, "info");
       addTimelineEntry(`${actorName} removed your co-host access.`, "role");
     }
+  });
+
+  collabSocket.on("collab:pair:overview", (overview) => {
+    pairOverview = Array.isArray(overview) ? overview : [];
+    if (collabModal?.style.display === "flex" && activeSessionId) {
+      if (collabModalView === "session") showSessionDetails(activeSessionId);
+      else if (collabModalView === "group-controls" && canUseCoHostTools()) showGroupControls(activeSessionId);
+    }
+  });
+
+  collabSocket.on("collab:pair:state", (pair) => {
+    const previousPair = activePairState;
+    const previousPairId = activePairState?.id || "";
+    const previousPartner = getPairPartnerName(activePairState);
+    const wasDriver = isCurrentPairDriver();
+    const changedToolTabs = getChangedPairToolTabs(previousPair, pair);
+    activePairState = pair || null;
+    if (!activePairState) {
+      if (followedParticipantName === previousPartner) followedParticipantName = "";
+      pairPanelOpen = false;
+      resetPairToolActivity();
+      pairFollowEnabled = false;
+      pairFollowSuspended = false;
+      pairPartnerPresence = null;
+      stopPairFollowAnimation();
+      stopPairVoice(false);
+      enforceCollabPermissionsUI();
+      renderPairDock();
+      return;
+    }
+    if (activePairState.id !== previousPairId) {
+      pairPanelOpen = false;
+      pairPanelTab = "chat";
+      resetPairToolActivity();
+      pairFollowEnabled = !isCurrentPairDriver();
+      pairFollowSuspended = false;
+      pairPartnerPresence = null;
+      followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+      showNotification(`Pair started with ${getPairPartnerName()}.`, "success");
+      setTimeout(() => {
+        emitPairPresenceSoon(true);
+        if (pairFollowEnabled) {
+          syncFollowedParticipantView();
+          requestPairPartnerPresence();
+        }
+      }, 0);
+    } else if (wasDriver !== isCurrentPairDriver()) {
+      pairFollowEnabled = !isCurrentPairDriver();
+      pairFollowSuspended = false;
+      followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+      stopPairFollowAnimation();
+      setTimeout(() => {
+        emitPairPresenceSoon(true);
+        if (pairFollowEnabled) {
+          syncFollowedParticipantView();
+          requestPairPartnerPresence();
+        }
+      }, 0);
+    }
+    changedToolTabs.forEach(markPairToolActivity);
+    if (pairFollowEnabled && !pairFollowSuspended) followedParticipantName = getPairPartnerName();
+    enforceCollabPermissionsUI();
+    renderPairDock();
+  });
+
+  collabSocket.on("collab:pair:invitation", handlePairInvitation);
+  collabSocket.on("collab:pair:invitation-response", (payload) => {
+    showNotification(
+      payload?.accepted ? `${payload.by} accepted your pair invitation.` : `${payload?.by || "That participant"} declined your pair invitation.`,
+      payload?.accepted ? "success" : "info",
+    );
+  });
+  collabSocket.on("collab:pair:ended", (payload) => {
+    const partner = getPairPartnerName();
+    activePairState = null;
+    pairPanelOpen = false;
+    resetPairToolActivity();
+    pairFollowEnabled = false;
+    pairFollowSuspended = false;
+    pairPartnerPresence = null;
+    stopPairFollowAnimation();
+    if (followedParticipantName === partner) followedParticipantName = "";
+    stopPairVoice(false);
+    enforceCollabPermissionsUI();
+    renderPairDock();
+    showNotification(payload?.reason || "Pair ended.", "info");
+  });
+  collabSocket.on("collab:pair:switch-request", async (payload) => {
+    const result = await showAppConfirm(
+      "SWITCH PAIR ROLES",
+      `${payload?.from || "Your partner"} wants to switch Driver and Navigator roles.`,
+      "SWITCH",
+      "NOT NOW",
+    );
+    const response = await emitPairEvent("collab:pair:switch-response", { accept: Boolean(result?.ok) });
+    if (!response?.ok) showNotification(response?.error || "Unable to answer the role switch.", "error");
+  });
+  collabSocket.on("collab:pair:chat", (message) => {
+    if (!activePairState || !message) return;
+    const messages = activePairState.chat || (activePairState.chat = []);
+    if (!messages.some((entry) => entry.id === message.id)) messages.push(message);
+    markPairToolActivity("chat");
+    renderPairDock();
+    if (message.from !== myInfo.name) showNotification(`${message.from} sent a pair message.`, "info");
+  });
+  collabSocket.on("collab:pair:presence", applyPairPartnerPresence);
+  collabSocket.on("collab:pair:presence-request", () => emitPairPresenceSoon(true));
+  collabSocket.on("collab:pair:help-request", (payload) => {
+    showNotification(`${payload?.from || "A pair"} asked the host for help.`, "warn");
+    addTimelineEntry(`${payload?.from || "A pair"} requested pair help.`, "pair");
+  });
+  collabSocket.on("collab:pair:voice", (payload) => {
+    handlePairVoiceSignal(payload).catch((error) => {
+      stopPairVoice(false);
+      showNotification(error?.message || "Pair voice connection failed.", "error");
+    });
   });
 
   collabSocket.on("collab:cursor", (payload) => {
@@ -16332,6 +17432,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:session-ended", (payload) => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    collabPendingLocalSync = false;
     removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
@@ -16357,6 +17458,19 @@ function ensureCollabSocket() {
 
   return true;
 }
+
+window.addEventListener("online", async () => {
+  if (!activeSessionId) return;
+  ensureCollabSocket();
+  if (collabSocket?.connected) {
+    await resumeCollabSession("Collaboration reconnected.");
+    startCollabHeartbeat();
+  }
+});
+
+window.addEventListener("offline", () => {
+  if (activeSessionId) maybeShowCollabOfflineNotice();
+});
 
 function applyRemoteSessionState(files, activeFileName, preferRemoteActive = false) {
   if (!Array.isArray(files)) return;
@@ -16427,13 +17541,31 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
 }
 
 function emitSessionUpdate() {
-  if (!collabSocket || !activeSessionId || !myInfo.name) return;
-  collabSocket.emit("collab:update", {
-    sessionId: activeSessionId,
-    files: projectFiles,
-    activeFileName: activeFile ? activeFile.name : null,
-    user: myInfo,
-  });
+  if (!activeSessionId || !myInfo.name) return;
+  collabPendingLocalSync = true;
+  if (!collabSocket) return;
+  if (!collabSocket.connected || collabResumeInFlight) {
+    return;
+  }
+  const syncRevision = collabLocalSyncRevision;
+  collabSocket.timeout(8000).emit(
+    "collab:update",
+    {
+      sessionId: activeSessionId,
+      files: projectFiles,
+      activeFileName: activeFile ? activeFile.name : null,
+      user: myInfo,
+    },
+    (error, response) => {
+      if (error) return;
+      if (!response?.ok) {
+        if (response?.needsResume) resumeCollabSession();
+        else if (syncRevision === collabLocalSyncRevision) collabPendingLocalSync = false;
+        return;
+      }
+      if (syncRevision === collabLocalSyncRevision) collabPendingLocalSync = false;
+    },
+  );
 }
 
 function getCollabDocumentRevision(content) {
@@ -16450,7 +17582,7 @@ function getCollabDocumentRevision(content) {
 }
 
 function announceTyping(activeEditorId) {
-  if (!collabSocket || !activeSessionId || !myInfo.name) return;
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name) return;
   clearTimeout(typingTimer);
   const editor = document.getElementById("activeEditor");
   const localCaretColor = /^#[0-9a-f]{6}$/i.test(String(myInfo.theme || ""))
@@ -16717,6 +17849,9 @@ function startBackgroundTimers() {
   cursorPruneInterval = setInterval(pruneRemoteCursors, 1000);
   roomIndicatorInterval = setInterval(() => {
     applyRoomIndicators();
+    if (activePairState && activeSessionId && collabSocket?.connected && !document.hidden) {
+      emitPairPresenceSoon();
+    }
     if (
       activeSessionId &&
       collabModal.style.display === "flex" &&
@@ -17543,8 +18678,19 @@ function showSessionDetails(sid) {
       const renameButton = canRenameParticipant(p)
         ? `<button class="run-button participant-rename-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><i class="fa-solid fa-pen" aria-hidden="true"></i><strong>RENAME</strong></button>`
         : "";
-      const rowActions = moreButton || renameButton
-        ? `<div class="collab-participant-row-actions">${renameButton}${moreButton}</div>`
+      const targetPair = getPairOverviewForName(p.name);
+      const myPair = getPairOverviewForName(myInfo.name);
+      const isMe = String(p.name || "").trim().toLowerCase() === String(myInfo.name || "").trim().toLowerCase();
+      const pairingBlocked =
+        collabPermissions.disablePairing ||
+        participantHasDisabledFeature(p, "pairing") ||
+        participantHasDisabledFeature(getMyParticipant(), "pairing") ||
+        Boolean(getMyParticipant()?.mutedChat);
+      const pairButton = !isMe && !pairingBlocked
+        ? `<button class="run-button participant-pair-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px;font-size:11px;" ${targetPair || myPair ? "disabled" : ""}><i class="fa-solid fa-code-compare"></i><strong>${targetPair ? "PAIRED" : "PAIR"}</strong></button>`
+        : "";
+      const rowActions = moreButton || renameButton || pairButton
+        ? `<div class="collab-participant-row-actions">${pairButton}${renameButton}${moreButton}</div>`
         : "";
       const statusParts = [
         p.currentFile || "No active file",
@@ -17557,7 +18703,7 @@ function showSessionDetails(sid) {
         <div class="collab-participant-main">
           <span class="collab-participant-color" style="background:${escapeHtml(p.theme)};"></span>
           <div class="collab-participant-text">
-            <div class="collab-participant-name">${escapeHtml(p.name)}${roleLabel}</div>
+            <div class="collab-participant-name">${escapeHtml(formatCollabDisplayName(p.name))}${roleLabel}${targetPair ? `<span class="pair-participant-badge">${escapeHtml(targetPair.driver === p.name ? "Driver" : "Navigator")}</span>` : ""}</div>
             <div class="collab-participant-meta">${escapeHtml(statusParts.join(" · "))}</div>
           </div>
         </div>
@@ -17584,7 +18730,7 @@ function showSessionDetails(sid) {
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Host</span>
-          <span class="collab-meta-value">${escapeHtml(getCurrentHostName() || "Unknown")}</span>
+          <span class="collab-meta-value">${escapeHtml(formatCollabDisplayName(getCurrentHostName(), "Unknown"))}</span>
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Announcement</span>
@@ -17638,6 +18784,9 @@ function showSessionDetails(sid) {
       const targetName = btn.getAttribute("data-name") || "";
       requestParticipantRename(targetName);
     });
+  });
+  modalBody.querySelectorAll(".participant-pair-btn").forEach((btn) => {
+    btn.addEventListener("click", () => inviteParticipantToPair(btn.getAttribute("data-name") || ""));
   });
   bindCollabChatControls();
   requestCollabChatHistory();
@@ -17797,6 +18946,7 @@ function syncProjectWithSession() {
 }
 
 function startSyncing() {
+  startCollabHeartbeat();
   emitSessionUpdate();
 }
 // PART 13 - MEDIA FILE HANDLER
