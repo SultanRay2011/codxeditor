@@ -218,6 +218,17 @@
           <div class="header-more-section">
             <div class="header-more-section-title">Editor Extras</div>
             <button
+              id="commandPaletteBtn"
+              class="run-button header-more-action"
+              title="Search files and editor actions"
+              aria-label="Open command palette"
+              type="button"
+            >
+              <i class="fa-solid fa-terminal"></i>
+              <strong>COMMAND PALETTE</strong>
+              <kbd>Ctrl K</kbd>
+            </button>
+            <button
               id="enableNodeRuntimeBtn"
               class="run-button header-more-action"
               title="Enable the browser-isolated Node.js runtime"
@@ -447,6 +458,7 @@
             <strong>RUN</strong>
           </button>
           <button
+            id="exportZipBtn"
             class="run-button"
             onclick="exportAsZip()"
             aria-label="Export project as ZIP"
@@ -455,6 +467,7 @@
             <strong>EXPORT ZIP FILE</strong>
           </button>
           <button
+            id="importZipBtn"
             class="run-button"
             onclick="importZip()"
             aria-label="Import ZIP file"
@@ -1454,6 +1467,44 @@
         <h2 id="projectLibraryTitle" style="margin: 0 0 18px">Project Library</h2>
         <div id="projectLibraryBody"></div>
       </div>
+    </div>
+
+    <!-- Command Palette -->
+    <div
+      id="commandPaletteModal"
+      class="command-palette-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="commandPaletteTitle"
+      hidden
+    >
+      <section class="command-palette-dialog">
+        <h2 id="commandPaletteTitle" class="sr-only">Command Palette</h2>
+        <label class="command-palette-search">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input
+            id="commandPaletteInput"
+            type="search"
+            placeholder="Search files and commands..."
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search commands"
+            aria-controls="commandPaletteResults"
+            aria-activedescendant=""
+          />
+          <kbd>ESC</kbd>
+        </label>
+        <div class="command-palette-meta">
+          <span id="commandPaletteStatus">Type a command or file name</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Enter</kbd> run</span>
+        </div>
+        <div
+          id="commandPaletteResults"
+          class="command-palette-results"
+          role="listbox"
+          aria-label="Available commands"
+        ></div>
+      </section>
     </div>
 
     <!-- Font Picker Modal -->

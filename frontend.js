@@ -57,8 +57,8 @@ const editorMediaViewerIcon = document.getElementById("editorMediaViewerIcon");
 const editorMediaViewerName = document.getElementById("editorMediaViewerName");
 const editorMediaViewerKind = document.getElementById("editorMediaViewerKind");
 const editorMediaViewerContent = document.getElementById("editorMediaViewerContent");
-const exportZipBtn = document.querySelector('button[aria-label="Export project as ZIP"]');
-const importZipBtn = document.querySelector('button[aria-label="Import ZIP file"]');
+const exportZipBtn = document.getElementById("exportZipBtn");
+const importZipBtn = document.getElementById("importZipBtn");
 const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
 const previewTitleEl = document.getElementById("previewTitle");
 const previewLinkEl = document.getElementById("previewLink");
@@ -137,6 +137,11 @@ const headerMoreBtn = document.getElementById("headerMoreBtn");
 const headerMorePanel = document.getElementById("headerMorePanel");
 const undoEditorBtn = document.getElementById("undoEditorBtn");
 const redoEditorBtn = document.getElementById("redoEditorBtn");
+const commandPaletteBtn = document.getElementById("commandPaletteBtn");
+const commandPaletteModal = document.getElementById("commandPaletteModal");
+const commandPaletteInput = document.getElementById("commandPaletteInput");
+const commandPaletteResults = document.getElementById("commandPaletteResults");
+const commandPaletteStatus = document.getElementById("commandPaletteStatus");
 
 
 function getModalDoneBtn() {
@@ -173,6 +178,250 @@ if (headerMoreBtn && headerMorePanel) {
   });
 
 }
+
+let commandPaletteMatches = [];
+let commandPaletteActiveIndex = 0;
+let commandPalettePreviousFocus = null;
+
+function getCommandButton(id) {
+  return document.getElementById(id);
+}
+
+function createButtonCommand(id, label, description, icon, buttonId, keywords = "") {
+  const button = getCommandButton(buttonId);
+  return {
+    id,
+    label,
+    description,
+    icon,
+    keywords,
+    disabled: Boolean(!button || button.disabled),
+    run: () => getCommandButton(buttonId)?.click(),
+  };
+}
+
+function getCommandPaletteCommands() {
+  const commands = [
+    createButtonCommand("file.new", "New file", "Create a file in this project", "fa-solid fa-file-circle-plus", "newFileBtn", "add create document"),
+    createButtonCommand("project.new", "New project", "Start with a fresh project", "fa-solid fa-folder-plus", "newProjectBtn", "clear reset"),
+    createButtonCommand("project.save", "Save project", "Save to your local project library", "fa-solid fa-floppy-disk", "saveProjectBtn", "store library"),
+    createButtonCommand("project.open", "Open saved projects", "Browse your local project library", "fa-solid fa-folder-open", "openSavedProjectsBtn", "load library"),
+    createButtonCommand("project.templates", "Open starter templates", "Start from a ready-made project", "fa-solid fa-layer-group", "templatesBtn", "gallery examples"),
+    createButtonCommand("project.publish", "Publish / share project", "Create or update a public link", "fa-solid fa-share-nodes", "publishProjectBtn", "deploy link"),
+    createButtonCommand("project.export", "Export project as ZIP", "Download every project file", "fa-solid fa-file-zipper", "exportZipBtn", "download backup"),
+    createButtonCommand("project.import", "Import project ZIP", "Open files from a ZIP archive", "fa-solid fa-file-import", "importZipBtn", "upload restore"),
+    createButtonCommand("editor.focus", "Focus code editor", "Return the cursor to the active file", "fa-solid fa-i-cursor", "activeEditor", "code type",),
+    createButtonCommand("editor.undo", "Undo edit", "Undo the last editor change", "fa-solid fa-rotate-left", "undoEditorBtn", "history"),
+    createButtonCommand("editor.redo", "Redo edit", "Restore the last undone change", "fa-solid fa-rotate-right", "redoEditorBtn", "history"),
+    createButtonCommand("editor.settings", "Open editor settings", "Theme, font and layout preferences", "fa-solid fa-gear", "settingsBtn", "appearance customize"),
+    createButtonCommand("editor.zen", isZenMode ? "Exit Zen Mode" : "Enter Zen Mode", "Toggle the focused editing layout", "fa-solid fa-laptop-code", "zenModeBtn", "focus fullscreen"),
+    createButtonCommand("preview.run", "Run preview", "Build the current project preview", "fa-solid fa-play", "runPreviewBtn", "refresh execute"),
+    createButtonCommand("preview.refresh", "Refresh preview", "Reload the preview pane", "fa-solid fa-rotate", "previewRefreshBtn", "reload"),
+    createButtonCommand("preview.fullscreen", "Toggle preview fullscreen", "Expand or restore the preview", "fa-solid fa-expand", "previewFullscreenBtn", "screen"),
+    createButtonCommand("collaboration.open", "Collaboration", "Create, join or manage a live session", "fa-solid fa-user-group", "collabBtn", "share room friends"),
+    createButtonCommand("tools.media", "Add media", "Import an image, video or audio file", "fa-solid fa-photo-film", "addMediaBtn", "upload asset"),
+    createButtonCommand("tools.fonts", "Browse fonts", "Find and copy font styles", "fa-solid fa-font", "fontPickerBtn", "typography google fontsource"),
+    createButtonCommand("tools.icons", "Browse icons", "Search the Font Awesome catalog", "fa-solid fa-icons", "getIconsBtn", "font awesome"),
+    createButtonCommand("tools.node", window.codxNodeRuntime?.enabled ? "Disable Node.js runtime" : "Enable Node.js runtime", "Use Node.js and npm inside the browser", "fa-brands fa-node-js", "enableNodeRuntimeBtn", "terminal npm server"),
+    createButtonCommand("help.open", "Help and tutorial", "Open learning options", "fa-solid fa-circle-question", "helpPageBtn", "guide tour docs"),
+  ];
+
+  commands.push({
+    id: "view.console",
+    label: showConsoleCheckbox?.checked ? "Hide console" : "Show console",
+    description: "Toggle preview logs and errors",
+    icon: "fa-solid fa-rectangle-list",
+    keywords: "output debug log",
+    disabled: Boolean(!showConsoleCheckbox || showConsoleCheckbox.disabled),
+    run: () => {
+      showConsoleCheckbox.checked = !showConsoleCheckbox.checked;
+      showConsoleCheckbox.dispatchEvent(new Event("change"));
+    },
+  });
+
+  commands.push({
+    id: "view.autorun",
+    label: autoRunCheckbox?.checked ? "Disable Auto-Run" : "Enable Auto-Run",
+    description: "Toggle automatic preview updates",
+    icon: "fa-solid fa-bolt",
+    keywords: "preview live update",
+    disabled: Boolean(!autoRunCheckbox || autoRunCheckbox.disabled),
+    run: () => {
+      autoRunCheckbox.checked = !autoRunCheckbox.checked;
+      autoRunCheckbox.dispatchEvent(new Event("change"));
+    },
+  });
+
+  (Array.isArray(projectFiles) ? projectFiles : []).forEach((file) => {
+    const fileName = String(file?.name || "").trim();
+    if (!fileName) return;
+    const icon = file.type === "html"
+      ? "fa-brands fa-html5"
+      : file.type === "css"
+        ? "fa-brands fa-css3-alt"
+        : file.type === "js"
+          ? "fa-brands fa-js"
+          : "fa-regular fa-file-code";
+    commands.push({
+      id: `file.open.${fileName.toLowerCase()}`,
+      label: `Open ${fileName}`,
+      description: file.active ? "Currently active file" : "Switch to this project file",
+      icon,
+      keywords: `file switch ${file.type || ""}`,
+      disabled: Boolean(file.active),
+      run: () => switchFile(fileName),
+    });
+  });
+
+  return commands;
+}
+
+function getCommandPaletteScore(command, rawQuery) {
+  const query = String(rawQuery || "").trim().toLowerCase();
+  if (!query) return command.id.startsWith("file.open.") ? 18 : 10;
+  const label = command.label.toLowerCase();
+  const haystack = `${label} ${command.description} ${command.keywords || ""}`.toLowerCase();
+  if (label === query) return 1000;
+  if (label.startsWith(query)) return 800 - label.length;
+  if (label.includes(query)) return 600 - label.indexOf(query);
+  if (haystack.includes(query)) return 400 - haystack.indexOf(query);
+
+  let queryIndex = 0;
+  let score = 0;
+  for (let index = 0; index < haystack.length && queryIndex < query.length; index += 1) {
+    if (haystack[index] === query[queryIndex]) {
+      score += index === 0 || /[\s./_-]/.test(haystack[index - 1]) ? 8 : 2;
+      queryIndex += 1;
+    }
+  }
+  return queryIndex === query.length ? score : -1;
+}
+
+function renderCommandPalette() {
+  if (!commandPaletteResults || !commandPaletteInput) return;
+  const query = commandPaletteInput.value;
+  commandPaletteMatches = getCommandPaletteCommands()
+    .map((command) => ({ command, score: getCommandPaletteScore(command, query) }))
+    .filter((entry) => entry.score >= 0)
+    .sort((left, right) => right.score - left.score || left.command.label.localeCompare(right.command.label))
+    .slice(0, 12)
+    .map((entry) => entry.command);
+
+  if (commandPaletteActiveIndex >= commandPaletteMatches.length) commandPaletteActiveIndex = 0;
+  if (commandPaletteMatches[commandPaletteActiveIndex]?.disabled) {
+    const firstEnabledIndex = commandPaletteMatches.findIndex((command) => !command.disabled);
+    commandPaletteActiveIndex = firstEnabledIndex >= 0 ? firstEnabledIndex : 0;
+  }
+  commandPaletteResults.replaceChildren();
+
+  if (!commandPaletteMatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "command-palette-empty";
+    empty.innerHTML = '<i class="fa-regular fa-face-frown-open"></i><strong>No matching commands</strong><span>Try a file name or a word like “preview”.</span>';
+    commandPaletteResults.appendChild(empty);
+  } else {
+    commandPaletteMatches.forEach((command, index) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.id = `commandPaletteOption${index}`;
+      option.className = "command-palette-option";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", index === commandPaletteActiveIndex ? "true" : "false");
+      option.disabled = command.disabled;
+      option.innerHTML = `<span class="command-palette-icon"><i class="${command.icon}"></i></span><span class="command-palette-copy"><strong>${escapeHtml(command.label)}</strong><small>${escapeHtml(command.description)}</small></span>${command.disabled ? '<span class="command-palette-state">Unavailable</span>' : '<i class="fa-solid fa-arrow-turn-down command-palette-enter"></i>'}`;
+      option.addEventListener("mousemove", () => {
+        if (command.disabled || commandPaletteActiveIndex === index) return;
+        commandPaletteActiveIndex = index;
+        updateCommandPaletteSelection();
+      });
+      option.addEventListener("click", () => executeCommandPaletteCommand(index));
+      commandPaletteResults.appendChild(option);
+    });
+  }
+
+  const enabledCount = commandPaletteMatches.filter((command) => !command.disabled).length;
+  commandPaletteStatus.textContent = query.trim()
+    ? `${enabledCount} matching command${enabledCount === 1 ? "" : "s"}`
+    : "Recently useful commands and project files";
+  updateCommandPaletteSelection();
+}
+
+function updateCommandPaletteSelection() {
+  const options = [...commandPaletteResults.querySelectorAll(".command-palette-option")];
+  options.forEach((option, index) => option.setAttribute("aria-selected", index === commandPaletteActiveIndex ? "true" : "false"));
+  const selected = options[commandPaletteActiveIndex];
+  commandPaletteInput.setAttribute("aria-activedescendant", selected?.id || "");
+  selected?.scrollIntoView({ block: "nearest" });
+}
+
+function moveCommandPaletteSelection(direction) {
+  if (!commandPaletteMatches.length) return;
+  let next = commandPaletteActiveIndex;
+  for (let step = 0; step < commandPaletteMatches.length; step += 1) {
+    next = (next + direction + commandPaletteMatches.length) % commandPaletteMatches.length;
+    if (!commandPaletteMatches[next].disabled) break;
+  }
+  commandPaletteActiveIndex = next;
+  updateCommandPaletteSelection();
+}
+
+function executeCommandPaletteCommand(index = commandPaletteActiveIndex) {
+  const command = commandPaletteMatches[index];
+  if (!command || command.disabled) return;
+  closeCommandPalette(false);
+  requestAnimationFrame(() => command.run());
+}
+
+function openCommandPalette(initialQuery = "") {
+  if (!commandPaletteModal) return;
+  commandPalettePreviousFocus = document.activeElement;
+  commandPaletteModal.hidden = false;
+  document.body.classList.add("command-palette-open");
+  commandPaletteInput.value = initialQuery;
+  commandPaletteActiveIndex = 0;
+  renderCommandPalette();
+  requestAnimationFrame(() => commandPaletteInput.focus());
+}
+
+function closeCommandPalette(restoreFocus = true) {
+  if (!commandPaletteModal || commandPaletteModal.hidden) return;
+  commandPaletteModal.hidden = true;
+  document.body.classList.remove("command-palette-open");
+  commandPaletteInput.value = "";
+  if (restoreFocus && commandPalettePreviousFocus instanceof HTMLElement) commandPalettePreviousFocus.focus();
+}
+
+commandPaletteBtn?.addEventListener("click", () => openCommandPalette());
+commandPaletteModal?.addEventListener("click", (event) => {
+  if (event.target === commandPaletteModal) closeCommandPalette();
+});
+commandPaletteInput?.addEventListener("input", () => {
+  commandPaletteActiveIndex = 0;
+  renderCommandPalette();
+});
+commandPaletteInput?.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveCommandPaletteSelection(event.key === "ArrowDown" ? 1 : -1);
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    executeCommandPaletteCommand();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeCommandPalette();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const isPaletteShortcut = (event.ctrlKey || event.metaKey) && (
+    (!event.shiftKey && event.key.toLowerCase() === "k") ||
+    (event.shiftKey && event.key.toLowerCase() === "p")
+  );
+  if (!isPaletteShortcut) return;
+  event.preventDefault();
+  if (commandPaletteModal?.hidden) openCommandPalette();
+  else closeCommandPalette();
+});
 
 let githubConnectionState = {
   configured: true,
@@ -4621,6 +4870,7 @@ let projectFiles = [
           <h2>Build in the editor</h2>
           <ul>
             <li>Create HTML, CSS, JavaScript, JSON, environment, and Node backend files</li>
+            <li>Press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and commands from the Command Palette</li>
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
@@ -4653,6 +4903,8 @@ let projectFiles = [
         <article class="card">
           <h2>Keyboard controls</h2>
           <ul>
+            <li><kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> Open the Command Palette</li>
+            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> Open the Command Palette</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> Export your project as a ZIP</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd> Run preview manually</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd> Create a new file</li>

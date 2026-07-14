@@ -577,6 +577,7 @@
           <ul>
             <li><a href="#getting-started">Getting Started</a></li>
             <li><a href="#workspace">Workspace Layout</a></li>
+            <li><a href="#command-palette">Command Palette</a></li>
             <li><a href="#editing">Editing Tools</a></li>
             <li><a href="#projects">Projects & Files</a></li>
             <li><a href="#github">GitHub Repositories</a></li>
@@ -602,7 +603,8 @@
               <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
               <li><strong>GitHub:</strong> signs in through GitHub OAuth, lists repositories, and lets you create, edit, upload, and commit repository files.</li>
               <li><strong>Help:</strong> lets you choose the animated editor tour or open this complete handbook.</li>
-              <li><strong>More:</strong> opens saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
+              <li><strong>More:</strong> opens the Command Palette, saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
+              <li><strong>Command Palette:</strong> press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and editor actions without leaving the keyboard.</li>
               <li><strong>Guided tour:</strong> explains the main editor controls step by step with Back, Next, Finish, and Close actions.</li>
             </ul>
           </section>
@@ -662,9 +664,45 @@
                 <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
                 <ul>
                   <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
-                  <li>Editor Extras contains Enable Node.js, Fonts, Get Icons, Zen Mode, and Homepage.</li>
+                  <li>Editor Extras contains Command Palette, Enable Node.js, Fonts, Get Icons, Zen Mode, and Homepage.</li>
                   <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML.</li>
                   <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="section-card" id="command-palette">
+            <h2>Command Palette</h2>
+            <p class="section-copy">
+              The Command Palette provides one searchable place for project files and editor actions. Open it from More &rarr; Command Palette, press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd>, or use <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-magnifying-glass"></i> Search Everything</h3>
+                <ul>
+                  <li>Search by a complete command, a partial phrase, a keyword, or a project filename.</li>
+                  <li>Fuzzy matching can find useful results even when the search is abbreviated.</li>
+                  <li>Current project files appear automatically, so newly created files are immediately searchable.</li>
+                  <li>Unavailable actions remain visible with a clear disabled state instead of failing silently.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-keyboard"></i> Keyboard Navigation</h3>
+                <ul>
+                  <li>Use <kbd>&uarr;</kbd> and <kbd>&darr;</kbd> to move through matching commands.</li>
+                  <li>Press <kbd>Enter</kbd> to run the selected command.</li>
+                  <li>Press <kbd>Esc</kbd> to close the palette and return focus to your previous control.</li>
+                  <li>The active result stays visible while you move through longer lists.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-bolt"></i> Available Actions</h3>
+                <ul>
+                  <li>Open project files, create files, focus the code editor, and use Undo or Redo.</li>
+                  <li>Run or refresh the preview, toggle fullscreen, Auto-Run, Console, or Zen Mode.</li>
+                  <li>Open saved projects, templates, publishing, ZIP import/export, collaboration, settings, fonts, icons, media, help, and Node.js.</li>
+                  <li>Commands reuse the editor's existing permission checks during collaboration sessions.</li>
                 </ul>
               </article>
             </div>
@@ -1238,6 +1276,8 @@
           <section class="section-card" id="shortcuts">
             <h2>Shortcuts</h2>
             <div class="shortcut-list">
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd></span><span>Open or close the Command Palette</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></span><span>Open or close the Command Palette</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd></span><span>Export the project as a ZIP archive</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run the preview manually</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a file in the project</span></div>
@@ -1296,7 +1336,7 @@
     </main>
 
     <footer class="standalone-footer">
-      <p><strong>CodX Editor Guide</strong> · Updated July 12, 2026</p>
+      <p><strong>CodX Editor Guide</strong> · Updated July 14, 2026</p>
       <nav aria-label="Help footer links"><a href="index.html">Home</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="welcome.html">Open Editor</a></nav>
     </footer>
 
