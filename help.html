@@ -770,8 +770,14 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-file-zipper"></i> Import & Export</h3>
                 <ul>
-                  <li>Export the full project as a ZIP archive and choose the archive name.</li>
+                  <li>Export ZIP File opens two large choice cards styled like Create and Join Collaboration.</li>
+                  <li>Choose Export ZIP File to create the full project as a new archive and select its name.</li>
+                  <li>Choose Update ZIP File, read the selection instructions, and select an existing <code>.zip</code> archive from your device.</li>
+                  <li>Updating replaces files whose paths match the current project, adds new project files, and preserves other entries already in the archive.</li>
+                  <li>Supported browsers save directly back to the selected ZIP after confirmation. Other browsers download an updated copy with the same file name so you can replace the old copy yourself.</li>
                   <li>Import a ZIP archive to load supported project text files.</li>
+                  <li>If every imported file is wrapped in the same outer folder, CodX Editor removes that folder name. For example, <code>my-project/index.html</code> appears as <code>index.html</code>, while meaningful inner paths such as <code>css/style.css</code> remain intact.</li>
+                  <li>Large ZIP imports are decompressed in small batches, rendered efficiently, and autosaved when the browser is idle. In very large projects, automatic diagnostics prioritize the active and preview files to keep the editor responsive.</li>
                   <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
                   <li>Imports focus on editable project files, while Add Media handles images, audio, and video.</li>
                 </ul>
@@ -906,6 +912,7 @@
                 <ul>
                   <li>Toggle the console panel from the header.</li>
                   <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li>Preview runtime-error notifications show <strong>Click To Open</strong>; selecting one opens the console, jumps to the reported source location when available, and highlights the error.</li>
                   <li>Smart syntax messages report the actual problematic operator or bracket instead of only showing the token where parsing stopped.</li>
                   <li>Located diagnostics are clickable and jump to the reported line and column.</li>
                   <li>Use Clear to remove old console messages.</li>
@@ -1049,6 +1056,7 @@
                   <li>Create a session, then copy its six-character PIN or the ready-made join instructions. The Session Info view also provides a share link.</li>
                   <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
                   <li>When someone requests entry, the host receives a waiting-room popup showing the person’s name and chosen color with Accept and Deny buttons.</li>
+                  <li>New waiting-room requests also show <strong>Click To Open</strong>; selecting the notification highlights that person and focuses their Accept button.</li>
                   <li>Admit All processes every current request only after the host confirms the bulk action in a second dialog.</li>
                   <li>Join with the six-character PIN or a valid invite link, then choose a 2–20 character display name, personal color, and collaboration cursor icon.</li>
                   <li>Invalid session links show a friendly not-found page.</li>
@@ -1066,6 +1074,7 @@
                   <li>Use private chat for direct messages.</li>
                   <li>Messages use the sender’s chosen color.</li>
                   <li>Unread counters appear on the collaboration button and beside the relevant private-chat recipient until those messages are viewed.</li>
+                  <li>Public and private message notifications show <strong>Click To Open</strong>; selecting the notification opens the correct conversation directly.</li>
                   <li>Moderators can clear group chat when permitted.</li>
                 </ul>
               </article>
@@ -1123,9 +1132,12 @@
                 <ul>
                   <li>Pair chat, suggestion pins, a shared task checklist, and activity history are available only to the paired participants.</li>
                   <li>New Pair chat, suggestion, and task activity places a red dot on Tools and on the affected tab until that tab is opened.</li>
+                  <li>Pair-start and Pair-message notifications show <strong>Click To Open</strong> and open the Pair chat tools directly.</li>
+                  <li>Received Pair suggestions show <strong>Click To Open</strong> and open Suggestions without moving your current editor selection or scroll position. Use View when you intentionally want to jump to the suggested code. New Pair tasks open Tasks and highlight the task.</li>
                   <li>Pair task checkboxes use rounded green controls, with a clear green checked state for completed work.</li>
                   <li>Suggestions record the file, selected range, proposed replacement, and optional explanation. They can be viewed, applied with Undo support, resolved, or rejected.</li>
                   <li>Ask Host marks the pair as needing help without exposing pair-chat content to the host.</li>
+                  <li>Pair help notifications show <strong>Click To Open</strong> and highlight the requesting pair in Group Controls.</li>
                   <li>Pair Snapshot downloads the current files and pair tools as a JSON backup.</li>
                   <li>Optional Voice requests microphone permission only after a call is accepted and sends audio directly between the two browsers when a direct WebRTC connection is available. CodX Editor does not record the call.</li>
                   <li>A disconnected partner can reconnect at any time. Pair state and roles wait indefinitely and return when reconnection succeeds, unless a pair member, the host, or an administrator explicitly ends the pair or room.</li>

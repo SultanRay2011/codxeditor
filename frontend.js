@@ -2447,12 +2447,16 @@ let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
 const editableTextExtensions = ["html", "htm", "css", "scss", "less", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "jsonc", "env", "md", "txt"];
+const ZIP_IMPORT_BATCH_SIZE = 12;
+const LARGE_PROJECT_FILE_THRESHOLD = 160;
+const LARGE_PROJECT_DIAGNOSTIC_LIMIT = 32;
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
 const AUTOSAVE_RESTORE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const DEVICE_ID_KEY = "codxDeviceId";
 let autosaveTimer = null;
+let autosaveIdleCallback = null;
 let lastAutosaveAt = null;
 let sessionSyncTimeout = null;
 let lastEditorInputType = "";
@@ -5709,9 +5713,20 @@ function applyProjectState(snapshot, sourceLabel = "project") {
   return true;
 }
 
-function scheduleProjectAutosave() {
+function cancelScheduledProjectAutosave() {
   clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
+  autosaveTimer = null;
+  if (autosaveIdleCallback !== null && typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(autosaveIdleCallback);
+  }
+  autosaveIdleCallback = null;
+}
+
+function scheduleProjectAutosave() {
+  cancelScheduledProjectAutosave();
+  const persistSnapshot = () => {
+    autosaveTimer = null;
+    autosaveIdleCallback = null;
     const snapshot = serializeProjectState();
     safeLocalStorage("set", AUTOSAVE_PROJECT_KEY, JSON.stringify(snapshot));
     safeLocalStorage(
@@ -5725,7 +5740,14 @@ function scheduleProjectAutosave() {
     );
     lastAutosaveAt = Date.now();
     updateProjectStatusUI();
-  }, 350);
+  };
+
+  const shouldWaitForIdle = projectFiles.length > LARGE_PROJECT_FILE_THRESHOLD;
+  if (shouldWaitForIdle && typeof window.requestIdleCallback === "function") {
+    autosaveIdleCallback = window.requestIdleCallback(persistSnapshot, { timeout: 1800 });
+    return;
+  }
+  autosaveTimer = setTimeout(persistSnapshot, shouldWaitForIdle ? 900 : 350);
 }
 
 function getSavedProjects() {
@@ -6218,25 +6240,39 @@ function showNotificationHtml(messageHtml, type = "info") {
   );
 }
 
-function showNotificationMarkup(messageMarkup, type = "info") {
+function showActionNotificationHtml(messageHtml, onOpen, type = "info") {
+  return showNotificationMarkup(
+    `<div class="codx-notification-message">${messageHtml || ""}</div>
+     <div class="codx-notification-action"><i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i> Click To Open</div>`,
+    type,
+    { onOpen, duration: 6000 },
+  );
+}
+
+function repositionCodxNotifications() {
+  let offsetTop = 86;
+  document.querySelectorAll(".codx-notification").forEach((item) => {
+    item.style.top = `${offsetTop}px`;
+    offsetTop += item.offsetHeight + 10;
+  });
+}
+
+function showNotificationMarkup(messageMarkup, type = "info", options = {}) {
   if (
     activeSessionId &&
     collabPermissions.quietMode &&
+    typeof options.onOpen !== "function" &&
     type !== "error" &&
     type !== "warn" &&
     !String(messageMarkup || "").toLowerCase().includes("session")
   ) {
     return;
   }
-  const existing = document.querySelectorAll(".codx-notification");
-  existing.forEach((item, index) => {
-    item.style.top = `${86 + index * 78}px`;
-  });
 
   const notification = document.createElement("div");
   notification.className = `codx-notification codx-notification-${type}`;
-  const offsetTop = 86 + existing.length * 78;
-  notification.style.top = `${offsetTop}px`;
+  const duration = Math.max(1000, Number(options.duration) || 3000);
+  notification.style.setProperty("--codx-notification-duration", `${duration}ms`);
 
   const icon =
     type === "error"
@@ -6265,20 +6301,102 @@ function showNotificationMarkup(messageMarkup, type = "info") {
       ${messageMarkup}
     </div>
   `;
+  const hasOpenAction = typeof options.onOpen === "function";
+  if (hasOpenAction) {
+    notification.classList.add("is-actionable");
+    notification.setAttribute("role", "button");
+    notification.setAttribute("tabindex", "0");
+    const readableMessage = notification.querySelector(".codx-notification-message")?.textContent?.trim() || label;
+    notification.setAttribute("aria-label", `${readableMessage}. Click to open`);
+  } else {
+    notification.setAttribute("role", "status");
+  }
   document.body.appendChild(notification);
-  setTimeout(() => {
+  repositionCodxNotifications();
+
+  let isDismissed = false;
+  let autoDismissTimer = 0;
+  const dismiss = () => {
+    if (isDismissed) return;
+    isDismissed = true;
     notification.classList.add("is-leaving");
     setTimeout(() => {
       notification.remove();
-      document.querySelectorAll(".codx-notification").forEach((item, index) => {
-        item.style.top = `${86 + index * 78}px`;
-      });
+      repositionCodxNotifications();
     }, 300);
-  }, 3000);
+  };
+
+  if (hasOpenAction) {
+    const open = () => {
+      clearTimeout(autoDismissTimer);
+      try {
+        options.onOpen();
+      } finally {
+        dismiss();
+      }
+    };
+    notification.addEventListener("click", open);
+    notification.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    });
+  }
+
+  autoDismissTimer = setTimeout(dismiss, duration);
+  return notification;
 }
 
-const consoleErrorObserver = new MutationObserver(() => {
+const previewRuntimeNotificationHistory = new Map();
+
+function openPreviewErrorFromNotification(message) {
+  const errorMessage = String(message || "").trim();
+  if (showConsoleCheckbox && !showConsoleCheckbox.disabled) {
+    showConsoleCheckbox.checked = true;
+    showConsoleCheckbox.dispatchEvent(new Event("change"));
+  }
+  const location = extractErrorLocationFromConsoleMessage(errorMessage);
+  if (location) jumpToEditorLocation(location.fileName, location.line, location.col || 1);
+  requestAnimationFrame(() => {
+    const matchingLine = Array.from(consoleOutput?.querySelectorAll("div.error") || [])
+      .find((line) => String(line.textContent || "").trim() === errorMessage);
+    if (!matchingLine) return;
+    matchingLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    matchingLine.classList.add("notification-target-flash");
+    setTimeout(() => matchingLine.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
+function notifyPreviewRuntimeError(message) {
+  const text = String(message || "").trim();
+  if (!text || !/^(?:Error:\s*\[|Promise rejected:|File not found:)/i.test(text)) return;
+  const now = Date.now();
+  const previousAt = Number(previewRuntimeNotificationHistory.get(text) || 0);
+  if (now - previousAt < 8000) return;
+  previewRuntimeNotificationHistory.set(text, now);
+  if (previewRuntimeNotificationHistory.size > 50) {
+    const oldest = previewRuntimeNotificationHistory.keys().next().value;
+    previewRuntimeNotificationHistory.delete(oldest);
+  }
+  const summary = text.length > 150 ? `${text.slice(0, 147)}...` : text;
+  showActionNotificationHtml(
+    `<strong>Preview error:</strong> ${escapeHtml(summary)}`,
+    () => openPreviewErrorFromNotification(text),
+    "error",
+  );
+}
+
+const consoleErrorObserver = new MutationObserver((mutations) => {
   updateFileErrorCountsFromConsole();
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const errorLines = [];
+      if (node.matches("div.error:not(.codx-diagnostic-line)")) errorLines.push(node);
+      node.querySelectorAll?.("div.error:not(.codx-diagnostic-line)").forEach((line) => errorLines.push(line));
+      errorLines.forEach((line) => notifyPreviewRuntimeError(line.textContent));
+    });
+  });
 });
 if (consoleOutput) {
   consoleErrorObserver.observe(consoleOutput, {
@@ -6321,8 +6439,10 @@ function scheduleSessionUpdate() {
   }, syncInterval - elapsed);
 }
 
-function renderFileList() {
-  const normalizedLegacyNames = normalizeProjectFileNamesInPlace(projectFiles);
+function renderFileList(options = {}) {
+  const normalizedLegacyNames = options.skipNameNormalization
+    ? false
+    : normalizeProjectFileNamesInPlace(projectFiles);
   if (normalizedLegacyNames) {
     scheduleProjectAutosave();
     if (!fileNameMigrationNoticeShown) {
@@ -6331,7 +6451,11 @@ function renderFileList() {
     }
   }
   __codxRescanProjectSuggestionCacheSoon();
-  fileList.innerHTML = "";
+  const fileListFragment = document.createDocumentFragment();
+  const canManageFileVisibility = Boolean(activeSessionId && canUseCoHostTools());
+  const visibilityParticipants = canManageFileVisibility
+    ? getModeratableCollabParticipants()
+    : [];
   projectFiles.forEach((file) => {
     const fileItem = document.createElement("div");
     fileItem.className = `file-item ${file.active ? "active" : ""}`;
@@ -6434,8 +6558,8 @@ function renderFileList() {
     deleteBtn.appendChild(trashIcon);
 
     let visibilityBtn = null;
-    if (activeSessionId && canUseCoHostTools()) {
-      const hiddenCount = getModeratableCollabParticipants().filter((participant) =>
+    if (canManageFileVisibility) {
+      const hiddenCount = visibilityParticipants.filter((participant) =>
         participantCannotSeeFile(participant, file.name),
       ).length;
       visibilityBtn = document.createElement("button");
@@ -6465,8 +6589,9 @@ function renderFileList() {
     if (visibilityBtn) {
       visibilityBtn.addEventListener("click", () => showFileVisibilityEditor(file.name, "quick", true));
     }
-    fileList.appendChild(fileItem);
+    fileListFragment.appendChild(fileItem);
   });
+  fileList.replaceChildren(fileListFragment);
   enforceCollabPermissionsUI();
 }
 
@@ -7879,7 +8004,32 @@ function getAcornJavaScriptSyntaxError(code) {
   }
 }
 
+function getProjectFilesForAutomaticDiagnostics() {
+  if (projectFiles.length <= LARGE_PROJECT_FILE_THRESHOLD) return projectFiles;
+  const selected = [];
+  const selectedNames = new Set();
+  const addFile = (file) => {
+    if (!file || !["html", "css", "js"].includes(file.type)) return;
+    const key = String(file.name || "").toLowerCase();
+    if (!key || selectedNames.has(key)) return;
+    selectedNames.add(key);
+    selected.push(file);
+  };
+  addFile(activeFile);
+  if (currentPreviewTarget?.fileName) {
+    addFile(projectFiles.find((file) =>
+      String(file.name || "").toLowerCase() === String(currentPreviewTarget.fileName).toLowerCase(),
+    ));
+  }
+  for (const file of projectFiles) {
+    if (selected.length >= LARGE_PROJECT_DIAGNOSTIC_LIMIT) break;
+    addFile(file);
+  }
+  return selected;
+}
+
 function runPreflightDiagnostics(targetEntries = null) {
+  const diagnosticFiles = getProjectFilesForAutomaticDiagnostics();
   const emitDiagnostic = (type, message, location = null) => {
     if (Array.isArray(targetEntries)) {
       targetEntries.push({ type, message, location });
@@ -7888,7 +8038,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     appendConsoleMessage(type, message);
   };
   // JS syntax checks per JS file
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "js")
     .forEach((file) => {
       const smartIssueCount = analyzeJavaScriptSource(file.content, file.name, emitDiagnostic);
@@ -7927,7 +8077,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     });
 
   // Basic CSS braces check
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "css")
     .forEach((file) => {
       const text = file.content || "";
@@ -7980,7 +8130,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     });
 
   // Position-aware HTML checks for every HTML file in the project.
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "html")
     .forEach((htmlFile) => {
       const htmlText = htmlFile.content || "";
@@ -13102,7 +13252,17 @@ function canCreateFilesFromDrop() {
   return true;
 }
 
-function loadImportedProjectFiles(importedFiles, successMessage) {
+function yieldToBrowserDuringImport() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function buildImportedFileSummary(label, fileNames) {
+  const names = Array.isArray(fileNames) ? fileNames : [];
+  if (names.length <= 10) return `${label}! Files: ${names.join(", ")}`;
+  return `${label}! ${names.length} files loaded. First files: ${names.slice(0, 5).join(", ")}, and ${names.length - 5} more.`;
+}
+
+async function loadImportedProjectFiles(importedFiles, successMessage) {
   if (!Array.isArray(importedFiles) || importedFiles.length === 0) {
     showNotification("No valid project files were found.", "error");
     return false;
@@ -13121,7 +13281,8 @@ function loadImportedProjectFiles(importedFiles, successMessage) {
     updateLineNumbers(editor);
     resetAllEditorHistory(editor);
   }
-  renderFileList();
+  renderFileList({ skipNameNormalization: true });
+  if (projectFiles.length > ZIP_IMPORT_BATCH_SIZE) await yieldToBrowserDuringImport();
   scheduleProjectAutosave();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
@@ -13206,7 +13367,7 @@ async function importProjectFromDroppedFolder(entries) {
 
   return loadImportedProjectFiles(
     importedFiles,
-    `Folder imported! Files: ${importedFiles.map((file) => file.name).join(", ")}`,
+    buildImportedFileSummary("Folder imported", importedFiles.map((file) => file.name)),
   );
 }
 
@@ -13281,11 +13442,64 @@ window.addEventListener("beforeunload", clearOwnSessionCursorBroadcast);
 startBackgroundTimers();
 
 // PART 9 - ZIP EXPORT
-async function exportAsZip() {
-  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
-    showNotification("The host disabled ZIP export for participants.", "error");
-    return false;
-  }
+function showZipExportActionPrompt() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "zip-export-choice";
+    if (appDialogTitle) appDialogTitle.textContent = "EXPORT ZIP FILE";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <div class="zip-choice-intro">Create a new ZIP archive or update one already on your device.</div>
+        <div class="collab-choice-grid zip-choice-grid">
+          <button type="button" id="zipCreateChoiceBtn" class="collab-choice-card zip-choice-card">
+            <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+            <span><strong>Export ZIP File</strong><small>Create and download a new project archive.</small></span>
+          </button>
+          <button type="button" id="zipUpdateChoiceBtn" class="collab-choice-card zip-choice-card">
+            <i class="fa-solid fa-file-pen" aria-hidden="true"></i>
+            <span><strong>Update ZIP File</strong><small>Choose an existing ZIP and update it with this project.</small></span>
+          </button>
+        </div>`;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `<button type="button" id="zipChoiceCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>`;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("zipCreateChoiceBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "export" });
+    });
+    document.getElementById("zipUpdateChoiceBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "update" });
+    });
+    document.getElementById("zipChoiceCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false });
+    });
+    setTimeout(() => document.getElementById("zipCreateChoiceBtn")?.focus(), 0);
+  });
+}
+
+function downloadZipBlob(content, fileName) {
+  const url = URL.createObjectURL(content);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function createProjectZipBlob(zip = new JSZip()) {
+  projectFiles.forEach((file) => {
+    zip.file(file.name, file.content);
+  });
+  return zip.generateAsync({ type: "blob" });
+}
+
+async function exportNewZipFile() {
   const dialog = await showAppPrompt(
     "EXPORT ZIP",
     "Name your ZIP file:",
@@ -13301,18 +13515,9 @@ async function exportAsZip() {
     return false;
   }
   const zipFileName = /\.zip$/i.test(trimmedName) ? trimmedName : `${trimmedName}.zip`;
-  const zip = new JSZip();
-  projectFiles.forEach((file) => {
-    zip.file(file.name, file.content);
-  });
   try {
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = zipFileName;
-    a.click();
-    URL.revokeObjectURL(url);
+    const content = await createProjectZipBlob();
+    downloadZipBlob(content, zipFileName);
     showNotification(`Project exported as ${zipFileName}!`, "success");
     return true;
   } catch (err) {
@@ -13322,7 +13527,129 @@ async function exportAsZip() {
   }
 }
 
+function chooseZipFileWithInput() {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".zip,application/zip,application/x-zip-compressed";
+    input.style.display = "none";
+    let settled = false;
+    const finish = (file = null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener("change", () => finish(input.files?.[0] || null), { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+async function chooseZipFileForUpdate() {
+  if (typeof window.showOpenFilePicker === "function") {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        excludeAcceptAllOption: true,
+        types: [{
+          description: "ZIP archive",
+          accept: { "application/zip": [".zip"] },
+        }],
+      });
+      if (!handle) return null;
+      return { file: await handle.getFile(), handle };
+    } catch (error) {
+      if (error?.name === "AbortError") return null;
+    }
+  }
+  const file = await chooseZipFileWithInput();
+  return file ? { file, handle: null } : null;
+}
+
+async function updateExistingZipFile() {
+  const instruction = await showAppConfirmHtml(
+    "UPDATE ZIP FILE",
+    "Your file picker will open. Select the existing <strong>.zip</strong> archive you want to update.<br><br>Files with matching paths will be replaced by the current project, new project files will be added, and other archive entries will remain.",
+    "CHOOSE ZIP",
+    "BACK",
+  );
+  if (!instruction?.ok) return false;
+
+  const selection = await chooseZipFileForUpdate();
+  if (!selection?.file) return false;
+  const selectedName = String(selection.file.name || "codx-project.zip");
+  if (!/\.zip$/i.test(selectedName)) {
+    showNotification("Choose a valid ZIP file to update.", "error");
+    return false;
+  }
+
+  let existingZip;
+  try {
+    existingZip = await JSZip.loadAsync(selection.file);
+  } catch (error) {
+    console.error("ZIP update read error:", error);
+    showNotification("That file could not be read as a ZIP archive.", "error");
+    return false;
+  }
+
+  const confirmation = await showAppConfirmHtml(
+    "UPDATE SELECTED ZIP?",
+    `Update <strong>${escapeHtml(selectedName)}</strong> with the current project files?`,
+    "UPDATE ZIP",
+    "CANCEL",
+  );
+  if (!confirmation?.ok) return false;
+
+  try {
+    const content = await createProjectZipBlob(existingZip);
+    if (selection.handle && typeof selection.handle.createWritable === "function") {
+      try {
+        const writable = await selection.handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        showNotification(`${selectedName} was updated successfully.`, "success");
+        return true;
+      } catch (error) {
+        console.warn("Direct ZIP update unavailable; downloading an updated copy instead.", error);
+      }
+    }
+    downloadZipBlob(content, selectedName);
+    showNotification(`Updated ${selectedName} downloaded. Replace the old copy if your browser kept both files.`, "success");
+    return true;
+  } catch (error) {
+    console.error("ZIP update error:", error);
+    showNotification("Error updating ZIP file", "error");
+    return false;
+  }
+}
+
+async function exportAsZip() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
+    showNotification("The host disabled ZIP export for participants.", "error");
+    return false;
+  }
+  const choice = await showZipExportActionPrompt();
+  if (!choice?.ok) return false;
+  return choice.action === "update" ? updateExistingZipFile() : exportNewZipFile();
+}
+
 // PART 10 - ZIP IMPORT
+function getSharedZipRootFolder(paths) {
+  const segmentedPaths = (paths || []).map((path) =>
+    String(path || "").split("/").filter(Boolean),
+  );
+  if (
+    !segmentedPaths.length ||
+    segmentedPaths.some((segments) => segments.length < 2)
+  ) {
+    return "";
+  }
+  const candidate = segmentedPaths[0][0];
+  return segmentedPaths.every((segments) => segments[0] === candidate) ? candidate : "";
+}
+
 async function importProjectFromZipFile(file) {
   if (!file || !/\.zip$/i.test(file.name || "")) {
     showNotification("Please select a valid ZIP file", "error");
@@ -13331,27 +13658,46 @@ async function importProjectFromZipFile(file) {
 
   try {
     const zip = await JSZip.loadAsync(file);
-    const importTasks = [];
-    const foundFiles = [];
+    const archiveFiles = [];
 
     zip.forEach((path, entry) => {
-      const normalizedPath = String(path || "").replace(/\\/g, "/");
-      const safePath = normalizeProjectFileName(normalizedPath);
-      const ext = safePath.split(".").pop().toLowerCase();
-      if (editableTextExtensions.includes(ext) && !entry.dir) {
-        foundFiles.push(safePath);
-        importTasks.push(
-          entry.async("string").then((content) => ({
-            name: safePath,
-            type: ext,
-            content,
-            active: false,
-          })),
-        );
-      }
+      if (entry.dir) return;
+      const normalizedPath = String(path || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "")
+        .replace(/^\.\//, "");
+      if (!normalizedPath || normalizedPath.startsWith("__MACOSX/")) return;
+      const ext = normalizedPath.split(".").pop().toLowerCase();
+      if (editableTextExtensions.includes(ext)) archiveFiles.push({ entry, normalizedPath });
     });
 
-    const importedFiles = await Promise.all(importTasks);
+    const sharedRoot = getSharedZipRootFolder(
+      archiveFiles.map(({ normalizedPath }) => normalizedPath),
+    );
+    const foundFiles = [];
+    const importedFiles = [];
+    for (let index = 0; index < archiveFiles.length; index += ZIP_IMPORT_BATCH_SIZE) {
+      const batch = archiveFiles.slice(index, index + ZIP_IMPORT_BATCH_SIZE);
+      const batchFiles = await Promise.all(batch.map(async ({ entry, normalizedPath }) => {
+        const relativePath = sharedRoot
+          ? normalizedPath.split("/").filter(Boolean).slice(1).join("/")
+          : normalizedPath;
+        const safePath = normalizeProjectFileName(relativePath);
+        const ext = safePath.split(".").pop().toLowerCase();
+        const content = await entry.async("string");
+        return {
+          name: safePath,
+          type: ext,
+          content,
+          active: false,
+        };
+      }));
+      importedFiles.push(...batchFiles);
+      foundFiles.push(...batchFiles.map((entry) => entry.name));
+      if (index + ZIP_IMPORT_BATCH_SIZE < archiveFiles.length) {
+        await yieldToBrowserDuringImport();
+      }
+    }
     if (!importedFiles.length) {
       showNotification("No valid files found in ZIP", "error");
       return false;
@@ -13359,7 +13705,7 @@ async function importProjectFromZipFile(file) {
 
     return loadImportedProjectFiles(
       importedFiles,
-      `Project imported! Files: ${foundFiles.join(", ")}`,
+      buildImportedFileSummary("Project imported", foundFiles),
     );
   } catch (err) {
     console.error("Import error:", err);
@@ -14246,6 +14592,20 @@ function renderWaitingRoomPopup() {
   });
 }
 
+function openWaitingRoomRequestFromNotification(socketId) {
+  if (!activeSessionId || !isHost()) return;
+  renderWaitingRoomPopup();
+  requestAnimationFrame(() => {
+    const requestCard = Array.from(document.querySelectorAll("[data-waiting-socket]"))
+      .find((card) => card.dataset.waitingSocket === String(socketId || ""));
+    if (!requestCard) return;
+    requestCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    requestCard.classList.add("notification-target-flash");
+    setTimeout(() => requestCard.classList.remove("notification-target-flash"), 1800);
+    requestCard.querySelector("[data-waiting-action='accept']")?.focus();
+  });
+}
+
 function showJoinPendingState(sessionId, name, hostName = "") {
   const resolvedHostName = String(hostName || collabHostName || "").trim();
   if (resolvedHostName) collabHostName = resolvedHostName;
@@ -14594,7 +14954,7 @@ function showGroupControls(sessionId) {
     : `<div class="collab-section-note">No banned devices in this session.</div>`;
   const activePairsHtml = pairOverview.length
     ? pairOverview.map((pair) => `
-        <div class="collab-pending-row">
+        <div class="collab-pending-row" data-active-pair-id="${escapeHtml(pair.id)}">
           <div class="collab-participant-text">
             <div class="collab-participant-name">${escapeHtml((pair.members || []).map((name) => formatCollabDisplayName(name)).join(" + "))}${pair.helpRequested ? `<span class="pair-participant-badge">Needs help</span>` : ""}</div>
             <div class="collab-participant-meta">${escapeHtml(pair.mode === "live" ? "Live Pair" : `Driver: ${formatCollabDisplayName(pair.driver)}`)} · ${escapeHtml(pair.status || "active")}</div>
@@ -15414,6 +15774,23 @@ function resetCollabUnreadMessages() {
   updateCollabUnreadBadges();
 }
 
+function openCollabChatFromNotification(mode, targetName = "") {
+  if (!activeSessionId) return;
+  collabChatMode = mode === "private" ? "private" : "group";
+  collabChatTarget = collabChatMode === "private" ? String(targetName || "") : "";
+  if (collabChatMode === "group") {
+    collabUnreadGroupMessages = 0;
+  } else if (collabChatTarget) {
+    delete collabUnreadPrivateMessages[getPrivateUnreadKey(collabChatTarget)];
+  }
+  updateCollabUnreadBadges();
+  showSessionDetails(activeSessionId);
+  requestAnimationFrame(() => {
+    document.getElementById("collabChatMessages")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("collabChatInput")?.focus();
+  });
+}
+
 function getCurrentChatMessages() {
   if (collabChatMode === "private") {
     const target = collabChatTarget;
@@ -15603,6 +15980,66 @@ function getPairPartnerName(pair = activePairState) {
   return (pair?.members || []).find((name) => String(name || "").trim().toLowerCase() !== myKey) || "";
 }
 
+function openPairToolsFromNotification(tab = "chat") {
+  if (!activePairState || !activeSessionId) return;
+  const allowedTabs = new Set(["chat", "suggestions", "tasks", "activity"]);
+  pairPanelTab = allowedTabs.has(tab) ? tab : "chat";
+  pairPanelOpen = true;
+  clearPairToolActivity(pairPanelTab);
+  renderPairDock();
+  requestAnimationFrame(() => {
+    const focusTarget = pairPanelTab === "chat"
+      ? document.getElementById("pairChatInput")
+      : pairPanelTab === "tasks"
+        ? document.getElementById("pairTaskInput")
+        : document.querySelector(".pair-panel-body");
+    focusTarget?.focus?.();
+  });
+}
+
+function openPairSuggestionFromNotification() {
+  const editorState = editorTextarea
+    ? {
+        selectionStart: editorTextarea.selectionStart,
+        selectionEnd: editorTextarea.selectionEnd,
+        scrollTop: editorTextarea.scrollTop,
+        scrollLeft: editorTextarea.scrollLeft,
+      }
+    : null;
+  openPairToolsFromNotification("suggestions");
+  requestAnimationFrame(() => {
+    if (!editorTextarea || !editorState) return;
+    editorTextarea.setSelectionRange(editorState.selectionStart, editorState.selectionEnd);
+    editorTextarea.scrollTop = editorState.scrollTop;
+    editorTextarea.scrollLeft = editorState.scrollLeft;
+  });
+}
+
+function openPairTaskFromNotification(taskId) {
+  openPairToolsFromNotification("tasks");
+  requestAnimationFrame(() => {
+    const taskRow = Array.from(document.querySelectorAll("[data-pair-task-id]"))
+      .find((row) => row.dataset.pairTaskId === String(taskId || ""));
+    if (!taskRow) return;
+    taskRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    taskRow.classList.add("notification-target-flash");
+    setTimeout(() => taskRow.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
+function openPairHelpFromNotification(pairId) {
+  if (!activeSessionId || !canUseCoHostTools()) return;
+  showGroupControls(activeSessionId);
+  requestAnimationFrame(() => {
+    const pairRow = Array.from(document.querySelectorAll("[data-active-pair-id]"))
+      .find((row) => row.dataset.activePairId === String(pairId || ""));
+    if (!pairRow) return;
+    pairRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    pairRow.classList.add("notification-target-flash");
+    setTimeout(() => pairRow.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
 function isCurrentPairDriver() {
   return Boolean(
     activePairState &&
@@ -15675,6 +16112,30 @@ function getChangedPairToolTabs(previousPair, nextPair) {
   return changed;
 }
 
+function getNewPairActionNotifications(previousPair, nextPair) {
+  if (!previousPair || !nextPair || previousPair.id !== nextPair.id) return [];
+  const notifications = [];
+  const myName = String(myInfo.name || "").trim().toLowerCase();
+  const isMine = (name) => String(name || "").trim().toLowerCase() === myName;
+
+  const previousSuggestionIds = new Set(
+    (previousPair.suggestions || []).map((suggestion) => suggestion.id),
+  );
+  (nextPair.suggestions || []).forEach((suggestion) => {
+    if (!previousSuggestionIds.has(suggestion.id) && !isMine(suggestion.from)) {
+      notifications.push({ kind: "suggestion", item: suggestion });
+    }
+  });
+
+  const previousTaskIds = new Set((previousPair.tasks || []).map((task) => task.id));
+  (nextPair.tasks || []).forEach((task) => {
+    if (!previousTaskIds.has(task.id) && !isMine(task.createdBy)) {
+      notifications.push({ kind: "task", item: task });
+    }
+  });
+  return notifications;
+}
+
 function renderPairPanelHtml() {
   if (!activePairState || !pairPanelOpen) return "";
   const tabs = [
@@ -15724,7 +16185,7 @@ function renderPairPanelHtml() {
       </div>
       <div class="pair-list" style="margin-top:10px;">
         ${tasks.length ? tasks.map((task) => `
-          <label class="pair-list-card pair-task-row ${task.done ? "is-done" : ""}">
+          <label class="pair-list-card pair-task-row ${task.done ? "is-done" : ""}" data-pair-task-id="${escapeHtml(task.id)}">
             <input class="pair-task-toggle" type="checkbox" data-id="${escapeHtml(task.id)}" ${task.done ? "checked" : ""}>
             <span><small>${escapeHtml(formatCollabDisplayName(task.createdBy, "Pair"))}</small>${escapeHtml(task.text)}</span>
           </label>`).join("") : `<div class="pair-empty">No tasks yet.</div>`}
@@ -17109,9 +17570,16 @@ function ensureCollabSocket() {
   collabSocket.on("collab:meta", (meta) => {
     if (!meta) return;
     const previousAnnouncement = String(collabPermissions.announcementBar || "").trim();
+    const previousPendingJoinIds = new Set(
+      collabPendingJoins.map((entry) => String(entry?.socketId || "")),
+    );
+    const nextPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
+    const newPendingJoinRequests = nextPendingJoins.filter(
+      (entry) => !previousPendingJoinIds.has(String(entry?.socketId || "")),
+    );
     collabHostName = meta.hostName || collabHostName;
     collabPermissions = normalizeCollabPermissions(meta.permissions);
-    collabPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
+    collabPendingJoins = nextPendingJoins;
     collabBans = Array.isArray(meta.bans) ? meta.bans : [];
     collabShareLink = meta.shareLink || collabShareLink;
     collabSessionPin = meta.sessionPin || collabSessionPin;
@@ -17127,6 +17595,15 @@ function ensureCollabSocket() {
     }
     enforceCollabPermissionsUI();
     renderWaitingRoomPopup();
+    if (isHost()) {
+      newPendingJoinRequests.forEach((entry) => {
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(entry?.name || "A participant")}</strong> is waiting to join the session.`,
+          () => openWaitingRoomRequestFromNotification(entry?.socketId),
+          "warn",
+        );
+      });
+    }
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);
@@ -17197,6 +17674,7 @@ function ensureCollabSocket() {
     const previousPartner = getPairPartnerName(activePairState);
     const wasDriver = isCurrentPairDriver();
     const changedToolTabs = getChangedPairToolTabs(previousPair, pair);
+    const actionNotifications = getNewPairActionNotifications(previousPair, pair);
     activePairState = pair || null;
     if (!activePairState) {
       if (followedParticipantName === previousPartner) followedParticipantName = "";
@@ -17219,7 +17697,11 @@ function ensureCollabSocket() {
       pairFollowSuspended = false;
       pairPartnerPresence = null;
       followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
-      showNotification(`Pair started with ${getPairPartnerName()}.`, "success");
+      showActionNotificationHtml(
+        `Pair started with <strong>${escapeHtml(getPairPartnerName())}</strong>.`,
+        () => openPairToolsFromNotification("chat"),
+        "success",
+      );
       setTimeout(() => {
         emitPairPresenceSoon(true);
         if (pairFollowEnabled) {
@@ -17244,6 +17726,23 @@ function ensureCollabSocket() {
     if (pairFollowEnabled && !pairFollowSuspended) followedParticipantName = getPairPartnerName();
     enforceCollabPermissionsUI();
     renderPairDock();
+    actionNotifications.forEach(({ kind, item }) => {
+      if (kind === "suggestion") {
+        if (pairPanelOpen && pairPanelTab === "suggestions") return;
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(item.from || getPairPartnerName())}</strong> sent a code suggestion for ${escapeHtml(item.fileName || "the editor")}.`,
+          openPairSuggestionFromNotification,
+          "info",
+        );
+      } else if (kind === "task") {
+        if (pairPanelOpen && pairPanelTab === "tasks") return;
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(item.createdBy || getPairPartnerName())}</strong> added a Pair task: ${escapeHtml(item.text || "Untitled task")}`,
+          () => openPairTaskFromNotification(item.id),
+          "info",
+        );
+      }
+    });
   });
 
   collabSocket.on("collab:pair:invitation", handlePairInvitation);
@@ -17284,12 +17783,22 @@ function ensureCollabSocket() {
     if (!messages.some((entry) => entry.id === message.id)) messages.push(message);
     markPairToolActivity("chat");
     renderPairDock();
-    if (message.from !== myInfo.name) showNotification(`${message.from} sent a pair message.`, "info");
+    if (message.from !== myInfo.name) {
+      showActionNotificationHtml(
+        `<strong>${escapeHtml(message.from)}</strong> sent a pair message.`,
+        () => openPairToolsFromNotification("chat"),
+        "info",
+      );
+    }
   });
   collabSocket.on("collab:pair:presence", applyPairPartnerPresence);
   collabSocket.on("collab:pair:presence-request", () => emitPairPresenceSoon(true));
   collabSocket.on("collab:pair:help-request", (payload) => {
-    showNotification(`${payload?.from || "A pair"} asked the host for help.`, "warn");
+    showActionNotificationHtml(
+      `<strong>${escapeHtml(payload?.from || "A pair")}</strong> asked the host for Pair help.`,
+      () => openPairHelpFromNotification(payload?.pair?.id),
+      "warn",
+    );
     addTimelineEntry(`${payload?.from || "A pair"} requested pair help.`, "pair");
   });
   collabSocket.on("collab:pair:voice", (payload) => {
@@ -17325,13 +17834,15 @@ function ensureCollabSocket() {
     if (senderName) {
       addTimelineEntry(`${senderName} sent a group message.`, "chat");
       if (senderName !== String(myInfo.name)) {
-        if (!isViewingCollabChat("group")) {
+        const viewingGroupChat = isViewingCollabChat("group");
+        if (!viewingGroupChat) {
           collabUnreadGroupMessages += 1;
         }
         updateCollabUnreadBadges();
-        if (!collabModal || collabModal.style.display !== "flex" || collabModalView !== "session") {
-          showNotificationHtml(
+        if (!viewingGroupChat) {
+          showActionNotificationHtml(
             `<strong>${escapeHtml(senderName)}</strong> has sent a message publicly.`,
+            () => openCollabChatFromNotification("group"),
             "info",
           );
         }
@@ -17352,15 +17863,19 @@ function ensureCollabSocket() {
       message.from &&
       message.from !== myInfo.name
     ) {
-      if (!isViewingCollabChat("private", message.from)) {
+      const viewingPrivateChat = isViewingCollabChat("private", message.from);
+      if (!viewingPrivateChat) {
         const privateKey = getPrivateUnreadKey(message.from);
         collabUnreadPrivateMessages[privateKey] = getPrivateUnreadCount(message.from) + 1;
       }
       updateCollabUnreadBadges();
-      showNotificationHtml(
-        `<strong>${escapeHtml(message.from)}</strong> has sent a message to you privately.`,
-        "info",
-      );
+      if (!viewingPrivateChat) {
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(message.from)}</strong> has sent a message to you privately.`,
+          () => openCollabChatFromNotification("private", message.from),
+          "info",
+        );
+      }
     }
   });
 
