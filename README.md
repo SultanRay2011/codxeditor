@@ -4,7 +4,7 @@ CodX Editor is a browser-based code editor for building and testing frontend pro
 
 Live site:
 
-`https://codx-furo.onrender.com`
+`https://codxeditor.onrender.com`
 
 ## What CodX Editor Is
 

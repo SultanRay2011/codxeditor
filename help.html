@@ -654,6 +654,7 @@
                 <ul>
                   <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
                   <li>The Show files in Zen Mode setting controls whether the file explorer remains visible.</li>
+                  <li>When files remain visible, Zen Mode places them in a vertically scrolling column beside the code editor instead of a horizontal tab strip.</li>
                   <li>Use the exit button or press <kbd>Esc</kbd> to leave Zen Mode.</li>
                 </ul>
               </article>
@@ -686,9 +687,12 @@
                 <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Suggestions</h3>
                 <ul>
                   <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
+                  <li>Suggestion rows use icons instead of emoji or text abbreviations. HTML, CSS, JavaScript, ENV, TXT, JSON, media, and other project paths display the icon that matches their type.</li>
                   <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
-                  <li>Typing <code>lorem</code> can insert placeholder text.</li>
+                  <li>Typing <code>lorem</code> inserts a full placeholder paragraph.</li>
                   <li>Path suggestions help when typing links, scripts, stylesheets, and media sources.</li>
+                  <li>CSS selector suggestions inside an HTML <code>&lt;style&gt;</code> block indent properties one level deeper and keep the closing brace aligned with the opening selector.</li>
+                  <li>Accepting the <code>style</code> tag inserts and displays exactly <code>&lt;style&gt;&lt;/style&gt;</code> with no placeholder space. Press Enter between the tags to create an indented blank CSS line while keeping both tags aligned.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -754,6 +758,8 @@
                 <ul>
                   <li>Save projects inside your browser with a custom project name.</li>
                   <li>Open or delete saved projects from the project library. The browser library keeps up to 24 projects.</li>
+                  <li>Saved Projects includes <strong>ZIP All Projects</strong>, which asks for an archive name and downloads every saved project in its own folder, plus <strong>Import All Projects</strong>, which restores project folders from a library ZIP. Matching project names are replaced.</li>
+                  <li>Saved Projects and Starter Templates open directly from their separate More-menu controls; the old switching buttons are not shown inside either modal.</li>
                   <li>If the current project has unsaved changes, opening another saved project shows Save &amp; Open, Discard &amp; Open, and Cancel choices.</li>
                   <li>The New project control shows Save &amp; Start New, Discard &amp; Start New, and Cancel when the current project is unsaved.</li>
                   <li>Autosave keeps a recovery draft while you work and can offer to restore it after a reload for up to seven days.</li>
@@ -763,8 +769,12 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-layer-group"></i> Starter Templates</h3>
                 <ul>
-                  <li>Choose from built-in starters for landing pages, portfolios, and contact forms.</li>
-                  <li>Templates include matching markup, styling, and scripts so you can begin faster.</li>
+                  <li>Choose from eight art-directed concepts: Signal Room product launch, Studio Ledger portfolio, Project Concierge intake form, Pulseboard analytics workspace, Nocturne event experience, Atelier Market concept store, Canvas Desk draggable creative workspace, and Loop Lab browser rhythm machine.</li>
+                  <li>Every concept has its own visual system and responsive layout rather than reusing a generic starter structure.</li>
+                  <li>The included JavaScript provides working interactions such as live demonstrations, filters, multi-step validation, animated data ranges, countdowns, accordions, a cart drawer, draggable windows, and Web Audio sequencing.</li>
+                  <li>Search by concept or feature and filter the gallery by Websites, Apps, Portfolios, or Commerce.</li>
+                  <li>Open a sandboxed live preview before using a concept, then switch the preview among desktop, tablet, and phone widths.</li>
+                  <li>Unique visual previews, categories, feature highlights, and interaction labels make each concept easy to evaluate before opening it.</li>
                   <li>If you have unsaved work, the editor asks before replacing your current project.</li>
                   <li>Apply a template when you want to replace the current project with a coordinated frontend starter.</li>
                 </ul>
@@ -778,6 +788,7 @@
                   <li>Updating replaces files whose paths match the current project, adds new project files, and preserves other entries already in the archive.</li>
                   <li>Supported browsers save directly back to the selected ZIP after confirmation. Other browsers download an updated copy with the same file name so you can replace the old copy yourself.</li>
                   <li>Import a ZIP archive to load supported project text files.</li>
+                  <li>For a full browser-library backup, use <strong>ZIP All Projects</strong> and <strong>Import All Projects</strong> inside Saved Projects. The bulk archive keeps each project in a separate folder and preserves its name, active file, and preview target.</li>
                   <li>If every imported file is wrapped in the same outer folder, CodX Editor removes that folder name. For example, <code>my-project/index.html</code> appears as <code>index.html</code>, while meaningful inner paths such as <code>css/style.css</code> remain intact.</li>
                   <li>Large ZIP imports are decompressed in small batches, rendered efficiently, and autosaved when the browser is idle. In very large projects, automatic diagnostics prioritize the active and preview files to keep the editor responsive.</li>
                   <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
@@ -788,6 +799,12 @@
                 <h3><i class="fa-solid fa-photo-film"></i> Media Files</h3>
                 <ul>
                   <li>Add images, videos, and audio to your project from the media button.</li>
+                  <li>Selecting an added media file opens a visual image, video, or audio player inside the editor instead of exposing its data URL as editable code.</li>
+                  <li>Media is kept as binary browser data and opened through a lightweight object URL, avoiding the large base64 copies that can exhaust memory when opening a video.</li>
+                  <li>Media up to 4 MB can be encoded for live collaboration. Larger media stays local to your browser so it cannot destabilize the session.</li>
+                  <li>Direct publishing can prepare up to 12 MB of local media on demand. Use ZIP export for projects containing larger videos.</li>
+                  <li>Developer media information is available only through Developer Tools: use the Media Source shortcut or run <code>media source on</code>. It is read-only; large binary payloads stay hidden for memory safety. Use <code>media source off</code>, Reset Tools, or reload to return to the viewer.</li>
+                  <li>Switching back to an HTML, CSS, JavaScript, ENV, TXT, or other text file restores the normal code editor.</li>
                   <li>The preview rewrites local media references so playback and image display work inside the browser preview.</li>
                 </ul>
               </article>
@@ -1056,6 +1073,7 @@
                 <h3><i class="fa-solid fa-users"></i> Sessions</h3>
                 <ul>
                   <li>Create a session, then copy its six-character PIN or the ready-made join instructions. The Session Info view also provides a share link.</li>
+                  <li>After the first session you create on a device, closing the Session PIN modal shows a one-time tutorial card beneath the Collaboration button. It explains that <strong>Manage Session</strong> reopens participants, invite details, collaboration tools, and room controls.</li>
                   <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
                   <li>When someone requests entry, the host receives a waiting-room popup showing the person’s name and chosen color with Accept and Deny buttons.</li>
                   <li>New waiting-room requests also show <strong>Click To Open</strong>; selecting the notification highlights that person and focuses their Accept button.</li>
@@ -1113,6 +1131,7 @@
                   <li>Participants can code, preview, chat, and collaborate normally unless room settings limit them.</li>
                   <li>Hosts can freeze editing, mute chat, limit file access, kick, or ban devices from a session.</li>
                   <li>Collaboration name labels show <strong>(you)</strong> beside your own name in the participant list, chat, and Pair tools, plus useful status such as muted, frozen, and priority.</li>
+                  <li>The participant list can be sorted by join time or alphabetically. Joined first is the default and uses each participant's recorded join time.</li>
                   <li>Participants can rename themselves when allowed; hosts and co-hosts can rename people they are permitted to manage.</li>
                   <li>Participant More options are shown as neat action cards for role, message, mute, freeze, file access, follow, details, copy, kick, and ban actions.</li>
                 </ul>
@@ -1189,7 +1208,8 @@
                   <li>Color Scheme cycles through system, light, and dark simulation. Breakpoints displays the current viewport category and exact CSS width.</li>
                   <li>Open a project file, jump to a line and column, toggle editor wrapping, or temporarily change the editor font and tab display size.</li>
                   <li>Format Code safely reindents supported files and remains undoable. It skips whitespace-sensitive HTML blocks instead of risking their content.</li>
-                  <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, wrapping, font, and tab display to normal defaults.</li>
+                  <li>Use Media Source or <code>media source on</code> to inspect safe, read-only details for the active image, video, or audio file. Large encoded or binary payloads are not copied into the editor because doing so can exhaust browser memory.</li>
+                  <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, media viewer, wrapping, font, and tab display to normal defaults.</li>
                   <li>Use <code>state</code> or <code>diagnostics</code> to inspect preview, editor, project, error, connection, and collaboration details without changing project code.</li>
                   <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
                   <li>Type <code>help</code> for the complete command list, use <kbd>↑</kbd>/<kbd>↓</kbd> for command history, and press <kbd>Tab</kbd> to complete a command.</li>

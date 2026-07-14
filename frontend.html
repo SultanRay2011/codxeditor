@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260714-file-extensions1" />
+    <link rel="stylesheet" href="/frontend.css?v=20260714-template-gallery6" />
   </head>
   <body>
     <a
@@ -355,6 +355,22 @@
             <div id="editorWatermark" aria-hidden="true">
               Type <strong>cxstart</strong> and hit enter for a html code setup.
             </div>
+            <section
+              id="editorMediaViewer"
+              class="editor-media-viewer"
+              role="region"
+              aria-label="Media file preview"
+              hidden
+            >
+              <div class="editor-media-viewer-header">
+                <span id="editorMediaViewerIcon" class="editor-media-viewer-icon" aria-hidden="true">
+                  <i class="fa-solid fa-photo-film"></i>
+                </span>
+                <strong id="editorMediaViewerName">Media file</strong>
+                <span id="editorMediaViewerKind" class="editor-media-viewer-kind">MEDIA</span>
+              </div>
+              <div id="editorMediaViewerContent" class="editor-media-viewer-content"></div>
+            </section>
             <textarea
               id="activeEditor"
               class="active"
@@ -1335,6 +1351,7 @@
             <button type="button" data-developer-command="scheme toggle" aria-pressed="false"><i class="fa-solid fa-circle-half-stroke"></i> Color Scheme</button>
             <button type="button" data-developer-command="breakpoints toggle" aria-pressed="false"><i class="fa-solid fa-ruler-horizontal"></i> Breakpoints</button>
             <button type="button" data-developer-command="editor format"><i class="fa-solid fa-align-left"></i> Format Code</button>
+            <button type="button" data-developer-command="media source toggle" aria-pressed="false"><i class="fa-solid fa-file-code"></i> Media Source</button>
             <button type="button" data-developer-command="tools reset"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Tools</button>
           </div>
         </div>
@@ -1724,7 +1741,8 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
-    <script src="/frontend.js?v=20260714-file-extensions1"></script>
+    <script src="/starter-templates.js?v=20260714-concepts3"></script>
+    <script src="/frontend.js?v=20260714-template-gallery6"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>

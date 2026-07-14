@@ -52,6 +52,11 @@ const modalBody = document.getElementById("modalBody");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const typingIndicatorEl = document.getElementById("typingIndicator");
 const editorWatermark = document.getElementById("editorWatermark");
+const editorMediaViewer = document.getElementById("editorMediaViewer");
+const editorMediaViewerIcon = document.getElementById("editorMediaViewerIcon");
+const editorMediaViewerName = document.getElementById("editorMediaViewerName");
+const editorMediaViewerKind = document.getElementById("editorMediaViewerKind");
+const editorMediaViewerContent = document.getElementById("editorMediaViewerContent");
 const exportZipBtn = document.querySelector('button[aria-label="Export project as ZIP"]');
 const importZipBtn = document.querySelector('button[aria-label="Import ZIP file"]');
 const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
@@ -121,6 +126,7 @@ const githubRepoModalBody = document.getElementById("githubRepoModalBody");
 const closeGitHubRepoModalBtn = document.getElementById("closeGitHubRepoModalBtn");
 const projectLibraryModal = document.getElementById("projectLibraryModal");
 const closeProjectLibraryBtn = document.getElementById("closeProjectLibraryBtn");
+const projectLibraryTitle = document.getElementById("projectLibraryTitle");
 const projectLibraryBody = document.getElementById("projectLibraryBody");
 const projectStatusBadge = document.getElementById("projectStatusBadge");
 const projectStatusMeta = document.getElementById("projectStatusMeta");
@@ -595,6 +601,7 @@ if (appDialog) {
 }
 const developerCommandHistory = [];
 let developerCommandHistoryIndex = 0;
+let developerMediaSourceVisible = false;
 const developerCommandSuggestions = [
   "help", "state", "diagnostics", "files", "file list", "file open ",
   "participants", "permissions", "errors", "device list", "device responsive",
@@ -605,6 +612,8 @@ const developerCommandSuggestions = [
   "scheme light", "scheme dark", "breakpoints toggle", "breakpoints on",
   "breakpoints off", "editor goto ", "editor format",
   "editor wrap on", "editor wrap off", "editor font ", "editor tabsize ",
+  "media source on", "media source off", "media source toggle",
+  "media code on", "media code off", "media code toggle",
   "tools reset", "clear", "close",
 ];
 if (developerConsoleModal) {
@@ -1136,12 +1145,12 @@ experimentalHtmlTags.forEach((tag) => {
 htmlTagMetaMap.set("lorem", {
   tag: "lorem",
   icon: "TXT",
-  desc: "Insert lorem ipsum placeholder text",
+  desc: "Insert a full lorem ipsum placeholder paragraph",
   attrs: [],
   badge: "snippet",
   category: "snippet",
   insertText:
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
 });
 [
   {
@@ -2356,6 +2365,7 @@ let typingTimer;
 let myInfo = {};
 let collabSocket = null;
 let collabParticipants = [];
+let collabParticipantSortMode = "joined";
 let collabTimeline = [];
 let lastParticipantsSnapshot = new Map();
 let previousParticipantCount = 0;
@@ -2450,17 +2460,29 @@ const editableTextExtensions = ["html", "htm", "css", "scss", "less", "js", "mjs
 const ZIP_IMPORT_BATCH_SIZE = 12;
 const LARGE_PROJECT_FILE_THRESHOLD = 160;
 const LARGE_PROJECT_DIAGNOSTIC_LIMIT = 32;
+const MAX_SAVED_PROJECTS = 24;
+const PROJECT_LIBRARY_ARCHIVE_FORMAT = "codx-project-library";
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
 const AUTOSAVE_RESTORE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const DEVICE_ID_KEY = "codxDeviceId";
+const COLLAB_MANAGE_TUTORIAL_KEY = "codxCollabManageTutorialSeen";
+const MEDIA_DATABASE_NAME = "codxEditorMedia";
+const MEDIA_DATABASE_STORE = "assets";
+const MEDIA_DATABASE_VERSION = 1;
+const MAX_DEVELOPER_MEDIA_SOURCE_CHARS = 1024 * 1024;
+const MAX_INLINE_MEDIA_SOURCE_CHARS = 8 * 1024 * 1024;
+const MAX_LIVE_MEDIA_TRANSFER_BYTES = 4 * 1024 * 1024;
+const MAX_PUBLISH_MEDIA_BYTES = 12 * 1024 * 1024;
 let autosaveTimer = null;
 let autosaveIdleCallback = null;
 let lastAutosaveAt = null;
 let sessionSyncTimeout = null;
 let lastEditorInputType = "";
 let fileNameMigrationNoticeShown = false;
+let mediaDatabasePromise = null;
+let collabManageTutorialEl = null;
 const defaultScriptWelcomeText = `console.log("WELCOME TO CODX EDITOR");`;
 
 function normalizeProjectFileName(value, fallback = "file.txt") {
@@ -2495,12 +2517,14 @@ function normalizeProjectFileNamesInPlace(files, previewTarget = currentPreviewT
   const renames = [];
   files.forEach((file, index) => {
     if (!file) return;
+    const mediaKind = getProjectMediaKind(file);
     const oldName = String(file.name || `file-${index + 1}.txt`);
     const nextName = makeUniqueProjectFileName(normalizeProjectFileName(oldName, `file-${index + 1}.txt`), usedNames);
     usedNames.add(nextName.toLowerCase());
     if (oldName !== nextName) {
       file.name = nextName;
-      file.type = getFileType(nextName) || file.type;
+      file.type = mediaKind ? "media" : getFileType(nextName) || file.type;
+      if (mediaKind) file.mediaType = mediaKind;
       renames.push([oldName, nextName]);
     }
   });
@@ -2523,7 +2547,7 @@ function normalizeProjectFileNamesInPlace(files, previewTarget = currentPreviewT
   return true;
 }
 
-const starterTemplates = [
+const fallbackStarterTemplates = [
   {
     id: "landing-page",
     name: "Landing Page",
@@ -3118,7 +3142,211 @@ button:hover {
   },
 ];
 
+const starterTemplates = Array.isArray(window.CODX_STARTER_TEMPLATES)
+  && window.CODX_STARTER_TEMPLATES.length
+  ? window.CODX_STARTER_TEMPLATES
+  : fallbackStarterTemplates;
+
+function renderStarterTemplatePreview(template) {
+  const preview = String(template?.preview || "signal").toLowerCase();
+  const safePreview = ["signal", "ledger", "concierge", "dashboard", "event", "shop", "workspace", "loop"].includes(preview)
+    ? preview
+    : "signal";
+  const previewScenes = {
+    signal: `
+      <span class="preview-orb"></span>
+      <span class="preview-kicker"></span>
+      <span class="preview-display"></span>
+      <span class="preview-display short"></span>
+      <span class="preview-terminal"><i></i><i></i><i></i></span>`,
+    ledger: `
+      <span class="preview-ledger-index">04</span>
+      <span class="preview-ledger-rule"></span>
+      <span class="preview-ledger-title"></span>
+      <span class="preview-ledger-image"></span>
+      <span class="preview-ledger-copy"></span>`,
+    concierge: `
+      <span class="preview-form-progress"><i></i></span>
+      <span class="preview-form-number">02</span>
+      <span class="preview-form-title"></span>
+      <span class="preview-form-choice"></span>
+      <span class="preview-form-choice second"></span>`,
+    dashboard: `
+      <span class="preview-dash-rail"><i></i><i></i><i></i></span>
+      <span class="preview-dash-stat"></span>
+      <span class="preview-dash-stat second"></span>
+      <span class="preview-dash-chart"><i></i></span>`,
+    event: `
+      <span class="preview-event-moon"></span>
+      <span class="preview-event-date">09—12</span>
+      <span class="preview-event-title"></span>
+      <span class="preview-event-ticket"></span>`,
+    shop: `
+      <span class="preview-shop-nav"></span>
+      <span class="preview-shop-type">ATELIER</span>
+      <span class="preview-shop-product one"></span>
+      <span class="preview-shop-product two"></span>
+      <span class="preview-shop-product three"></span>`,
+    workspace: `
+      <span class="preview-workspace-dock"><i></i><i></i><i></i><i></i></span>
+      <span class="preview-workspace-window large"><b></b><i></i><i></i></span>
+      <span class="preview-workspace-window note">MOVE<br>IDEAS</span>
+      <span class="preview-workspace-cursor">↖</span>`,
+    loop: `
+      <span class="preview-loop-title">LOOP / 08</span>
+      <span class="preview-loop-controls"><i></i><i></i><b></b></span>
+      <span class="preview-loop-grid">${"<i></i>".repeat(24)}</span>`,
+  };
+  return `
+    <div class="template-preview template-preview-${safePreview}" aria-hidden="true">
+      <div class="template-preview-bar">
+        <span></span><span></span><span></span>
+        <small>${escapeHtml(template?.category || "Website")}</small>
+      </div>
+      <div class="template-preview-scene">${previewScenes[safePreview]}</div>
+    </div>`;
+}
+
+function getStarterTemplateGroup(template) {
+  const explicitGroup = String(template?.group || "").trim().toLowerCase();
+  if (explicitGroup) return explicitGroup;
+  const preview = String(template?.preview || "").toLowerCase();
+  if (["dashboard", "concierge", "board", "workspace", "loop"].includes(preview)) return "apps";
+  if (preview === "ledger") return "portfolios";
+  if (preview === "shop") return "commerce";
+  return "websites";
+}
+
+function buildStarterTemplatePreviewDocument(template) {
+  const files = Array.isArray(template?.files) ? template.files : [];
+  const htmlFile = files.find((file) => String(file.type || "").toLowerCase() === "html");
+  const cssFile = files.find((file) => String(file.type || "").toLowerCase() === "css");
+  const jsFile = files.find((file) => String(file.type || "").toLowerCase() === "js");
+  if (!htmlFile) return "<!doctype html><html><body>No preview is available.</body></html>";
+
+  const safeCss = String(cssFile?.content || "").replace(/<\/style/gi, "<\\/style");
+  const safeJs = String(jsFile?.content || "").replace(/<\/script/gi, "<\\/script");
+  let html = String(htmlFile.content || "");
+  const styleTag = `<style data-codx-template-preview>${safeCss}</style>`;
+  const scriptTag = `<script data-codx-template-preview>${safeJs}<\/script>`;
+
+  html = html.replace(
+    /<link\b[^>]*href=["'](?:\.\/)?style\.css["'][^>]*>/i,
+    () => styleTag,
+  );
+  if (!html.includes(styleTag)) {
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, () => `${styleTag}</head>`) : `${styleTag}${html}`;
+  }
+  html = html.replace(
+    /<script\b[^>]*src=["'](?:\.\/)?script\.js["'][^>]*>\s*<\/script>/i,
+    () => scriptTag,
+  );
+  if (!html.includes(scriptTag)) {
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, () => `${scriptTag}</body>`) : `${html}${scriptTag}`;
+  }
+  const baseTag = '<base target="_blank">';
+  return /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, (_match, attributes) => `<head${attributes}>${baseTag}`)
+    : `${baseTag}${html}`;
+}
+
+function closeStarterTemplatePreview() {
+  const modal = document.getElementById("starterTemplatePreviewModal");
+  if (!modal) return;
+  if (modal._escapeHandler) document.removeEventListener("keydown", modal._escapeHandler);
+  modal.remove();
+  document.body.classList.remove("template-preview-modal-open");
+}
+
+async function applyStarterTemplate(template) {
+  if (!template) return false;
+  if (hasUnsavedChanges) {
+    const decision = await showUnsavedProjectOpenDialog(template.name);
+    if (!decision?.ok) return false;
+    if (decision.action === "save") {
+      const saved = await saveCurrentProjectBeforeOpeningAnother();
+      if (!saved) return false;
+    } else if (decision.action !== "discard") {
+      return false;
+    }
+  }
+
+  const applied = applyProjectState(
+    {
+      files: template.files,
+      activeFileName: template.files[0]?.name || "",
+      previewTarget: { mode: "html", fileName: template.files[0]?.name || "" },
+    },
+    "template",
+  );
+  if (!applied) return false;
+  activeSavedProjectName = null;
+  closeStarterTemplatePreview();
+  closeProjectLibrary();
+  showNotification(`Opened ${template.name}.`, "success");
+  return true;
+}
+
+function showStarterTemplatePreview(template) {
+  if (!template) return;
+  closeStarterTemplatePreview();
+  const modal = document.createElement("div");
+  modal.id = "starterTemplatePreviewModal";
+  modal.className = "starter-template-preview-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "starterTemplatePreviewTitle");
+  modal.innerHTML = `
+    <div class="starter-template-preview-dialog">
+      <header class="starter-template-preview-head">
+        <div class="starter-template-preview-identity">
+          <span class="template-icon" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")}"><i class="fa-solid ${escapeHtml(template.icon || "fa-layer-group")}"></i></span>
+          <div><small>${escapeHtml(template.category || "Starter concept")}</small><h2 id="starterTemplatePreviewTitle">${escapeHtml(template.name)}</h2></div>
+        </div>
+        <div class="starter-template-device-switch" aria-label="Preview size">
+          <button class="active" type="button" data-preview-device="desktop" title="Desktop preview"><i class="fa-solid fa-desktop"></i><span>Desktop</span></button>
+          <button type="button" data-preview-device="tablet" title="Tablet preview"><i class="fa-solid fa-tablet-screen-button"></i><span>Tablet</span></button>
+          <button type="button" data-preview-device="phone" title="Phone preview"><i class="fa-solid fa-mobile-screen-button"></i><span>Phone</span></button>
+        </div>
+        <button class="starter-template-preview-close" type="button" aria-label="Close live preview">&times;</button>
+      </header>
+      <div class="starter-template-preview-stage" data-device="desktop">
+        <div class="starter-template-browser-frame">
+          <div class="starter-template-browser-bar"><span></span><span></span><span></span><p>${escapeHtml(template.name.toLowerCase().replace(/\s+/g, "-"))}.preview</p></div>
+          <iframe title="Live preview of ${escapeHtml(template.name)}" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+        </div>
+      </div>
+      <footer class="starter-template-preview-footer">
+        <div><span>${escapeHtml(template.tone || "Art-directed starter")}</span><p>${escapeHtml(template.description || "")}</p></div>
+        <button class="run-button starter-template-use-preview" type="button"><strong>USE THIS CONCEPT</strong><i class="fa-solid fa-arrow-right"></i></button>
+      </footer>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("template-preview-modal-open");
+
+  const iframe = modal.querySelector("iframe");
+  iframe.srcdoc = buildStarterTemplatePreviewDocument(template);
+  modal.querySelector(".starter-template-preview-close")?.addEventListener("click", closeStarterTemplatePreview);
+  modal.querySelector(".starter-template-use-preview")?.addEventListener("click", () => applyStarterTemplate(template));
+  modal.querySelectorAll("[data-preview-device]").forEach((button) => {
+    button.addEventListener("click", () => {
+      modal.querySelectorAll("[data-preview-device]").forEach((entry) => entry.classList.remove("active"));
+      button.classList.add("active");
+      modal.querySelector(".starter-template-preview-stage").dataset.device = button.dataset.previewDevice;
+    });
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeStarterTemplatePreview();
+  });
+  modal._escapeHandler = (event) => {
+    if (event.key === "Escape") closeStarterTemplatePreview();
+  };
+  document.addEventListener("keydown", modal._escapeHandler);
+  modal.querySelector(".starter-template-preview-close")?.focus({ preventScroll: true });
+}
+
 function resetTransientCollabUiState() {
+  dismissCollabManageTutorial();
   clearTimeout(sessionSyncTimeout);
   sessionSyncTimeout = null;
   lastSessionSyncAt = 0;
@@ -3129,6 +3357,7 @@ function resetTransientCollabUiState() {
   editor?.classList.remove("collab-live-typing-caret");
   editor?.style.removeProperty("--local-collab-caret-color");
   resetCollabUnreadMessages();
+  collabParticipantSortMode = "joined";
   hideLocalCollabCursor();
   followedParticipantName = "";
   stopCollabHeartbeat();
@@ -3288,6 +3517,7 @@ function getDeveloperStateSummary() {
     autoRun: Boolean(autoRunCheckbox?.checked),
     consoleVisible: Boolean(showConsoleCheckbox?.checked),
     zenMode: Boolean(isZenMode),
+    mediaSourceView: Boolean(developerMediaSourceVisible),
     activeSessionId: activeSessionId || null,
     role: getMyRole(),
     participantCount: collabParticipants.length,
@@ -3459,6 +3689,30 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
     return;
   }
 
+  if (/^media (?:source|code) (?:on|off|toggle)$/.test(command)) {
+    const requestedMode = command.split(" ").at(-1);
+    const enabled = requestedMode === "on"
+      ? true
+      : requestedMode === "off"
+        ? false
+        : !developerMediaSourceVisible;
+    setDeveloperMediaSourceVisible(enabled);
+    const activeMediaKind = getProjectMediaKind(activeFile);
+    appendDeveloperConsoleLine(
+      enabled
+        ? activeMediaKind
+          ? `Media Source View enabled for ${activeFile.name}. Close Developer Tools to inspect the safe, read-only source details.`
+          : "Media Source View enabled. Select an image, video, or audio file to inspect its safe, read-only source details."
+        : "Media Source View disabled. Media files now open as visual previews.",
+    );
+    appendDeveloperConsoleLine("");
+    showNotification(
+      enabled ? "Developer Media Source View enabled." : "Visual media previews restored.",
+      enabled ? "warn" : "success",
+    );
+    return;
+  }
+
   if (command.startsWith("editor goto ")) {
     const match = command.match(/^editor goto\s+(\d+)(?:\s+(\d+))?$/);
     if (!match || !activeFile) appendDeveloperConsoleLine("Usage: editor goto <line> [column]");
@@ -3532,7 +3786,8 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
       appendDeveloperConsoleLine("Editor controls:");
       appendDeveloperConsoleLine("  file list   file open <name>   editor goto <line> [column]");
       appendDeveloperConsoleLine("  editor format   editor wrap <on|off>   editor font <10-32>");
-      appendDeveloperConsoleLine("  editor tabsize <2|4|8>   tools reset");
+      appendDeveloperConsoleLine("  editor tabsize <2|4|8>   media source <on|off|toggle>");
+      appendDeveloperConsoleLine("  tools reset");
       appendDeveloperConsoleLine("Diagnostics:");
       appendDeveloperConsoleLine("  state   diagnostics   participants   permissions   errors");
       appendDeveloperConsoleLine("Console: clear   close");
@@ -4682,6 +4937,13 @@ function setDeveloperShortcutPressed(command, pressed) {
   button?.setAttribute("aria-pressed", pressed ? "true" : "false");
 }
 
+function setDeveloperMediaSourceVisible(enabled) {
+  developerMediaSourceVisible = Boolean(enabled);
+  setDeveloperShortcutPressed("media source toggle", developerMediaSourceVisible);
+  displayActiveFileInEditor({ preserveCaret: true });
+  enforceCollabPermissionsUI();
+}
+
 function setPreviewGridEnabled(enabled) {
   previewGridEnabled = Boolean(enabled);
   previewDeviceFrame?.classList.toggle("show-layout-grid", previewGridEnabled);
@@ -4976,6 +5238,7 @@ function formatActiveEditorCode() {
 }
 
 function resetDeveloperToolControls() {
+  setDeveloperMediaSourceVisible(false);
   setPreviewDevicePreset("responsive");
   setPreviewZoom(100);
   setPreviewInspecting(false);
@@ -4987,7 +5250,11 @@ function resetDeveloperToolControls() {
   editorTextarea.style.removeProperty("tab-size");
   loadSettings();
   syncSyntaxLayerStyle(editorTextarea);
-  renderSyntaxHighlight(editorTextarea);
+  if (getProjectMediaKind(activeFile)) {
+    if (highlightLayer) highlightLayer.innerHTML = "";
+  } else {
+    renderSyntaxHighlight(editorTextarea);
+  }
 }
 
 if (previewViewportStage && typeof ResizeObserver !== "undefined") {
@@ -5424,6 +5691,368 @@ iframe.addEventListener("load", () => {
 });
 let activeFile = projectFiles[0];
 
+function getProjectMediaKind(file) {
+  if (!file) return "";
+  const declaredType = String(file.mediaType || file.type || "").trim().toLowerCase();
+  if (["image", "img"].includes(declaredType)) return "image";
+  if (declaredType === "video") return "video";
+  if (declaredType === "audio") return "audio";
+
+  const ext = getFileType(String(file.name || ""));
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"].includes(ext)) {
+    return "image";
+  }
+  if (["mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "video";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac"].includes(ext)) return "audio";
+  return "";
+}
+
+function normalizeProjectMediaMetadata(files) {
+  if (!Array.isArray(files)) return [];
+  files.forEach((file) => {
+    const mediaKind = getProjectMediaKind(file);
+    if (!mediaKind) return;
+    file.type = "media";
+    file.mediaType = mediaKind;
+  });
+  return files;
+}
+
+function openMediaDatabase() {
+  if (mediaDatabasePromise) return mediaDatabasePromise;
+  mediaDatabasePromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB is unavailable."));
+      return;
+    }
+    const request = indexedDB.open(MEDIA_DATABASE_NAME, MEDIA_DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(MEDIA_DATABASE_STORE)) {
+        database.createObjectStore(MEDIA_DATABASE_STORE, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Unable to open media storage."));
+  });
+  return mediaDatabasePromise;
+}
+
+function createMediaStorageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `media-${crypto.randomUUID()}`;
+  }
+  return `media-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function setRuntimeMediaProperty(file, property, value) {
+  if (!file) return;
+  Object.defineProperty(file, property, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+function attachRuntimeMediaBlob(file, blob) {
+  if (!file || !(blob instanceof Blob)) return "";
+  if (file.mediaObjectUrl) URL.revokeObjectURL(file.mediaObjectUrl);
+  const objectUrl = URL.createObjectURL(blob);
+  setRuntimeMediaProperty(file, "mediaBlob", blob);
+  setRuntimeMediaProperty(file, "mediaObjectUrl", objectUrl);
+  setRuntimeMediaProperty(file, "mediaRestoreFailed", false);
+  file.mediaSize = Number(blob.size || 0);
+  file.mediaMimeType = String(blob.type || file.mediaMimeType || "application/octet-stream");
+  file.content = "";
+  return objectUrl;
+}
+
+function getProjectMediaSource(file) {
+  if (!file) return "";
+  if (file.mediaObjectUrl) return String(file.mediaObjectUrl);
+  if (file.mediaBlob instanceof Blob) return attachRuntimeMediaBlob(file, file.mediaBlob);
+  const source = String(file.content || "");
+  if (source.startsWith("data:") && source.length > MAX_INLINE_MEDIA_SOURCE_CHARS) return "";
+  return source;
+}
+
+function releaseProjectMediaObjectUrls(files = projectFiles) {
+  (Array.isArray(files) ? files : []).forEach((file) => {
+    if (!file?.mediaObjectUrl) return;
+    URL.revokeObjectURL(file.mediaObjectUrl);
+    setRuntimeMediaProperty(file, "mediaObjectUrl", "");
+  });
+}
+
+function persistMediaBlob(file, blob) {
+  if (!file || !(blob instanceof Blob)) return Promise.reject(new Error("No media data was provided."));
+  file.mediaStorageId = String(file.mediaStorageId || createMediaStorageId());
+  return openMediaDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(MEDIA_DATABASE_STORE, "readwrite");
+    transaction.objectStore(MEDIA_DATABASE_STORE).put({
+      id: file.mediaStorageId,
+      name: String(file.name || "media"),
+      mimeType: String(blob.type || file.mediaMimeType || "application/octet-stream"),
+      size: Number(blob.size || 0),
+      blob,
+      savedAt: Date.now(),
+    });
+    transaction.oncomplete = () => resolve(file.mediaStorageId);
+    transaction.onerror = () => reject(transaction.error || new Error("Unable to store media."));
+    transaction.onabort = () => reject(transaction.error || new Error("Media storage was cancelled."));
+  }));
+}
+
+function readMediaBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to encode media."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function buildPublishableProjectFiles() {
+  const mediaNeedingEncoding = projectFiles.filter(
+    (file) => file.mediaBlob instanceof Blob && !String(file.content || ""),
+  );
+  const totalBytes = mediaNeedingEncoding.reduce(
+    (total, file) => total + Number(file.mediaBlob?.size || file.mediaSize || 0),
+    0,
+  );
+  if (totalBytes > MAX_PUBLISH_MEDIA_BYTES) {
+    throw new Error(
+      `Local media is ${formatMediaByteSize(totalBytes)}. Direct publishing supports up to ${formatMediaByteSize(MAX_PUBLISH_MEDIA_BYTES)} of local media; export the project as ZIP for larger videos.`,
+    );
+  }
+
+  const encodedContent = new Map();
+  for (const file of mediaNeedingEncoding) {
+    encodedContent.set(file, await readMediaBlobAsDataUrl(file.mediaBlob));
+  }
+  return projectFiles.map((file) => ({
+    name: file.name,
+    type: file.type,
+    mediaType: file.mediaType || getProjectMediaKind(file) || undefined,
+    content: encodedContent.get(file) || file.content || "",
+    active: Boolean(file.active),
+  }));
+}
+
+function readPersistedMediaBlob(storageId) {
+  const id = String(storageId || "").trim();
+  if (!id) return Promise.resolve(null);
+  return openMediaDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(MEDIA_DATABASE_STORE, "readonly");
+    const request = transaction.objectStore(MEDIA_DATABASE_STORE).get(id);
+    request.onsuccess = () => resolve(request.result?.blob instanceof Blob ? request.result.blob : null);
+    request.onerror = () => reject(request.error || new Error("Unable to restore media."));
+  }));
+}
+
+async function hydrateStoredProjectMedia(files) {
+  const candidates = (Array.isArray(files) ? files : []).filter(
+    (file) => getProjectMediaKind(file) && file.mediaStorageId && !file.mediaBlob && !file.content,
+  );
+  if (!candidates.length) return;
+  const hydratedFiles = (await Promise.all(candidates.map(async (file) => {
+    try {
+      const blob = await readPersistedMediaBlob(file.mediaStorageId);
+      if (!blob || !projectFiles.includes(file)) {
+        if (projectFiles.includes(file)) setRuntimeMediaProperty(file, "mediaRestoreFailed", true);
+        return null;
+      }
+      attachRuntimeMediaBlob(file, blob);
+      return file;
+    } catch (_error) {
+      if (projectFiles.includes(file)) setRuntimeMediaProperty(file, "mediaRestoreFailed", true);
+      return null;
+    }
+  }))).filter(Boolean);
+  if (activeFile && (hydratedFiles.includes(activeFile) || activeFile.mediaRestoreFailed)) {
+    displayActiveFileInEditor({ preserveCaret: true });
+    enforceCollabPermissionsUI();
+  }
+  if (!hydratedFiles.length) return;
+  if (autoRunCheckbox?.checked) updatePreview();
+}
+
+function formatMediaByteSize(value) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = bytes / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unitIndex]}`;
+}
+
+function getDeveloperMediaSourceText(file) {
+  const source = String(file?.content || "");
+  if (!file) return "";
+  if (file.mediaBlob instanceof Blob || file.mediaStorageId) {
+    return [
+      "Binary media source (read-only)",
+      `Name: ${file.name || "media"}`,
+      `Type: ${file.mediaMimeType || file.mediaBlob?.type || getProjectMediaKind(file) || "unknown"}`,
+      `Size: ${formatMediaByteSize(file.mediaSize || file.mediaBlob?.size || 0)}`,
+      "The binary bytes are kept out of the code editor to prevent excessive memory use.",
+    ].join("\n");
+  }
+  if (source.length > MAX_DEVELOPER_MEDIA_SOURCE_CHARS) {
+    return [
+      "Large media source (read-only)",
+      `Name: ${file.name || "media"}`,
+      `Stored characters: ${source.length.toLocaleString()}`,
+      "The encoded payload is hidden to prevent this tab from running out of memory.",
+    ].join("\n");
+  }
+  return source;
+}
+
+function getMediaViewerIconClass(kind) {
+  if (kind === "image") return "fa-solid fa-image";
+  if (kind === "video") return "fa-solid fa-video";
+  if (kind === "audio") return "fa-solid fa-volume-high";
+  return "fa-solid fa-photo-film";
+}
+
+function showMediaViewerFallback(message) {
+  if (!editorMediaViewerContent) return;
+  const fallback = document.createElement("div");
+  fallback.className = "editor-media-empty-state";
+  const icon = document.createElement("i");
+  icon.className = "fa-solid fa-triangle-exclamation";
+  icon.setAttribute("aria-hidden", "true");
+  const text = document.createElement("p");
+  text.textContent = message;
+  fallback.append(icon, text);
+  editorMediaViewerContent.replaceChildren(fallback);
+}
+
+function renderActiveMediaFile(file, kind) {
+  if (!editorMediaViewer || !editorMediaViewerContent) return;
+  editorMediaViewer.hidden = false;
+  if (editorMediaViewerName) editorMediaViewerName.textContent = file.name || "Media file";
+  if (editorMediaViewerKind) editorMediaViewerKind.textContent = kind.toUpperCase();
+  if (editorMediaViewerIcon) {
+    editorMediaViewerIcon.innerHTML = `<i class="${getMediaViewerIconClass(kind)}"></i>`;
+  }
+  editorMediaViewerContent.replaceChildren();
+
+  const source = getProjectMediaSource(file);
+  if (!source) {
+    const encodedSource = String(file.content || "");
+    showMediaViewerFallback(
+      encodedSource.startsWith("data:") && encodedSource.length > MAX_INLINE_MEDIA_SOURCE_CHARS
+        ? "This older encoded media file is too large to open safely. Remove it and add the original file again to use the memory-safe viewer."
+        : file.mediaRestoreFailed
+          ? "This media file could not be restored from browser storage. Add the original file again to reconnect it."
+          : file.mediaStorageId
+          ? "Restoring this media file from browser storage..."
+          : "This media file has no previewable content.",
+    );
+    return;
+  }
+
+  let mediaElement;
+  if (kind === "image") {
+    mediaElement = document.createElement("img");
+    mediaElement.alt = file.name ? `Preview of ${file.name}` : "Image preview";
+  } else if (kind === "video") {
+    mediaElement = document.createElement("video");
+    mediaElement.controls = true;
+    mediaElement.playsInline = true;
+    mediaElement.preload = "metadata";
+  } else if (kind === "audio") {
+    const audioCard = document.createElement("div");
+    audioCard.className = "editor-media-audio-card";
+    const audioIcon = document.createElement("i");
+    audioIcon.className = "fa-solid fa-music";
+    audioIcon.setAttribute("aria-hidden", "true");
+    mediaElement = document.createElement("audio");
+    mediaElement.controls = true;
+    mediaElement.preload = "metadata";
+    audioCard.append(audioIcon, mediaElement);
+    editorMediaViewerContent.appendChild(audioCard);
+  }
+
+  if (!mediaElement) {
+    showMediaViewerFallback("This file type cannot be previewed in the editor.");
+    return;
+  }
+  mediaElement.addEventListener("error", () => {
+    if (activeFile === file) showMediaViewerFallback("The browser could not display this media file.");
+  }, { once: true });
+  mediaElement.src = source;
+  if (kind !== "audio") editorMediaViewerContent.appendChild(mediaElement);
+}
+
+function displayActiveFileInEditor(options = {}) {
+  const editor = document.getElementById("activeEditor");
+  if (!editor) return false;
+  const codeContainer = editor.closest(".code-container");
+  const mediaKind = getProjectMediaKind(activeFile);
+  const isMediaFile = Boolean(mediaKind);
+  const showMediaSource = isMediaFile && developerMediaSourceVisible;
+  codeContainer?.classList.toggle("media-file-active", isMediaFile && !showMediaSource);
+  codeContainer?.classList.toggle("media-source-active", showMediaSource);
+  hideSuggestions();
+
+  if (isMediaFile && activeFile && !showMediaSource) {
+    editor.value = "";
+    editor.setAttribute("aria-hidden", "true");
+    editor.tabIndex = -1;
+    editor.blur();
+    if (lineNumbers) lineNumbers.textContent = "";
+    if (highlightLayer) highlightLayer.innerHTML = "";
+    if (undoEditorBtn) undoEditorBtn.disabled = true;
+    if (redoEditorBtn) redoEditorBtn.disabled = true;
+    renderActiveMediaFile(activeFile, mediaKind);
+    return true;
+  }
+
+  if (editorMediaViewer) editorMediaViewer.hidden = true;
+  if (editorMediaViewerContent) editorMediaViewerContent.replaceChildren();
+  editor.removeAttribute("aria-hidden");
+  editor.removeAttribute("tabindex");
+  const previousCaret = Number(editor.selectionStart || 0);
+  editor.value = activeFile
+    ? showMediaSource
+      ? getDeveloperMediaSourceText(activeFile)
+      : String(activeFile.content || "")
+    : "";
+  const requestedCaret = Number.isFinite(options.cursorPosition)
+    ? Number(options.cursorPosition)
+    : options.preserveCaret
+      ? previousCaret
+      : editor.value.length;
+  const caret = Math.max(0, Math.min(requestedCaret, editor.value.length));
+  editor.selectionStart = editor.selectionEnd = caret;
+  updateLineNumbers(editor);
+  syncScroll(editor);
+  syncSyntaxLayerStyle(editor);
+  if (showMediaSource) {
+    if (highlightLayer) highlightLayer.innerHTML = "";
+    clearInlineHtmlCorrectionDisplay(editor);
+    editor.readOnly = true;
+    editor.title = "Read-only media source enabled from Developer Tools.";
+    if (undoEditorBtn) undoEditorBtn.disabled = true;
+    if (redoEditorBtn) redoEditorBtn.disabled = true;
+  } else {
+    renderSyntaxHighlight(editor);
+    syncInlineHtmlCorrectionDisplay(editor);
+  }
+  if (options.resetAllHistory) resetAllEditorHistory(editor);
+  else if (!showMediaSource) syncEditorHistoryState(editor);
+  if (options.focus) editor.focus();
+  return showMediaSource;
+}
+
 function getDefaultHtmlStarter() {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -5434,7 +6063,7 @@ function getDefaultHtmlStarter() {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    
+${"    "}
     <script src="script.js"></script>
 </body>
 </html>`;
@@ -5575,7 +6204,7 @@ function resolvePreviewAssetPath(assetPath) {
   const cleanPath = normalizedPath.replace(/^\.\/+/, "").toLowerCase();
   const fileName = cleanPath.split("/").pop();
   const mediaFile = projectFiles.find((file) => {
-    if (file.type !== "media") return false;
+    if (!getProjectMediaKind(file)) return false;
     const candidate = String(file.name || "").trim().replace(/^\.\/+/, "").toLowerCase();
     return (
       candidate === cleanPath ||
@@ -5583,8 +6212,9 @@ function resolvePreviewAssetPath(assetPath) {
       candidate.split("/").pop() === fileName
     );
   });
-  if (mediaFile && mediaFile.content) {
-    return mediaFile.content;
+  const mediaSource = getProjectMediaSource(mediaFile);
+  if (mediaSource) {
+    return mediaSource;
   }
   return normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
 }
@@ -5634,7 +6264,11 @@ function serializeProjectState() {
     files: projectFiles.map((file) => ({
       name: file.name,
       type: file.type,
-      content: file.content,
+      mediaType: file.mediaType || getProjectMediaKind(file) || undefined,
+      mediaStorageId: file.mediaStorageId || undefined,
+      mediaSize: Number(file.mediaSize || 0) || undefined,
+      mediaMimeType: file.mediaMimeType || undefined,
+      content: file.mediaBlob instanceof Blob && file.mediaStorageId ? "" : file.content,
       active: file.active,
     })),
     activeFileName: activeFile ? activeFile.name : "",
@@ -5669,12 +6303,17 @@ function applyProjectState(snapshot, sourceLabel = "project") {
     return false;
   }
 
-  projectFiles = upgradeStarterScriptIfNeeded(files).map((file, index) => ({
+  releaseProjectMediaObjectUrls(projectFiles);
+  projectFiles = normalizeProjectMediaMetadata(upgradeStarterScriptIfNeeded(files).map((file, index) => ({
     name: normalizeProjectFileName(file.name, `file-${index + 1}.html`),
     type: String(file.type || "html"),
+    mediaType: String(file.mediaType || getProjectMediaKind(file) || ""),
+    mediaStorageId: String(file.mediaStorageId || ""),
+    mediaSize: Number(file.mediaSize || 0),
+    mediaMimeType: String(file.mediaMimeType || ""),
     content: String(file.content || ""),
     active: false,
-  }));
+  })));
 
   normalizeProjectFileNamesInPlace(projectFiles);
   const requestedActiveName = normalizeProjectFileName(snapshot?.activeFileName || "");
@@ -5697,13 +6336,11 @@ function applyProjectState(snapshot, sourceLabel = "project") {
 
   const editor = document.getElementById("activeEditor");
   if (editor && activeFile) {
-    editor.value = activeFile.content;
-    updateLineNumbers(editor);
-    syncScroll(editor);
-    resetAllEditorHistory(editor);
+    displayActiveFileInEditor({ resetAllHistory: true });
   }
   renderFileList();
   enforceCollabPermissionsUI();
+  hydrateStoredProjectMedia(projectFiles);
   hasUnsavedChanges = false;
   lastAutosaveAt = Date.now();
   updateProjectStatusUI();
@@ -5813,7 +6450,7 @@ function findSavedProjectNameForSnapshot(snapshot) {
 }
 
 function setSavedProjects(projects) {
-  safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects));
+  return safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects)) === true;
 }
 
 function saveCurrentProjectToLibrary(projectName) {
@@ -5847,7 +6484,7 @@ function saveCurrentProjectToLibrary(projectName) {
   } else {
     projects.unshift(nextRecord);
   }
-  setSavedProjects(projects.slice(0, 24));
+  setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
   activeSavedProjectName = trimmedName;
   hasUnsavedChanges = false;
   lastAutosaveAt = Date.now();
@@ -5958,6 +6595,427 @@ async function deleteSavedProject(projectId) {
   showNotification("Saved project removed.", "success");
 }
 
+function getSafeArchiveFolderName(value, fallback = "project") {
+  const safeName = String(value || "")
+    .trim()
+    .replace(/[\u0000-\u001f<>:"/\\|?*]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  return safeName && safeName !== "." && safeName !== ".." ? safeName : fallback;
+}
+
+function getUniqueArchiveFolderName(projectName, usedNames, index) {
+  const baseName = getSafeArchiveFolderName(projectName, `project-${index + 1}`);
+  let folderName = baseName;
+  let suffix = 2;
+  while (usedNames.has(folderName.toLowerCase())) {
+    folderName = `${baseName} (${suffix++})`;
+  }
+  usedNames.add(folderName.toLowerCase());
+  return folderName;
+}
+
+function getSafeArchiveRelativePath(value, fallback = "file.txt") {
+  const segments = String(value || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment && segment !== "." && segment !== "..")
+    .map((segment) => segment.replace(/[\u0000-\u001f<>:"|?*]/g, "-").replace(/[. ]+$/g, ""))
+    .filter(Boolean);
+  return segments.join("/") || fallback;
+}
+
+function getMediaMimeTypeForArchiveFile(fileName) {
+  const mimeTypes = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    avif: "image/avif",
+    bmp: "image/bmp",
+    ico: "image/x-icon",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogv: "video/ogg",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+  };
+  return mimeTypes[getFileType(fileName)] || "application/octet-stream";
+}
+
+async function addSavedProjectFileToArchive(folder, file) {
+  const fileName = getSafeArchiveRelativePath(file?.name, "file.txt");
+  const mediaKind = getProjectMediaKind(file);
+  if (!mediaKind) {
+    folder.file(fileName, String(file?.content || ""));
+    return true;
+  }
+
+  const encodedMedia = String(file?.content || "").match(/^data:[^;,]+;base64,([\s\S]+)$/i);
+  if (encodedMedia) {
+    folder.file(fileName, encodedMedia[1], { base64: true });
+    return true;
+  }
+
+  if (file?.mediaStorageId) {
+    try {
+      const blob = await readPersistedMediaBlob(file.mediaStorageId);
+      if (blob instanceof Blob) {
+        folder.file(fileName, blob);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`Unable to add stored media ${fileName} to the project library ZIP.`, error);
+    }
+  }
+  return false;
+}
+
+async function zipAllSavedProjects() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
+    showNotification("The host disabled ZIP export for participants.", "error");
+    return false;
+  }
+  const projects = getSavedProjects();
+  if (!projects.length) {
+    showNotification("There are no saved projects to ZIP.", "info");
+    return false;
+  }
+
+  const dialog = await showAppPrompt(
+    "ZIP ALL PROJECTS",
+    "Name the ZIP containing all of your saved project folders:",
+    "codx-all-projects.zip",
+    "codx-all-projects.zip",
+  );
+  if (!dialog?.ok) return false;
+  const requestedName = String(dialog.value || "").trim();
+  if (!requestedName) {
+    showNotification("ZIP file name cannot be empty.", "error");
+    return false;
+  }
+  const baseZipName = requestedName.replace(/\.zip$/i, "");
+  const zipFileName = `${getSafeArchiveFolderName(baseZipName, "codx-all-projects")}.zip`;
+
+  const button = document.getElementById("zipAllProjectsBtn");
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>ZIPPING...</strong>';
+  }
+
+  try {
+    const zip = new JSZip();
+    const usedFolderNames = new Set();
+    const manifestProjects = [];
+    let missingMediaCount = 0;
+
+    for (let projectIndex = 0; projectIndex < projects.length; projectIndex += 1) {
+      const project = projects[projectIndex];
+      const folderName = getUniqueArchiveFolderName(project.name, usedFolderNames, projectIndex);
+      const folder = zip.folder(folderName);
+      const snapshot = project?.snapshot || {};
+      const files = Array.isArray(snapshot.files) ? snapshot.files : [];
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        if (!(await addSavedProjectFileToArchive(folder, files[fileIndex]))) missingMediaCount += 1;
+        if ((fileIndex + 1) % ZIP_IMPORT_BATCH_SIZE === 0) await yieldToBrowserDuringImport();
+      }
+      manifestProjects.push({
+        name: String(project.name || folderName),
+        folder: folderName,
+        updatedAt: Number(project.updatedAt || snapshot.savedAt || Date.now()),
+        activeFileName: String(snapshot.activeFileName || ""),
+        previewTarget: snapshot.previewTarget || null,
+      });
+      await yieldToBrowserDuringImport();
+    }
+
+    zip.comment = JSON.stringify({
+      format: PROJECT_LIBRARY_ARCHIVE_FORMAT,
+      version: 1,
+      exportedAt: Date.now(),
+      projects: manifestProjects,
+    });
+    const content = await zip.generateAsync({ type: "blob" });
+    downloadZipBlob(content, zipFileName);
+    const mediaNote = missingMediaCount
+      ? ` ${missingMediaCount} unavailable media file${missingMediaCount === 1 ? " was" : "s were"} skipped.`
+      : "";
+    showNotification(`Zipped ${projects.length} saved project${projects.length === 1 ? "" : "s"} as ${zipFileName}.${mediaNote}`, missingMediaCount ? "warn" : "success");
+    return true;
+  } catch (error) {
+    console.error("Saved project library ZIP error:", error);
+    showNotification("Could not ZIP the saved project library.", "error");
+    return false;
+  } finally {
+    if (projectLibraryModal?.style.display === "flex") renderProjectLibrary("saved");
+  }
+}
+
+function getNormalizedArchiveEntryPath(path) {
+  const segments = String(path || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean);
+  if (!segments.length || segments.some((segment) => segment === "." || segment === "..")) return "";
+  return segments.join("/");
+}
+
+function readProjectLibraryArchiveManifest(zip) {
+  try {
+    const parsed = JSON.parse(String(zip?.comment || ""));
+    if (parsed?.format !== PROJECT_LIBRARY_ARCHIVE_FORMAT || !Array.isArray(parsed.projects)) return null;
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function collectProjectGroupsFromArchive(zip) {
+  const entries = [];
+  zip.forEach((path, entry) => {
+    if (entry.dir) return;
+    const normalizedPath = getNormalizedArchiveEntryPath(path);
+    if (!normalizedPath || normalizedPath.startsWith("__MACOSX/")) return;
+    entries.push({ entry, normalizedPath });
+  });
+
+  const manifest = readProjectLibraryArchiveManifest(zip);
+  if (manifest) {
+    const groups = manifest.projects.map((project, index) => {
+      const folder = getNormalizedArchiveEntryPath(project?.folder || "");
+      if (!folder || folder.includes("/")) return null;
+      const prefix = `${folder}/`;
+      return {
+        name: String(project?.name || folder).trim() || folder,
+        folder,
+        updatedAt: Number(project?.updatedAt || Date.now()),
+        activeFileName: String(project?.activeFileName || ""),
+        previewTarget: project?.previewTarget || null,
+        files: entries
+          .filter(({ normalizedPath }) => normalizedPath.startsWith(prefix))
+          .map(({ entry, normalizedPath }) => ({ entry, relativePath: normalizedPath.slice(prefix.length) })),
+        order: index,
+      };
+    }).filter((group) => group?.files.length);
+    if (groups.length) return groups;
+  }
+
+  const groupsByFolder = new Map();
+  entries.forEach(({ entry, normalizedPath }) => {
+    const segments = normalizedPath.split("/");
+    if (segments.length < 2) return;
+    const folder = segments.shift();
+    const relativePath = segments.join("/");
+    if (!groupsByFolder.has(folder)) {
+      groupsByFolder.set(folder, {
+        name: folder,
+        folder,
+        updatedAt: Date.now(),
+        activeFileName: "",
+        previewTarget: null,
+        files: [],
+        order: groupsByFolder.size,
+      });
+    }
+    groupsByFolder.get(folder).files.push({ entry, relativePath });
+  });
+  return [...groupsByFolder.values()];
+}
+
+async function createSavedProjectRecordFromArchiveGroup(group, index) {
+  const usedNames = new Set();
+  const candidates = (Array.isArray(group?.files) ? group.files : []).map(({ entry, relativePath }) => {
+    const safeName = makeUniqueProjectFileName(
+      getSafeArchiveRelativePath(relativePath, `file-${usedNames.size + 1}.txt`),
+      usedNames,
+    );
+    const extension = getFileType(safeName);
+    const mediaKind = getProjectMediaKind({ name: safeName });
+    if (!editableTextExtensions.includes(extension) && !mediaKind) return null;
+    usedNames.add(safeName.toLowerCase());
+    return { entry, safeName, extension, mediaKind };
+  }).filter(Boolean);
+  if (!candidates.length) return { record: null, missingMediaCount: 0 };
+
+  const importedFiles = [];
+  let missingMediaCount = 0;
+  for (let batchIndex = 0; batchIndex < candidates.length; batchIndex += ZIP_IMPORT_BATCH_SIZE) {
+    const batch = candidates.slice(batchIndex, batchIndex + ZIP_IMPORT_BATCH_SIZE);
+    const results = await Promise.all(batch.map(async ({ entry, safeName, extension, mediaKind }) => {
+      if (!mediaKind) {
+        return {
+          name: safeName,
+          type: extension,
+          content: await entry.async("string"),
+          active: false,
+        };
+      }
+
+      const sourceBlob = await entry.async("blob");
+      const mimeType = getMediaMimeTypeForArchiveFile(safeName);
+      const blob = sourceBlob.type === mimeType ? sourceBlob : new Blob([sourceBlob], { type: mimeType });
+      const mediaFile = {
+        name: safeName,
+        type: "media",
+        mediaType: mediaKind,
+        mediaStorageId: createMediaStorageId(),
+        mediaSize: Number(blob.size || 0),
+        mediaMimeType: mimeType,
+        content: "",
+        active: false,
+      };
+      try {
+        await persistMediaBlob(mediaFile, blob);
+        return mediaFile;
+      } catch (error) {
+        console.warn(`Unable to store imported media ${safeName}.`, error);
+        missingMediaCount += 1;
+        return null;
+      }
+    }));
+    importedFiles.push(...results.filter(Boolean));
+    if (batchIndex + ZIP_IMPORT_BATCH_SIZE < candidates.length) await yieldToBrowserDuringImport();
+  }
+  if (!importedFiles.length) return { record: null, missingMediaCount };
+
+  const requestedActiveName = normalizeProjectFileName(
+    getSafeArchiveRelativePath(group.activeFileName || "", ""),
+    "",
+  );
+  const activeFile = importedFiles.find((file) => file.name === requestedActiveName)
+    || importedFiles.find((file) => file.name.toLowerCase() === "index.html")
+    || importedFiles.find((file) => file.type === "html")
+    || importedFiles[0];
+  importedFiles.forEach((file) => { file.active = file === activeFile; });
+
+  const requestedPreviewName = group.previewTarget?.mode === "html"
+    ? normalizeProjectFileName(
+        getSafeArchiveRelativePath(group.previewTarget.fileName || "", ""),
+        "",
+      )
+    : "";
+  const previewFile = importedFiles.find((file) => file.type === "html" && file.name === requestedPreviewName)
+    || importedFiles.find((file) => file.type === "html");
+  const projectName = String(group.name || "").trim()
+    || String(group.folder || "").trim()
+    || `Imported project ${index + 1}`;
+  const updatedAt = Number(group.updatedAt || Date.now());
+  return {
+    missingMediaCount,
+    record: {
+      id: `project-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+      name: projectName,
+      updatedAt,
+      snapshot: {
+        version: 1,
+        files: importedFiles,
+        activeFileName: activeFile.name,
+        previewTarget: previewFile
+          ? { mode: "html", fileName: previewFile.name }
+          : { mode: "auto", fileName: "" },
+        savedAt: updatedAt,
+      },
+    },
+  };
+}
+
+async function importAllSavedProjects() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableImportZip) {
+    showNotification("The host disabled ZIP import for participants.", "error");
+    return false;
+  }
+  if (activeSessionId && !isHost() && collabPermissions.disableSaveProject) {
+    showNotification("The host disabled saving projects for participants.", "error");
+    return false;
+  }
+
+  const file = await chooseZipFileWithInput();
+  if (!file) return false;
+  if (!/\.zip$/i.test(file.name || "")) {
+    showNotification("Choose a valid ZIP file containing project folders.", "error");
+    return false;
+  }
+
+  const button = document.getElementById("importAllProjectsBtn");
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>IMPORTING...</strong>';
+  }
+
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const allGroups = collectProjectGroupsFromArchive(zip);
+    if (!allGroups.length) {
+      showNotification("No project folders were found in that ZIP.", "error");
+      return false;
+    }
+
+    const groups = allGroups.slice(0, MAX_SAVED_PROJECTS);
+    const importedRecords = [];
+    const importedNames = new Set();
+    let missingMediaCount = 0;
+    for (let index = 0; index < groups.length; index += 1) {
+      const result = await createSavedProjectRecordFromArchiveGroup(groups[index], index);
+      missingMediaCount += result.missingMediaCount;
+      if (result.record) {
+        const nameKey = result.record.name.toLowerCase();
+        if (!importedNames.has(nameKey)) {
+          importedNames.add(nameKey);
+          importedRecords.push(result.record);
+        }
+      }
+      await yieldToBrowserDuringImport();
+    }
+    if (!importedRecords.length) {
+      showNotification("No supported project files were found in those folders.", "error");
+      return false;
+    }
+
+    const existingProjects = getSavedProjects();
+    const replacedCount = existingProjects.filter((project) =>
+      importedNames.has(String(project.name || "").trim().toLowerCase()),
+    ).length;
+    const retainedProjects = existingProjects.filter((project) =>
+      !importedNames.has(String(project.name || "").trim().toLowerCase()),
+    );
+    const nextProjects = [...importedRecords, ...retainedProjects].slice(0, MAX_SAVED_PROJECTS);
+    if (!setSavedProjects(nextProjects)) {
+      showNotification("Browser storage could not save the imported project library.", "error");
+      return false;
+    }
+
+    renderProjectLibrary("saved");
+    const details = [
+      replacedCount ? `${replacedCount} existing name${replacedCount === 1 ? " was" : "s were"} replaced.` : "",
+      allGroups.length > groups.length ? `Only the first ${MAX_SAVED_PROJECTS} projects were imported.` : "",
+      missingMediaCount ? `${missingMediaCount} media file${missingMediaCount === 1 ? " was" : "s were"} skipped.` : "",
+    ].filter(Boolean).join(" ");
+    showNotification(`Imported ${importedRecords.length} saved project${importedRecords.length === 1 ? "" : "s"}.${details ? ` ${details}` : ""}`, missingMediaCount ? "warn" : "success");
+    return true;
+  } catch (error) {
+    console.error("Saved project library import error:", error);
+    showNotification("That ZIP could not be imported as a project library.", "error");
+    return false;
+  } finally {
+    const currentButton = document.getElementById("importAllProjectsBtn");
+    if (currentButton) {
+      currentButton.disabled = false;
+      currentButton.innerHTML = '<i class="fa-solid fa-file-import"></i><strong>IMPORT ALL PROJECTS</strong>';
+    }
+  }
+}
+
 async function publishCurrentProject() {
   if (
     activeSessionId && !isHost() && collabPermissions.disablePublishShare
@@ -5999,6 +7057,7 @@ async function publishCurrentProject() {
     if (!confirmUpdate?.ok) return;
   }
   try {
+    const publishFiles = await buildPublishableProjectFiles();
     const response = await fetch("/api/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -6006,7 +7065,7 @@ async function publishCurrentProject() {
         mode,
         publishId,
         verificationKey,
-        files: projectFiles,
+        files: publishFiles,
         activeFileName: activeFile ? activeFile.name : "",
       }),
     });
@@ -6045,53 +7104,81 @@ function renderProjectLibrary(mode = "saved") {
     }
   }
   const savedProjects = getSavedProjects();
-  const tabs = `
-    <div class="collab-pill-row" style="margin-bottom:16px;">
-      <button id="savedProjectsTabBtn" class="run-button"${mode === "saved" ? ' style="background:var(--accent-color);color:#fff;"' : ""}><strong>SAVED PROJECTS</strong></button>
-      <button id="templateProjectsTabBtn" class="run-button"${mode === "templates" ? ' style="background:var(--accent-color);color:#fff;"' : ""}><strong>STARTER TEMPLATES</strong></button>
-    </div>
-  `;
+  projectLibraryModal.classList.toggle("template-library-open", mode === "templates");
+  if (projectLibraryTitle) {
+    projectLibraryTitle.textContent = mode === "templates" ? "Starter Templates" : "Saved Projects";
+  }
 
   if (mode === "templates") {
     projectLibraryBody.innerHTML =
-      tabs +
-      `<div class="template-library-grid">${starterTemplates
+      `<section class="template-library-intro">
+        <div>
+          <span class="template-library-kicker">CURATED STARTING POINTS</span>
+          <h3>Start with a point of view.</h3>
+          <p>${starterTemplates.length} responsive concepts with distinct art direction, thoughtful content, and working interactions. Every file is plain HTML, CSS, and JavaScript.</p>
+        </div>
+        <span class="template-library-count"><strong>${starterTemplates.length}</strong> concepts</span>
+      </section>
+      <div class="template-library-toolbar">
+        <label class="template-library-search">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input id="templateLibrarySearch" type="search" placeholder="Search concepts, styles, or features" autocomplete="off" />
+        </label>
+        <div class="template-library-filters" aria-label="Filter starter concepts">
+          <button class="active" type="button" data-template-group="all">All</button>
+          <button type="button" data-template-group="websites">Websites</button>
+          <button type="button" data-template-group="apps">Apps</button>
+          <button type="button" data-template-group="portfolios">Portfolios</button>
+          <button type="button" data-template-group="commerce">Commerce</button>
+        </div>
+      </div>
+      <div class="template-library-grid">${starterTemplates
         .map(
           (template) => `
-            <article class="template-card" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")};">
+            <article class="template-card template-card-${escapeHtml(template.preview || "signal")}" data-template-card data-template-group="${escapeHtml(getStarterTemplateGroup(template))}" data-template-search="${escapeHtml([template.name, template.category, template.tone, template.description, ...(template.highlights || [])].join(" ").toLowerCase())}" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")};--template-accent-2:${escapeHtml(template.accent2 || template.accent || "#4CAF50")};">
               <div class="template-card-top">
                 <span class="template-icon"><i class="fa-solid ${escapeHtml(template.icon || "fa-layer-group")}"></i></span>
-                <span class="template-tone">${escapeHtml(template.tone || "Starter")}</span>
-              </div>
-              <div class="template-preview" aria-hidden="true">
-                <span class="template-preview-dot"></span>
-                <span class="template-preview-dot"></span>
-                <span class="template-preview-dot"></span>
-                <div class="template-preview-hero"></div>
-                <div class="template-preview-line wide"></div>
-                <div class="template-preview-line"></div>
-                <div class="template-preview-cards">
-                  <span></span><span></span><span></span>
+                <div class="template-card-labels">
+                  <span class="template-category">${escapeHtml(template.category || "Website")}</span>
+                  <span class="template-tone">${escapeHtml(template.tone || "Starter")}</span>
                 </div>
               </div>
+              ${renderStarterTemplatePreview(template)}
               <h4 class="template-title">${escapeHtml(template.name)}</h4>
               <div class="template-description">${escapeHtml(template.description)}</div>
               <div class="template-meta-row">
                 <span class="template-meta-pill"><i class="fa-solid fa-folder-tree"></i> ${template.files.length} files</span>
-                <span class="template-meta-pill"><i class="fa-solid fa-code"></i> ${escapeHtml(template.files.map((file) => file.type.toUpperCase()).join(" • "))}</span>
+                <span class="template-meta-pill"><i class="fa-solid fa-wand-magic-sparkles"></i> ${escapeHtml(template.level || "Interactive")}</span>
               </div>
               <div class="template-highlights">
                 ${(Array.isArray(template.highlights) ? template.highlights : [])
                   .map((item) => `<span class="template-highlight-pill">${escapeHtml(item)}</span>`)
                   .join("")}
               </div>
-              <button class="run-button apply-template-btn" data-template="${escapeHtml(template.id)}"><strong>USE TEMPLATE</strong></button>
+              <div class="template-card-actions">
+                <button class="run-button preview-template-btn" data-template="${escapeHtml(template.id)}" type="button"><i class="fa-solid fa-eye"></i><span>LIVE PREVIEW</span></button>
+                <button class="run-button apply-template-btn" data-template="${escapeHtml(template.id)}" type="button"><span>USE CONCEPT</span><i class="fa-solid fa-arrow-right"></i></button>
+              </div>
             </article>`,
         )
-        .join("")}</div>`;
+        .join("")}</div>
+      <div id="templateLibraryEmpty" class="template-library-empty" hidden>
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <strong>No concept matches that search.</strong>
+        <span>Try another keyword or choose a different category.</span>
+      </div>`;
   } else {
     projectLibraryBody.innerHTML =
-      tabs +
+      `<div class="project-library-actions">
+        <button id="zipAllProjectsBtn" class="run-button" type="button"${savedProjects.length ? "" : " disabled"}>
+          <i class="fa-solid fa-file-zipper" aria-hidden="true"></i>
+          <span><strong>ZIP ALL PROJECTS</strong><small>Download every saved project in its own folder.</small></span>
+        </button>
+        <button id="importAllProjectsBtn" class="run-button" type="button">
+          <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+          <span><strong>IMPORT ALL PROJECTS</strong><small>Add project folders from a library ZIP.</small></span>
+        </button>
+      </div>` +
       (savedProjects.length
         ? `<div class="collab-participant-list">${savedProjects
             .map(
@@ -6115,10 +7202,10 @@ function renderProjectLibrary(mode = "saved") {
 
   projectLibraryModal.style.display = "flex";
 
-  const savedTabBtn = document.getElementById("savedProjectsTabBtn");
-  const templateTabBtn = document.getElementById("templateProjectsTabBtn");
-  if (savedTabBtn) savedTabBtn.onclick = () => renderProjectLibrary("saved");
-  if (templateTabBtn) templateTabBtn.onclick = () => renderProjectLibrary("templates");
+  const zipAllProjectsBtn = document.getElementById("zipAllProjectsBtn");
+  const importAllProjectsBtn = document.getElementById("importAllProjectsBtn");
+  if (zipAllProjectsBtn) zipAllProjectsBtn.onclick = zipAllSavedProjects;
+  if (importAllProjectsBtn) importAllProjectsBtn.onclick = importAllSavedProjects;
 
   document.querySelectorAll(".open-saved-project-btn").forEach((btn) => {
     btn.onclick = () => openSavedProjectFromLibrary(btn.dataset.projectId);
@@ -6128,23 +7215,44 @@ function renderProjectLibrary(mode = "saved") {
     btn.onclick = () => deleteSavedProject(btn.dataset.projectId);
   });
 
+  document.querySelectorAll(".preview-template-btn").forEach((btn) => {
+    btn.onclick = () => {
+      const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
+      if (template) showStarterTemplatePreview(template);
+    };
+  });
+
   document.querySelectorAll(".apply-template-btn").forEach((btn) => {
     btn.onclick = () => {
       const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
-      if (!template) return;
-      const applied = applyProjectState(
-        {
-          files: template.files,
-          activeFileName: template.files[0]?.name || "",
-          previewTarget: { mode: "html", fileName: template.files[0]?.name || "" },
-        },
-        "template",
-      );
-      if (!applied) return;
-      activeSavedProjectName = null;
-      closeProjectLibrary();
-      showNotification(`Template "${template.name}" loaded.`, "success");
+      if (template) applyStarterTemplate(template);
     };
+  });
+
+  const templateSearch = document.getElementById("templateLibrarySearch");
+  const templateGroupButtons = [...document.querySelectorAll(".template-library-filters [data-template-group]")];
+  const templateCards = [...document.querySelectorAll("[data-template-card]")];
+  const templateEmpty = document.getElementById("templateLibraryEmpty");
+  let activeTemplateGroup = "all";
+  const filterTemplates = () => {
+    const query = String(templateSearch?.value || "").trim().toLowerCase();
+    let visibleCount = 0;
+    templateCards.forEach((card) => {
+      const groupMatches = activeTemplateGroup === "all" || card.dataset.templateGroup === activeTemplateGroup;
+      const searchMatches = !query || String(card.dataset.templateSearch || "").includes(query);
+      const visible = groupMatches && searchMatches;
+      card.hidden = !visible;
+      if (visible) visibleCount += 1;
+    });
+    if (templateEmpty) templateEmpty.hidden = visibleCount > 0;
+  };
+  templateSearch?.addEventListener("input", filterTemplates);
+  templateGroupButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTemplateGroup = button.dataset.templateGroup || "all";
+      templateGroupButtons.forEach((entry) => entry.classList.toggle("active", entry === button));
+      filterTemplates();
+    });
   });
 }
 
@@ -6603,16 +7711,9 @@ function switchFile(fileName) {
     file.active = String(file.name || "").trim().toLowerCase() === normalizedFileName;
     if (file.active) {
       activeFile = file;
-      const editor = document.getElementById("activeEditor");
-      editor.value = file.content;
-      updateLineNumbers(editor);
-      syncScroll(editor);
-      syncInlineHtmlCorrectionDisplay(editor);
-      syncEditorHistoryState(editor);
-      // Hide suggestions when switching files
-      hideSuggestions();
     }
   });
+  displayActiveFileInEditor();
   if (activeFile && activeFile.type === "html") {
     currentPreviewTarget = { mode: "html", fileName: activeFile.name };
   } else {
@@ -6671,12 +7772,8 @@ async function createNewFile() {
     currentPreviewTarget = { mode: "html", fileName: newFile.name };
   }
 
-  const editor = document.getElementById("activeEditor");
-  editor.value = newFile.content; // Set editor value to the template
-  updateLineNumbers(editor);
   const cursorPos = getHtmlStarterCursorPosition(newFile.content);
-  editor.focus();
-  editor.setSelectionRange(cursorPos, cursorPos);
+  displayActiveFileInEditor({ cursorPosition: cursorPos, focus: true });
   hasUnsavedChanges = true;
   updateProjectStatusUI();
   renderFileList();
@@ -6786,6 +7883,13 @@ async function deleteFile(fileName) {
   );
   if (dialog?.ok) {
     const normalizedFileName = String(fileName || "").trim().toLowerCase();
+    const deletedFile = projectFiles.find(
+      (file) => String(file.name || "").trim().toLowerCase() === normalizedFileName,
+    );
+    if (deletedFile?.mediaObjectUrl) {
+      URL.revokeObjectURL(deletedFile.mediaObjectUrl);
+      setRuntimeMediaProperty(deletedFile, "mediaObjectUrl", "");
+    }
     projectFiles = projectFiles.filter(
       (file) => String(file.name || "").trim().toLowerCase() !== normalizedFileName,
     );
@@ -6795,10 +7899,7 @@ async function deleteFile(fileName) {
     ) {
       activeFile = projectFiles[0];
       activeFile.active = true;
-      const editor = document.getElementById("activeEditor");
-      editor.value = activeFile.content;
-      updateLineNumbers(editor);
-      syncScroll(editor);
+      displayActiveFileInEditor();
     }
     if (
       currentPreviewTarget.fileName &&
@@ -8455,7 +9556,7 @@ function updatePreview() {
     const normalizedSrc = (srcValue || "").trim().toLowerCase();
     const srcFileName = normalizedSrc.split("/").pop();
     return projectFiles.find((f) => {
-      if (f.type !== "media") return false;
+      if (!getProjectMediaKind(f)) return false;
       const fileName = (f.name || "").toLowerCase();
       return fileName === normalizedSrc || fileName === srcFileName;
     });
@@ -8482,8 +9583,9 @@ function updatePreview() {
 
       // Try to find the media file in projectFiles
       const mediaFile = resolveMediaFile(src);
-      if (mediaFile && mediaFile.content) {
-        return `<${tag}${before} src="${mediaFile.content}"${after}>`;
+      const mediaSource = getProjectMediaSource(mediaFile);
+      if (mediaSource) {
+        return `<${tag}${before} src="${escapeHtmlAttributeValue(mediaSource)}"${after}>`;
       } else {
         // File not found in project - it might be in the same directory or external
         // Just keep the original src
@@ -9055,7 +10157,7 @@ function restoreEditorHistorySnapshot(editor, snapshot) {
 }
 
 function undoEditorHistory(editor = document.getElementById("activeEditor")) {
-  if (!editor || !activeFile) return false;
+  if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -9074,7 +10176,7 @@ function undoEditorHistory(editor = document.getElementById("activeEditor")) {
 }
 
 function redoEditorHistory(editor = document.getElementById("activeEditor")) {
-  if (!editor || !activeFile) return false;
+  if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -9271,11 +10373,15 @@ function highlightHtml(code) {
 
     if (match[1]) {
       result += highlightHtmlSegment(match[1]);
-      result += highlightCss(match[2] || "", match.index + match[1].length);
+      const styleContent = match[2] || "";
+      result += styleContent
+        ? highlightCss(styleContent, match.index + match[1].length)
+        : "";
       result += highlightHtmlSegment(match[3]);
     } else {
       result += highlightHtmlSegment(match[4]);
-      result += highlightJs(match[5] || "");
+      const scriptContent = match[5] || "";
+      result += scriptContent ? highlightJs(scriptContent) : "";
       result += highlightHtmlSegment(match[6]);
     }
 
@@ -9765,13 +10871,7 @@ function syncSyntaxLayerStyle(textarea) {
 // PART 6 - EDITOR INITIALIZATION
 function initializeEditor() {
   const editor = document.getElementById("activeEditor");
-  editor.value = activeFile.content;
-  updateLineNumbers(editor);
-  syncScroll(editor);
-  syncSyntaxLayerStyle(editor);
-  renderSyntaxHighlight(editor);
-  syncInlineHtmlCorrectionDisplay(editor);
-  syncEditorHistoryState(editor, { clearStacks: true });
+  displayActiveFileInEditor({ resetAllHistory: true });
 
   editor.addEventListener("beforeinput", (e) => {
     lastEditorInputType = String(e.inputType || "");
@@ -9792,6 +10892,10 @@ function initializeEditor() {
 
   // MODIFIED: Combined input listener
   editor.addEventListener("input", (e) => {
+    if (getProjectMediaKind(activeFile)) {
+      displayActiveFileInEditor();
+      return;
+    }
     if (!canCurrentUserEditFile(activeFile ? activeFile.name : "")) {
       showNotification(
         isPairNavigatorEditingLocked()
@@ -11167,8 +12271,8 @@ function getFileType(name) {
 
 function matchesExtensionByContext(fileName, attr, tag) {
   const ext = getFileType(fileName);
-  const imageExt = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"]);
-  const mediaExt = new Set(["mp3", "wav", "ogg", "mp4", "webm", "m4a"]);
+  const imageExt = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"]);
+  const mediaExt = new Set(["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"]);
 
   if (attr === "href" && tag === "link") return ext === "css" || imageExt.has(ext);
   if (attr === "href" && tag === "a") return true;
@@ -11217,8 +12321,8 @@ function getFileIcon(fileName) {
   if (ext === "json") return "JSON";
   if (ext === "env") return "ENV";
   if (ext === "txt") return "TXT";
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "IMG";
-  if (["mp3", "wav", "ogg", "mp4", "webm", "m4a"].includes(ext)) return "MED";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "IMG";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "MED";
   return "FILE";
 }
 
@@ -11233,16 +12337,62 @@ function createFileExtensionIcon(fileName) {
     env: "fa-solid fa-key",
     txt: "fa-solid fa-file-lines",
   };
-  const safeExt = ["html", "css", "js", "mjs", "json", "env", "txt"].includes(ext) ? ext : "file";
+  const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"];
+  const videoExtensions = ["mp4", "webm", "ogv", "mov", "m4v"];
+  const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
+  let safeExt = ["html", "css", "js", "mjs", "json", "env", "txt"].includes(ext) ? ext : "file";
+  let glyphClass = iconByExtension[ext] || "fa-solid fa-file-code";
+  if (imageExtensions.includes(ext)) {
+    safeExt = "image";
+    glyphClass = "fa-solid fa-image";
+  } else if (videoExtensions.includes(ext)) {
+    safeExt = "video";
+    glyphClass = "fa-solid fa-video";
+  } else if (audioExtensions.includes(ext)) {
+    safeExt = "audio";
+    glyphClass = "fa-solid fa-volume-high";
+  }
   const icon = document.createElement("span");
   icon.className = `file-extension-icon file-extension-icon-${safeExt}`;
   icon.title = `${getFileIcon(fileName)} file`;
   icon.setAttribute("aria-hidden", "true");
 
   const glyph = document.createElement("i");
-  glyph.className = iconByExtension[ext] || "fa-solid fa-file-code";
+  glyph.className = glyphClass;
   icon.appendChild(glyph);
   return icon;
+}
+
+const suggestionIconDefinitions = {
+  html: { className: "fa-brands fa-html5", label: "HTML" },
+  css: { className: "fa-brands fa-css3-alt", label: "CSS" },
+  js: { className: "fa-brands fa-js", label: "JavaScript" },
+  env: { className: "fa-solid fa-key", label: "ENV" },
+  txt: { className: "fa-solid fa-file-lines", label: "TXT" },
+  json: { className: "fa-solid fa-code", label: "JSON" },
+  image: { className: "fa-solid fa-image", label: "Image" },
+  media: { className: "fa-solid fa-photo-film", label: "Media" },
+  file: { className: "fa-solid fa-file-code", label: "File" },
+};
+
+function getSuggestionIconKind(kind, fileName = "") {
+  if (!fileName) return suggestionIconDefinitions[kind] ? kind : "file";
+  const ext = getFileType(fileName);
+  if (["html", "htm"].includes(ext)) return "html";
+  if (["css", "scss", "less"].includes(ext)) return "css";
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(ext)) return "js";
+  if (ext === "env") return "env";
+  if (ext === "txt") return "txt";
+  if (["json", "jsonc"].includes(ext)) return "json";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "image";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "media";
+  return "file";
+}
+
+function getSuggestionIconMarkup(kind, fileName = "") {
+  const iconKind = getSuggestionIconKind(kind, fileName);
+  const definition = suggestionIconDefinitions[iconKind];
+  return `<span class="suggestion-icon suggestion-icon-${iconKind}" title="${definition.label}" aria-hidden="true"><i class="${definition.className}"></i></span>`;
 }
 
 function getCaretCoordinates(textarea, pos) {
@@ -11368,10 +12518,17 @@ function showSuggestions(editor, suggestions, prefix, mode) {
     const badge = badgeLabel
       ? `<span class="suggestion-badge">${escapeHtml(badgeLabel)}</span>`
       : "";
-    const safeIcon = mode === "tag-closing" ? "</>" : tagMeta.icon || "<>";
+    const tagIconKind = tagText === "lorem"
+      ? "txt"
+      : tagText === "style"
+        ? "css"
+        : tagText === "script"
+          ? "js"
+          : "html";
+    const iconMarkup = getSuggestionIconMarkup(tagIconKind);
     const displayTag = tagMeta.insertText ? highlightedTag : `&lt;${highlightedTag}&gt;`;
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${escapeHtml(safeIcon)}</span>
+      ${iconMarkup}
       <span class="suggestion-content">
         <div class="suggestion-tag">${displayTag}${badge}</div>
         <div class="suggestion-desc">${escapeHtml(tagMeta.desc || "HTML element")}${attrs ? ` - ${escapeHtml(attrs)}` : ""}</div>
@@ -11589,7 +12746,7 @@ function showCssSuggestions(editor, suggestions, mode) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">CSS</span>
+      ${getSuggestionIconMarkup("css")}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "CSS suggestion")}</div>
@@ -11630,7 +12787,7 @@ function showHtmlAttributeSuggestions(editor, suggestions) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">ATTR</span>
+      ${getSuggestionIconMarkup("html")}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "HTML attribute")}</div>
@@ -11655,7 +12812,7 @@ function showJsSuggestions(editor, suggestions, mode = "js") {
   suggestionPopup.innerHTML = "";
   suggestionPopup.dataset.mode = mode;
   const title = mode === "env" ? "Environment variables" : mode === "html-value" ? "HTML values" : "JavaScript";
-  const icon = mode === "env" ? "ENV" : mode === "html-value" ? "HTML" : "JS";
+  const iconKind = mode === "env" ? "env" : mode === "html-value" ? "html" : "js";
 
   const header = document.createElement("div");
   header.className = "suggestion-header";
@@ -11673,7 +12830,7 @@ function showJsSuggestions(editor, suggestions, mode = "js") {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${icon}</span>
+      ${getSuggestionIconMarkup(iconKind)}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "JavaScript suggestion")}</div>
@@ -11726,7 +12883,7 @@ function showFileSuggestions(editor, fileSuggestions, prefix, context = null) {
         : escapeHtml(fileName);
 
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${escapeHtml(getFileIcon(fileName))}</span>
+      ${getSuggestionIconMarkup("file", fileName)}
       <span class="suggestion-content">
         <div class="suggestion-tag">${highlightedName}</div>
         <div class="suggestion-desc">Use file path in current attribute</div>
@@ -11901,6 +13058,25 @@ function selectSuggestion(tag) {
     return;
   }
 
+  if (!isClosing && String(tag || "").toLowerCase() === "style") {
+    const replaceStart = isPlain
+      ? textBefore.length - prefix.length
+      : textBefore.length - prefix.length - 1;
+    const insertedText = "<style></style>";
+    const caretPos = replaceStart + "<style>".length;
+    applyEditorMutation(
+      editor,
+      replaceStart,
+      editor.selectionEnd,
+      insertedText,
+      caretPos,
+      caretPos,
+    );
+    hideSuggestions();
+    editor.focus();
+    return;
+  }
+
   const plainPrefixStart = textBefore.length - prefix.length;
   if (!isClosing && isPlain) {
     const smartCapture = getSmartHtmlTagCapture(editor, tag, plainPrefixStart);
@@ -12055,6 +13231,49 @@ function selectHtmlAttributeSuggestion(attrName) {
   editor.focus();
 }
 
+function getInlineStyleSelectorSuggestionLayout(editorValue, replaceStart, replaceEnd) {
+  const source = String(editorValue || "");
+  const safeStart = Math.max(0, Number(replaceStart || 0));
+  const safeEnd = Math.max(safeStart, Number(replaceEnd || safeStart));
+  const lineStart = source.lastIndexOf("\n", Math.max(0, safeStart - 1)) + 1;
+  const beforeSelector = source.slice(lineStart, safeStart);
+  const styleOpenMatch = beforeSelector.match(/^([\t ]*)<style\b[^>]*>[\t ]*$/i);
+  if (!styleOpenMatch) return null;
+  const afterSelector = source.slice(safeEnd);
+  const spaceBeforeClosingStyle = afterSelector.match(/^[\t ]*(?=<\/style\b)/i)?.[0] || "";
+  if (!/^<\/style\b/i.test(afterSelector.slice(spaceBeforeClosingStyle.length))) return null;
+  const styleIndent = styleOpenMatch[1] || "";
+  const selectorIndent = styleIndent + INDENT_UNIT;
+  return {
+    styleIndent,
+    selectorIndent,
+    propertyIndent: selectorIndent + INDENT_UNIT,
+    replaceEnd: safeEnd + spaceBeforeClosingStyle.length,
+  };
+}
+
+function buildInlineStyleSelectorSuggestion(value, layout) {
+  const selector = String(value || "");
+  const insertedText =
+    `\n${layout.selectorIndent}${selector} {` +
+    `\n${layout.propertyIndent}` +
+    `\n${layout.selectorIndent}}` +
+    `\n${layout.styleIndent}`;
+  const cursorOffset =
+    1 + layout.selectorIndent.length + selector.length + 2 + 1 + layout.propertyIndent.length;
+  return { insertedText, cursorOffset };
+}
+
+function buildIndentedCssSelectorSuggestion(value, baseIndent) {
+  const selector = String(value || "");
+  const selectorIndent = String(baseIndent || "");
+  const propertyIndent = selectorIndent + INDENT_UNIT;
+  return {
+    insertedText: `${selector} {\n${propertyIndent}\n${selectorIndent}}`,
+    cursorOffset: selector.length + 3 + propertyIndent.length,
+  };
+}
+
 function selectCssSuggestion(value) {
   const editor = document.getElementById("activeEditor");
   if (!currentSuggestionContext) return;
@@ -12065,6 +13284,7 @@ function selectCssSuggestion(value) {
   let finalReplaceEnd = replaceEnd;
   let insertedText = value;
   let cursorOffset = value.length;
+  let applyBaseIndent = true;
 
   if (mode === "css-property") {
     const afterSlice = editor.value.substring(replaceEnd);
@@ -12103,12 +13323,25 @@ function selectCssSuggestion(value) {
   } else if (mode === "css-selector") {
     const afterSlice = editor.value.substring(replaceEnd);
     if (!/^\s*\{/.test(afterSlice)) {
-      insertedText = `${value} {\n${INDENT_UNIT}\n}`;
-      cursorOffset = value.length + 3 + INDENT_UNIT.length;
+      const inlineStyleLayout = activeFile.type === "html"
+        ? getInlineStyleSelectorSuggestionLayout(editor.value, replaceStart, replaceEnd)
+        : null;
+      if (inlineStyleLayout) {
+        const inlineSuggestion = buildInlineStyleSelectorSuggestion(value, inlineStyleLayout);
+        insertedText = inlineSuggestion.insertedText;
+        cursorOffset = inlineSuggestion.cursorOffset;
+        finalReplaceEnd = inlineStyleLayout.replaceEnd;
+        applyBaseIndent = false;
+      } else {
+        const selectorSuggestion = buildIndentedCssSelectorSuggestion(value, currentIndent);
+        insertedText = selectorSuggestion.insertedText;
+        cursorOffset = selectorSuggestion.cursorOffset;
+        applyBaseIndent = false;
+      }
     }
   }
 
-  if (insertedText.includes("\n")) {
+  if (applyBaseIndent && insertedText.includes("\n")) {
     const formatted = indentMultilineSuggestionText(insertedText, cursorOffset, currentIndent);
     insertedText = formatted.text;
     cursorOffset = formatted.cursorOffset;
@@ -12306,6 +13539,26 @@ function handleAutoCloseAndIndent(e, editor) {
   return false; // Not handled
 }
 
+function getMatchingHtmlTagPairAtCaret(editor) {
+  if (!editor) return null;
+  const selectionStart = Number(editor.selectionStart || 0);
+  const selectionEnd = Number(editor.selectionEnd || selectionStart);
+  const textBefore = editor.value.substring(0, selectionStart);
+  const textAfter = editor.value.substring(selectionEnd);
+  const openTagMatch = textBefore.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/);
+  if (!openTagMatch) return null;
+  const tagName = openTagMatch[1].toLowerCase();
+  if (selfClosingTags.includes(tagName)) return null;
+  const closingTagMatch = textAfter.match(
+    new RegExp(`^([\\t ]*)(</${tagName}\\s*>)`, "i"),
+  );
+  if (!closingTagMatch) return null;
+  return {
+    tagName,
+    whitespaceLength: closingTagMatch[1].length,
+  };
+}
+
 function handleHtmlEnterIndentation(e, editor) {
   if (e.key !== "Enter" || activeFile.type !== "html") return false;
   const pos = editor.selectionStart;
@@ -12319,15 +13572,16 @@ function handleHtmlEnterIndentation(e, editor) {
 
   if (openTagMatch) {
     const tagName = openTagMatch[1].toLowerCase();
-    const closingTagPattern = new RegExp(`^</${tagName}\\s*>`, "i");
+    const matchingPair = getMatchingHtmlTagPairAtCaret(editor);
     if (!selfClosingTags.includes(tagName)) {
       const nextIndent = currentIndent + INDENT_UNIT;
       e.preventDefault();
-      const replacement = closingTagPattern.test(textAfter)
+      const replacement = matchingPair
         ? "\n" + nextIndent + "\n" + currentIndent
         : "\n" + nextIndent;
       const caretPos = pos + 1 + nextIndent.length;
-      applyEditorMutation(editor, pos, editor.selectionEnd, replacement, caretPos, caretPos);
+      const replaceEnd = editor.selectionEnd + Number(matchingPair?.whitespaceLength || 0);
+      applyEditorMutation(editor, pos, replaceEnd, replacement, caretPos, caretPos);
       return true;
     }
   }
@@ -12955,6 +14209,10 @@ function handleEditorKeyDown(e) {
     activeFile.type === "html" && isInsideStyleTag(caretContextBefore);
   const isHtmlScriptContext =
     activeFile.type === "html" && isInsideScriptTag(caretContextBefore);
+  const matchingHtmlTagPair =
+    activeFile.type === "html" && e.key === "Enter"
+      ? getMatchingHtmlTagPairAtCaret(editor)
+      : null;
   const isCssEditorContext = activeFile.type === "css" || isHtmlStyleContext;
   const isCodeEditorContext =
     isCssEditorContext || activeFile.type === "js" || isHtmlScriptContext;
@@ -12962,8 +14220,7 @@ function handleEditorKeyDown(e) {
   if (
     activeFile.type === "html" &&
     e.key === "Enter" &&
-    !isHtmlStyleContext &&
-    !isHtmlScriptContext &&
+    ((!isHtmlStyleContext && !isHtmlScriptContext) || matchingHtmlTagPair) &&
     suggestionPopup.style.display !== "block"
   ) {
     hideSuggestions();
@@ -13270,6 +14527,7 @@ async function loadImportedProjectFiles(importedFiles, successMessage) {
     return false;
   }
 
+  releaseProjectMediaObjectUrls(projectFiles);
   projectFiles = importedFiles.map((file, index) => ({
     ...file,
     name: normalizeProjectFileName(file?.name, `file-${index + 1}.txt`),
@@ -13279,9 +14537,7 @@ async function loadImportedProjectFiles(importedFiles, successMessage) {
   activeFile = projectFiles[0];
   const editor = document.getElementById("activeEditor");
   if (editor && activeFile) {
-    editor.value = activeFile.content;
-    updateLineNumbers(editor);
-    resetAllEditorHistory(editor);
+    displayActiveFileInEditor({ resetAllHistory: true });
   }
   renderFileList({ skipNameNormalization: true });
   if (projectFiles.length > ZIP_IMPORT_BATCH_SIZE) await yieldToBrowserDuringImport();
@@ -13389,8 +14645,7 @@ async function addDroppedFilesToProject(files) {
     if (projectFiles.length === 1) {
       imported.active = true;
       activeFile = imported;
-      document.getElementById("activeEditor").value = imported.content;
-      updateLineNumbers();
+      displayActiveFileInEditor();
     }
     importedCount += 1;
     showNotification(`Imported: ${imported.name}`, "success");
@@ -13496,7 +14751,19 @@ function downloadZipBlob(content, fileName) {
 
 async function createProjectZipBlob(zip = new JSZip()) {
   projectFiles.forEach((file) => {
-    zip.file(file.name, file.content);
+    if (file.mediaBlob instanceof Blob) {
+      zip.file(file.name, file.mediaBlob);
+      return;
+    }
+    const content = String(file.content || "");
+    const encodedMedia = getProjectMediaKind(file)
+      ? content.match(/^data:[^;,]+;base64,([\s\S]+)$/i)
+      : null;
+    if (encodedMedia) {
+      zip.file(file.name, encodedMedia[1], { base64: true });
+      return;
+    }
+    zip.file(file.name, content);
   });
   return zip.generateAsync({ type: "blob" });
 }
@@ -13962,6 +15229,55 @@ function updateCollabButtonState() {
   updateFileVisibilityQuickButton();
 }
 
+function positionCollabManageTutorial() {
+  if (!collabManageTutorialEl || !collabBtn || !document.body.contains(collabManageTutorialEl)) return;
+  const buttonRect = collabBtn.getBoundingClientRect();
+  const popupWidth = Math.min(360, window.innerWidth - 24);
+  const left = Math.max(
+    12,
+    Math.min(window.innerWidth - popupWidth - 12, buttonRect.left + buttonRect.width / 2 - popupWidth / 2),
+  );
+  const arrowCenter = Math.max(22, Math.min(popupWidth - 22, buttonRect.left + buttonRect.width / 2 - left));
+  collabManageTutorialEl.style.width = `${popupWidth}px`;
+  collabManageTutorialEl.style.left = `${left}px`;
+  collabManageTutorialEl.style.top = `${buttonRect.bottom + 12}px`;
+  collabManageTutorialEl.style.setProperty("--collab-tutorial-arrow-left", `${arrowCenter}px`);
+}
+
+function dismissCollabManageTutorial() {
+  if (!collabManageTutorialEl) return;
+  window.removeEventListener("resize", positionCollabManageTutorial);
+  window.removeEventListener("scroll", positionCollabManageTutorial, true);
+  collabManageTutorialEl.remove();
+  collabManageTutorialEl = null;
+}
+
+function showCollabManageTutorial() {
+  if (!collabBtn || collabManageTutorialEl || safeLocalStorage("get", COLLAB_MANAGE_TUTORIAL_KEY)) return;
+  safeLocalStorage("set", COLLAB_MANAGE_TUTORIAL_KEY, "1");
+  collabManageTutorialEl = document.createElement("aside");
+  collabManageTutorialEl.className = "collab-manage-tutorial";
+  collabManageTutorialEl.setAttribute("role", "dialog");
+  collabManageTutorialEl.setAttribute("aria-modal", "false");
+  collabManageTutorialEl.setAttribute("aria-labelledby", "collabManageTutorialTitle");
+  collabManageTutorialEl.innerHTML = `
+    <button class="collab-manage-tutorial-close" type="button" aria-label="Close session management tip">&times;</button>
+    <span class="collab-manage-tutorial-kicker"><i class="fa-solid fa-circle-check"></i> SESSION CREATED</span>
+    <h3 id="collabManageTutorialTitle">This button now manages your session.</h3>
+    <p>Click <strong>MANAGE SESSION</strong> whenever you want to view participants, copy the invite, open collaboration tools, or change room controls.</p>
+    <button class="run-button collab-manage-tutorial-done" type="button"><strong>GOT IT</strong></button>`;
+  document.body.appendChild(collabManageTutorialEl);
+  collabManageTutorialEl.querySelector(".collab-manage-tutorial-close")?.addEventListener("click", dismissCollabManageTutorial);
+  collabManageTutorialEl.querySelector(".collab-manage-tutorial-done")?.addEventListener("click", dismissCollabManageTutorial);
+  window.addEventListener("resize", positionCollabManageTutorial);
+  window.addEventListener("scroll", positionCollabManageTutorial, true);
+  requestAnimationFrame(() => {
+    positionCollabManageTutorial();
+    collabManageTutorialEl?.classList.add("visible");
+    collabManageTutorialEl?.querySelector(".collab-manage-tutorial-done")?.focus({ preventScroll: true });
+  });
+}
+
 function canUseCoHostTools() {
   return isHost() || isCoHost();
 }
@@ -14068,8 +15384,11 @@ function enforceCollabPermissionsUI() {
     }
     const editor = document.getElementById("activeEditor");
     if (editor) {
-      editor.readOnly = false;
-      editor.title = "";
+      const mediaSourceReadOnly = developerMediaSourceVisible && Boolean(getProjectMediaKind(activeFile));
+      editor.readOnly = mediaSourceReadOnly;
+      editor.title = mediaSourceReadOnly
+        ? "Read-only media source enabled from Developer Tools."
+        : "";
     }
     if (consoleContainer && showConsoleCheckbox && !showConsoleCheckbox.checked) {
       consoleContainer.classList.remove("show");
@@ -14161,8 +15480,11 @@ function enforceCollabPermissionsUI() {
   }
   const editor = document.getElementById("activeEditor");
   if (editor) {
-    editor.readOnly = lockEditor;
-    editor.title = lockEditor
+    const mediaSourceReadOnly = developerMediaSourceVisible && Boolean(getProjectMediaKind(activeFile));
+    editor.readOnly = lockEditor || mediaSourceReadOnly;
+    editor.title = mediaSourceReadOnly
+      ? "Read-only media source enabled from Developer Tools."
+      : lockEditor
       ? globalReadOnly
         ? collabPermissions.pauseCollab
           ? "The host paused collaboration for the group."
@@ -18008,10 +19330,12 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
       : files;
     const requestedActiveName = normalizeProjectFileName(activeFileName || "");
     const currentActiveName = activeFile ? normalizeProjectFileName(activeFile.name) : null;
-    projectFiles = visibleFiles;
+    releaseProjectMediaObjectUrls(projectFiles);
+    projectFiles = normalizeProjectMediaMetadata(visibleFiles);
     normalizeProjectFileNamesInPlace(projectFiles);
     if (!projectFiles.length) {
       activeFile = null;
+      displayActiveFileInEditor();
       const emptyEditor = document.getElementById("activeEditor");
       if (emptyEditor) {
         emptyEditor.value = "";
@@ -18042,14 +19366,10 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
       currentPreviewTarget = { mode: "html", fileName: activeFile.name };
     }
 
-    const ed = document.getElementById("activeEditor");
-    const currentPos = ed.selectionStart;
-    ed.value = activeFile.content;
-    ed.selectionStart = ed.selectionEnd = Math.min(currentPos, ed.value.length);
-    updateLineNumbers(ed);
-    resetAllEditorHistory(ed);
+    displayActiveFileInEditor({ preserveCaret: true, resetAllHistory: true });
     renderFileList();
     enforceCollabPermissionsUI();
+    hydrateStoredProjectMedia(projectFiles);
     renderRemoteCursors();
     if (autoRunCheckbox.checked) updatePreview();
   } finally {
@@ -18817,6 +20137,7 @@ function renderJoinPinStep({ name = "", theme = "#2196F3", cursorStyle = "pointe
 }
 
 function startCollaboration() {
+  dismissCollabManageTutorial();
   if (!ensureCollabSocket()) return;
   if (activeSessionId && myInfo.name) {
     showSessionDetails(activeSessionId);
@@ -19174,16 +20495,38 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
   );
 }
 
+function sortSessionParticipants(participants, mode = collabParticipantSortMode) {
+  const entries = (Array.isArray(participants) ? participants : []).map((participant, index) => ({
+    participant,
+    index,
+  }));
+  entries.sort((left, right) => {
+    if (mode === "alphabetical") {
+      const nameOrder = String(left.participant?.name || "").localeCompare(
+        String(right.participant?.name || ""),
+        undefined,
+        { sensitivity: "base", numeric: true },
+      );
+      return nameOrder || left.index - right.index;
+    }
+    const leftJoinedAt = Number(left.participant?.joinedAt);
+    const rightJoinedAt = Number(right.participant?.joinedAt);
+    if (Number.isFinite(leftJoinedAt) && Number.isFinite(rightJoinedAt) && leftJoinedAt !== rightJoinedAt) {
+      return leftJoinedAt - rightJoinedAt;
+    }
+    if (Number.isFinite(leftJoinedAt) !== Number.isFinite(rightJoinedAt)) {
+      return Number.isFinite(leftJoinedAt) ? -1 : 1;
+    }
+    return left.index - right.index;
+  });
+  return entries.map((entry) => entry.participant);
+}
+
 function showSessionDetails(sid) {
   collabModalView = "session";
   setCollabCloseButtonVisible(true);
   const link = collabShareLink || `${window.location.origin}/frontend.html/${sid}`;
-  const orderedParticipants = [...collabParticipants].sort((a, b) => {
-    if ((a.role || "") === "host") return -1;
-    if ((b.role || "") === "host") return 1;
-    if (Boolean(a.priority) !== Boolean(b.priority)) return a.priority ? -1 : 1;
-    return String(a.name || "").localeCompare(String(b.name || ""));
-  });
+  const orderedParticipants = sortSessionParticipants(collabParticipants);
   const listItems = orderedParticipants
     .map((p) => {
       const roleLabel =
@@ -19264,7 +20607,16 @@ function showSessionDetails(sid) {
       </div>
     </div>
     <div class="collab-section-card">
-      <h4 class="collab-section-title">Participants <span style="font-weight:normal;color:var(--text-muted);font-size:13px;">(${orderedParticipants.length})</span></h4>
+      <div class="collab-participant-list-heading">
+        <h4 class="collab-section-title">Participants <span style="font-weight:normal;color:var(--text-muted);font-size:13px;">(${orderedParticipants.length})</span></h4>
+        <label class="collab-participant-sort-label" for="collabParticipantSortSelect">
+          <span>Sort by</span>
+          <select id="collabParticipantSortSelect" class="collab-participant-sort-select" aria-label="Sort participants">
+            <option value="joined" ${collabParticipantSortMode === "joined" ? "selected" : ""}>Joined first</option>
+            <option value="alphabetical" ${collabParticipantSortMode === "alphabetical" ? "selected" : ""}>Alphabetical</option>
+          </select>
+        </label>
+      </div>
       <div class="collab-participant-list">${listItems}</div>
     </div>
     <div class="collab-section-card">
@@ -19286,6 +20638,18 @@ function showSessionDetails(sid) {
   const sessionCopyLinkBtn = document.getElementById("sessionCopyLinkBtn");
   if (sessionCopyLinkBtn) {
     sessionCopyLinkBtn.onclick = () => copyLink();
+  }
+  const participantSortSelect = document.getElementById("collabParticipantSortSelect");
+  if (participantSortSelect) {
+    participantSortSelect.addEventListener("change", () => {
+      collabParticipantSortMode = participantSortSelect.value === "alphabetical"
+        ? "alphabetical"
+        : "joined";
+      const previousScrollTop = modalBody.scrollTop;
+      showSessionDetails(sid);
+      modalBody.scrollTop = previousScrollTop;
+      document.getElementById("collabParticipantSortSelect")?.focus();
+    });
   }
   if (canUseCoHostTools()) {
     const moreButtons = modalBody.querySelectorAll(".participant-more-btn");
@@ -19337,11 +20701,17 @@ function copyLink() {
 }
 
 function closeModal() {
+  const shouldShowManageTutorial =
+    collabModalView === "created-pin" &&
+    Boolean(activeSessionId) &&
+    isHost() &&
+    !safeLocalStorage("get", COLLAB_MANAGE_TUTORIAL_KEY);
   collabModalView = "idle";
   activeParticipantActionName = "";
   collabModal.style.display = "none";
   setCollabCloseButtonVisible(true);
   setModalActions(`<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`);
+  if (shouldShowManageTutorial) setTimeout(showCollabManageTutorial, 180);
 }
 
 function isReloadNavigation() {
@@ -19483,7 +20853,7 @@ addMediaBtn.addEventListener("click", () => {
   mediaInput.click();
 });
 
-mediaInput.addEventListener("change", (e) => {
+mediaInput.addEventListener("change", async (e) => {
   if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableNewFile) {
     showNotification("The host disabled creating new files for participants.", "error");
     mediaInput.value = "";
@@ -19492,39 +20862,69 @@ mediaInput.addEventListener("change", (e) => {
   const files = Array.from(e.target.files);
   if (!files.length) return;
 
-  files.forEach((file) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result;
-      const name = normalizeProjectFileName(file.name);
-      const ext = name.split(".").pop().toLowerCase();
-      const type = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext)
-        ? "img"
-        : ext === "mp4"
-          ? "video"
-          : "audio";
+  let addedCount = 0;
+  let storageWarningShown = false;
+  for (const file of files) {
+    const name = normalizeProjectFileName(file.name);
+    const mimeKind = String(file.type || "").split("/")[0].toLowerCase();
+    const mediaType = ["image", "video", "audio"].includes(mimeKind)
+      ? mimeKind
+      : getProjectMediaKind({ name, type: "media" });
 
-      const newFile = {
-        name,
-        type: "media",
-        mediaType: type,
-        content: base64,
-        active: false,
-      };
+    if (!mediaType) {
+      showNotification(`${name} is not a supported media file`, "warn");
+      continue;
+    }
+    if (projectFiles.some((entry) => String(entry.name || "").trim().toLowerCase() === name.toLowerCase())) {
+      showNotification(`${name} already exists`, "warn");
+      continue;
+    }
 
-      if (!projectFiles.some((f) => String(f.name || "").trim().toLowerCase() === name.toLowerCase())) {
-        projectFiles.push(newFile);
-        showNotification(`Added: ${name}`, "success");
-      } else {
-        showNotification(`${name} already exists`, "warn");
-      }
-      renderFileList();
-      syncProjectWithSession();
+    const newFile = {
+      name,
+      type: "media",
+      mediaType,
+      mediaStorageId: createMediaStorageId(),
+      mediaSize: Number(file.size || 0),
+      mediaMimeType: String(file.type || "application/octet-stream"),
+      content: "",
+      active: false,
     };
-    reader.readAsDataURL(file);
-  });
+    attachRuntimeMediaBlob(newFile, file);
+    projectFiles.push(newFile);
+    addedCount += 1;
+
+    try {
+      await persistMediaBlob(newFile, file);
+    } catch (error) {
+      console.warn("Media persistence unavailable:", error);
+      newFile.mediaStorageId = "";
+      if (!storageWarningShown) {
+        storageWarningShown = true;
+        showNotification("Media is available in this tab, but browser storage could not save it for reload.", "warn");
+      }
+    }
+    if (file.size <= MAX_LIVE_MEDIA_TRANSFER_BYTES) {
+      try {
+        newFile.content = await readMediaBlobAsDataUrl(file);
+      } catch (_error) {}
+    } else if (activeSessionId) {
+      showNotification(`${name} is too large for live collaboration transfer, so it stays local to this browser.`, "warn");
+    }
+    showNotification(`Added: ${name} (${formatMediaByteSize(file.size)})`, "success");
+  }
+
   mediaInput.value = "";
+  if (!addedCount) return;
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
+  renderFileList();
+  scheduleProjectAutosave();
+  if (autoRunCheckbox.checked) debouncedUpdatePreview();
+  syncProjectWithSession();
 });
+
+window.addEventListener("unload", () => releaseProjectMediaObjectUrls(projectFiles));
 
 // PART 14 - SEAMLESS & FULL-RANGE DIVIDER DRAG
 let isDragging = false;

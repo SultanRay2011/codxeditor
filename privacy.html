@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="site-enhancements.css?v=20260713-home-hero3" />
     <title>Privacy Policy & Data Guide | CodX Editor</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"WebPage","name":"CodX Editor Privacy Policy and Data Guide","url":"https://codxeditor.up.railway.app/privacy.html","dateModified":"2026-07-12","isPartOf":{"@type":"WebSite","name":"CodX Editor","url":"https://codxeditor.up.railway.app/"}}
+      {"@context":"https://schema.org","@type":"WebPage","name":"CodX Editor Privacy Policy and Data Guide","url":"https://codxeditor.up.railway.app/privacy.html","dateModified":"2026-07-14","isPartOf":{"@type":"WebSite","name":"CodX Editor","url":"https://codxeditor.up.railway.app/"}}
     </script>
     <style>
       * {
@@ -835,7 +835,7 @@
       <div class="content-section">
         <div class="badge">PRIVACY POLICY</div>
         <h1>Privacy Policy</h1>
-        <p class="last-updated">Last Updated: July 12, 2026</p>
+        <p class="last-updated">Last Updated: July 14, 2026</p>
 
         <svg viewBox="0 0 200 140" width="180" height="126" role="img" aria-labelledby="privacyIllTitle" style="margin:16px auto;display:block;">
           <title id="privacyIllTitle">Illustration of a shield with a padlock, representing user data privacy</title>
@@ -856,8 +856,8 @@
           <h2 id="privacyMapTitle">Where information is handled depends on the feature you choose</h2>
           <p>The standard editor can be used without an account. Connected and sharing features have different data paths, so this summary separates them instead of suggesting that every action is local.</p>
           <div class="data-map">
-            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-hard-drive"></i></span><h3>Browser storage</h3><p>Unsaved recovery data, preferences, tutorial state, device identifiers used for collaboration safety, and locally saved projects can be stored in your browser. Clearing site data may remove them.</p></article>
-            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-users"></i></span><h3>Live collaboration</h3><p>A session temporarily carries display names, chosen colors, cursor styles, chat, shared project updates, permissions, and connection identifiers through the collaboration server.</p></article>
+            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-hard-drive"></i></span><h3>Browser storage</h3><p>Unsaved recovery data, preferences, tutorial state (including whether the one-time Manage Session tip was shown), device identifiers used for collaboration safety, and locally saved projects can be stored in your browser. The project library keeps up to 24 entries, and an autosaved recovery draft remains eligible for restoration for up to seven days. Clearing site data may remove them.</p></article>
+            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-users"></i></span><h3>Live collaboration</h3><p>A session temporarily carries display names, chosen colors, cursor styles, chat, pair tasks and suggestions, shared project updates, permissions, and connection identifiers through the collaboration server. Optional pair voice is direct browser-to-browser audio and is not recorded by CodX Editor.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-brands fa-github"></i></span><h3>GitHub connection</h3><p>OAuth authorization is handled through GitHub. The server keeps the connected session needed to request repositories and commits; the browser is not asked to store a pasted personal token.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-globe"></i></span><h3>Publishing</h3><p>Files included in a published project are sent to the service so the public link can work. Do not publish secrets, private messages, credentials, or material you do not have permission to share.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-cube"></i></span><h3>Optional browser runtime</h3><p>Runtime project files and packages can run in an isolated browser container supplied by the runtime provider. A temporary preview URL bridges the selected localhost port to the browser tab.</p></article>
@@ -1016,6 +1016,10 @@
               Session identifiers are used only for connection routing, not for
               user tracking
             </li>
+            <li>Pair invitations, roles, timers, pair chat, task lists, suggestion pins, activity entries, and reconnect status are kept in temporary session memory and are removed when the pair or room ends</li>
+            <li>Pair snapshots are created only when requested and downloaded to the requesting browser; users control the resulting local JSON file</li>
+            <li>Optional pair voice asks each participant for microphone permission and uses WebRTC to send audio directly between paired browsers when a direct connection is possible</li>
+            <li>CodX Editor does not record pair voice or send voice audio through the Socket.IO collaboration server. WebRTC connection setup exchanges network connection information between the paired browsers.</li>
           </ul>
         </div>
 
@@ -1027,8 +1031,7 @@
           <ul>
             <li>
               <span class="checkmark"><i class="fa-solid fa-check"></i></span>
-              <strong>Your Code or Projects</strong> - Everything you write
-              stays on your device
+              <strong>Your Standard Editor Code or Projects</strong> - Standard editor work stays on your device unless you deliberately use collaboration, publishing, GitHub, or another sharing feature
             </li>
             <li>
               <span class="checkmark"><i class="fa-solid fa-check"></i></span>
@@ -1067,7 +1070,9 @@
             local storage (localStorage) by default. This data stays on your
             device unless you explicitly export, publish, or upload it through
             another feature. You have complete control over this data and can
-            clear it at any time through your browser settings.
+            clear it at any time through your browser settings. The saved-project
+            library keeps up to 24 entries, while an autosaved recovery draft is
+            offered for restoration for up to seven days.
           </p>
 
           <h3>5.2 Standard Editor Processing</h3>
@@ -1077,6 +1082,44 @@
             editor project content to a server for processing, compilation, or
             storage unless you use a feature such as collaboration or GitHub
             upload that explicitly sends data to another service.
+          </p>
+          <p>
+            Add Media reads images, video, and audio selected from your device in
+            the browser and uses that local data to display the media viewer. The
+            viewer does not upload the file by itself. Media leaves the device
+            only when you choose a sharing feature such as collaboration,
+            publishing, or a GitHub upload.
+          </p>
+          <p>
+            Added media may be stored locally as binary data in your browser's
+            IndexedDB so it can be restored without converting it into a larger
+            base64 string. Temporary object URLs are used for playback and are
+            released when the page closes. Clearing CodX Editor's browser site
+            data removes this locally stored media.
+          </p>
+          <p>
+            Developer Tools can intentionally expose safe details about that
+            local media in a read-only Media Source View. Large encoded and binary
+            payloads remain hidden to prevent excessive memory use. The view is
+            off by default, is not saved as a preference, and does not upload the
+            media by itself.
+          </p>
+          <p>
+            ZIP exporting and updating are also handled locally in your browser.
+            If you choose Update ZIP File, CodX Editor reads only the archive you
+            select, updates matching project paths, adds current project files,
+            and preserves unrelated archive entries. A supported browser may ask
+            for permission to write back to that selected file; otherwise the
+            updated archive is downloaded as a new local copy. The selected ZIP
+            is not uploaded to CodX Editor for this process.
+          </p>
+          <p>
+            ZIP All Projects and Import All Projects are also processed locally
+            in your browser. A bulk export places each locally saved project in
+            its own archive folder and stores restoration metadata in the ZIP.
+            A bulk import reads the ZIP you select and writes supported project
+            files back into the browser project library; projects with matching
+            names are replaced. The archive is not uploaded to CodX Editor.
           </p>
 
           <h3>5.3 External Libraries and Services</h3>
@@ -1132,28 +1175,17 @@
         <div class="privacy-section">
           <h2>8. Children's Privacy</h2>
           <p>
-            CodX Editor can be used by people of all ages. We do not knowingly
-            collect personal information from anyone, including children.
-            However, Google AdSense may collect data from all visitors. Parents
-            and educators should be aware that:
+            CodX Editor is intended for a general audience and is not directed at
+            children under 13. We do not knowingly collect personal information
+            from children under 13. If you believe a child has provided personal
+            information through our service, please contact us so we can address it.
           </p>
-          <ul>
-            <li>
-              Children's browsing activity may be tracked by advertising
-              services
-            </li>
-            <li>
-              Personalized ads may be displayed based on browsing behavior
-            </li>
-            <li>
-              Parents can enable privacy controls in Google accounts for
-              children
-            </li>
-          </ul>
           <p>
-            We recommend that parents review Google's privacy policies and use
-            appropriate parental controls and ad-blocking tools when children
-            use our service.
+            Google AdSense may collect non-personal browsing data (such as IP
+            address and device type) from all visitors to serve advertisements.
+            Visitors under 13 should not use this service without parental guidance,
+            and parents or educators supervising younger users should review Google's
+            privacy policies and consider using parental controls or ad-blocking tools.
           </p>
         </div>
 
@@ -1261,6 +1293,7 @@
           <a href="index.html">Home</a>
           <a href="welcome.html">Launch Editor</a>
           <a href="about.html">About</a>
+          <a href="help.html">Help</a>
           <a href="contact.html">Contact</a>
         </div>
 

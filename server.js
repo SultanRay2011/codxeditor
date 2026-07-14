@@ -368,6 +368,12 @@ app.use(
   "/vendor/webcontainer",
   express.static(path.join(__dirname, "node_modules", "@webcontainer", "api", "dist")),
 );
+app.get("/404.html", (_req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "404.html"));
+});
+app.get("/404-for-preview.html", (_req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "404-for-preview.html"));
+});
 app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
 
@@ -767,10 +773,6 @@ app.post("/api/github/repos/:owner/:repo/commit", async (req, res) => {
   }
 });
 
-app.get("/404-for-preview.html", (_req, res) => {
-  res.status(404).sendFile(path.join(__dirname, "404-for-preview.html"));
-});
-
 app.get(/^\/frontend\.html\/([A-Za-z0-9-]+)$/, (req, res) => {
   const sessionId = normalizeSessionId(req.params[0]);
   if (!isValidSessionId(sessionId)) {
@@ -1046,7 +1048,6 @@ app.get("/published/:id", (req, res) => {
   res.send(buildPublishedHtml(project, requestedFile, sentTitle));
 });
 
-// Fallback: unknown GET routes go to custom 404 page.
 // Fallback: unknown GET routes go to custom 404 page.
 app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, "404.html"));
