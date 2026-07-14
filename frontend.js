@@ -9,7 +9,10 @@ const editorsPanel = document.querySelector(".editors");
 const previewPanel = document.querySelector(".preview");
 const lineNumbers = document.getElementById("lineNumbers");
 const highlightLayer = document.getElementById("highlightLayer");
+const pairSelectionHighlight = document.getElementById("pairSelectionHighlight");
 const remoteCursorLayer = document.getElementById("remoteCursorLayer");
+const localCollabCursor = document.getElementById("localCollabCursor");
+const localCollabCursorIcon = document.getElementById("localCollabCursorIcon");
 const editorContainer = document.querySelector(".editor-container");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
@@ -27,23 +30,40 @@ const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
 const editorFontEmbedInput = document.getElementById("editorFontEmbed");
+const googleFontCustomization = document.getElementById("googleFontCustomization");
+const googleFontDetectedName = document.getElementById("googleFontDetectedName");
+const editorFontWeightInput = document.getElementById("editorFontWeight");
+const editorFontWeightValue = document.getElementById("editorFontWeightValue");
+const editorFontItalicInput = document.getElementById("editorFontItalic");
+const editorFontLetterSpacingInput = document.getElementById("editorFontLetterSpacing");
+const editorFontLetterSpacingValue = document.getElementById("editorFontLetterSpacingValue");
+const editorFontLineHeightInput = document.getElementById("editorFontLineHeight");
+const editorFontLineHeightValue = document.getElementById("editorFontLineHeightValue");
 const settingsPreview = document.getElementById("settingsPreview");
 const settingsPreviewCode = document.getElementById("settingsPreviewCode");
 const newFileBtn = document.getElementById("newFileBtn");
+const collabFileVisibilityBtn = document.getElementById("collabFileVisibilityBtn");
 const fileList = document.getElementById("fileList");
 const collabBtn = document.getElementById("collabBtn");
+const collabMessageBadge = document.getElementById("collabMessageBadge");
 const collabModal = document.getElementById("collabModal");
 const modalTitle = document.getElementById("modalTitle");
 const modalBody = document.getElementById("modalBody");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const typingIndicatorEl = document.getElementById("typingIndicator");
 const editorWatermark = document.getElementById("editorWatermark");
+const editorMediaViewer = document.getElementById("editorMediaViewer");
+const editorMediaViewerIcon = document.getElementById("editorMediaViewerIcon");
+const editorMediaViewerName = document.getElementById("editorMediaViewerName");
+const editorMediaViewerKind = document.getElementById("editorMediaViewerKind");
+const editorMediaViewerContent = document.getElementById("editorMediaViewerContent");
 const exportZipBtn = document.querySelector('button[aria-label="Export project as ZIP"]');
 const importZipBtn = document.querySelector('button[aria-label="Import ZIP file"]');
 const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
 const previewTitleEl = document.getElementById("previewTitle");
 const previewLinkEl = document.getElementById("previewLink");
 const previewFaviconEl = document.getElementById("previewFavicon");
+const previewRefreshBtn = document.getElementById("previewRefreshBtn");
 const previewInspectBtn = document.getElementById("previewInspectBtn");
 const previewZoomBtn = document.getElementById("previewZoomBtn");
 const previewZoomModal = document.getElementById("previewZoomModal");
@@ -52,6 +72,11 @@ const previewZoomValue = document.getElementById("previewZoomValue");
 const previewZoomOutBtn = document.getElementById("previewZoomOutBtn");
 const previewZoomInBtn = document.getElementById("previewZoomInBtn");
 const previewZoomResetBtn = document.getElementById("previewZoomResetBtn");
+const previewViewportStage = document.getElementById("previewViewportStage");
+const previewDeviceShell = document.getElementById("previewDeviceShell");
+const previewDeviceFrame = document.getElementById("previewDeviceFrame");
+const previewDeviceBadge = document.getElementById("previewDeviceBadge");
+const previewBreakpointIndicator = document.getElementById("previewBreakpointIndicator");
 const errorMsgEl = document.getElementById("errorMsg");
 const zenModeBtn = document.getElementById("zenModeBtn");
 const zenExitBtn = document.getElementById("zenExitBtn");
@@ -70,6 +95,10 @@ const developerConsoleInput = document.getElementById("developerConsoleInput");
 const runDeveloperCommandBtn = document.getElementById("runDeveloperCommandBtn");
 const clearDeveloperConsoleBtn = document.getElementById("clearDeveloperConsoleBtn");
 const closeDeveloperConsoleBtn = document.getElementById("closeDeveloperConsoleBtn");
+const developerConsoleShortcutButtons = document.querySelectorAll("[data-developer-command]");
+const pairDock = document.getElementById("pairDock");
+const pairDockContent = document.getElementById("pairDockContent");
+const pairVoiceAudio = document.getElementById("pairVoiceAudio");
 const saveProjectBtn = document.getElementById("saveProjectBtn");
 const projectStatusSaveBtn = document.getElementById("projectStatusSaveBtn");
 const newProjectBtn = document.getElementById("newProjectBtn");
@@ -81,6 +110,7 @@ const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
 const enableNodeRuntimeBtn = document.getElementById("enableNodeRuntimeBtn");
 const enableNodeRuntimeBtnLabel = document.getElementById("enableNodeRuntimeBtnLabel");
 const getIconsBtn = document.getElementById("getIconsBtn");
+const helpPageBtn = document.getElementById("helpPageBtn");
 const fontAwesomeIconModal = document.getElementById("fontAwesomeIconModal");
 const closeFontAwesomeIconBtn = document.getElementById("closeFontAwesomeIconBtn");
 const fontAwesomeIconSearch = document.getElementById("fontAwesomeIconSearch");
@@ -96,6 +126,7 @@ const githubRepoModalBody = document.getElementById("githubRepoModalBody");
 const closeGitHubRepoModalBtn = document.getElementById("closeGitHubRepoModalBtn");
 const projectLibraryModal = document.getElementById("projectLibraryModal");
 const closeProjectLibraryBtn = document.getElementById("closeProjectLibraryBtn");
+const projectLibraryTitle = document.getElementById("projectLibraryTitle");
 const projectLibraryBody = document.getElementById("projectLibraryBody");
 const projectStatusBadge = document.getElementById("projectStatusBadge");
 const projectStatusMeta = document.getElementById("projectStatusMeta");
@@ -140,6 +171,7 @@ if (headerMoreBtn && headerMorePanel) {
       setHeaderMoreMenuOpen(false);
     });
   });
+
 }
 
 let githubConnectionState = {
@@ -567,6 +599,23 @@ if (appDialog) {
     }
   });
 }
+const developerCommandHistory = [];
+let developerCommandHistoryIndex = 0;
+let developerMediaSourceVisible = false;
+const developerCommandSuggestions = [
+  "help", "state", "diagnostics", "files", "file list", "file open ",
+  "participants", "permissions", "errors", "device list", "device responsive",
+  "device phone", "device tablet", "device laptop", "device desktop", "viewport ",
+  "rotate", "zoom reset", "zoom in", "zoom out", "preview status",
+  "preview refresh", "preview fullscreen", "preview inspect", "preview screenshot",
+  "grid toggle", "grid on", "grid off", "scheme toggle", "scheme system",
+  "scheme light", "scheme dark", "breakpoints toggle", "breakpoints on",
+  "breakpoints off", "editor goto ", "editor format",
+  "editor wrap on", "editor wrap off", "editor font ", "editor tabsize ",
+  "media source on", "media source off", "media source toggle",
+  "media code on", "media code off", "media code toggle",
+  "tools reset", "clear", "close",
+];
 if (developerConsoleModal) {
   developerConsoleModal.addEventListener("click", (e) => {
     if (e.target === developerConsoleModal) {
@@ -589,6 +638,12 @@ if (runDeveloperCommandBtn) {
     developerConsoleInput.focus();
   };
 }
+developerConsoleShortcutButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    runDeveloperCommand(button.dataset.developerCommand || "");
+    developerConsoleInput?.focus();
+  });
+});
 if (developerConsoleInput) {
   developerConsoleInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -598,6 +653,30 @@ if (developerConsoleInput) {
     if (e.key === "Escape") {
       e.preventDefault();
       closeDeveloperConsole();
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const direction = e.key === "ArrowUp" ? -1 : 1;
+      developerCommandHistoryIndex = Math.max(
+        0,
+        Math.min(developerCommandHistory.length, developerCommandHistoryIndex + direction),
+      );
+      developerConsoleInput.value = developerCommandHistory[developerCommandHistoryIndex] || "";
+      developerConsoleInput.setSelectionRange(
+        developerConsoleInput.value.length,
+        developerConsoleInput.value.length,
+      );
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const typed = developerConsoleInput.value.trimStart().toLowerCase();
+      const matches = developerCommandSuggestions.filter((item) => item.startsWith(typed));
+      if (matches.length === 1) {
+        developerConsoleInput.value = matches[0];
+        developerConsoleInput.setSelectionRange(matches[0].length, matches[0].length);
+      } else if (matches.length > 1) {
+        appendDeveloperConsoleLine(`Suggestions: ${matches.join(", ")}`);
+      }
     }
   });
 }
@@ -1066,12 +1145,12 @@ experimentalHtmlTags.forEach((tag) => {
 htmlTagMetaMap.set("lorem", {
   tag: "lorem",
   icon: "TXT",
-  desc: "Insert lorem ipsum placeholder text",
+  desc: "Insert a full lorem ipsum placeholder paragraph",
   attrs: [],
   badge: "snippet",
   category: "snippet",
   insertText:
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
 });
 [
   {
@@ -2286,6 +2365,7 @@ let typingTimer;
 let myInfo = {};
 let collabSocket = null;
 let collabParticipants = [];
+let collabParticipantSortMode = "joined";
 let collabTimeline = [];
 let lastParticipantsSnapshot = new Map();
 let previousParticipantCount = 0;
@@ -2296,13 +2376,27 @@ let collabGroupMessages = [];
 let collabPrivateMessages = [];
 let collabChatMode = "group";
 let collabChatTarget = "";
+let collabUnreadGroupMessages = 0;
+let collabUnreadPrivateMessages = {};
 let remoteCursorState = {};
 let remoteTypingState = {};
 let lastCursorEmitAt = 0;
+let lastSessionSyncAt = 0;
+let collabRevisionCacheContent = null;
+let collabRevisionCacheValue = "";
 let fileErrorCounts = {};
 let fileErrorLocations = {};
 let collabOfflineNoticeLastAt = 0;
 let collabOfflineNoticeActive = false;
+let collabResumeInFlight = false;
+let collabResumeRetryTimer = null;
+let collabResumeFailureCount = 0;
+let collabHostRecoveryInFlight = false;
+let collabHeartbeatInterval = null;
+let collabHeartbeatAckTimer = null;
+let collabHasConnectedOnce = false;
+let collabPendingLocalSync = false;
+let collabLocalSyncRevision = 0;
 const defaultCollabPermissions = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -2317,6 +2411,7 @@ const defaultCollabPermissions = {
   disableNewFile: false,
   disableRunCode: false,
   disableConsoleAccess: false,
+  disablePairing: false,
   readOnlyAll: false,
   roomLocked: false,
   pauseCollab: false,
@@ -2337,6 +2432,24 @@ let collabPendingJoins = [];
 let collabShareLink = "";
 let collabSessionPin = "";
 let collabBans = [];
+let activePairState = null;
+let pairOverview = [];
+let pairFollowEnabled = false;
+let pairFollowSuspended = false;
+let pairPanelOpen = false;
+let pairPanelTab = "chat";
+let pairToolActivity = { chat: false, suggestions: false, tasks: false };
+let pairLastPresenceEmitAt = 0;
+let pairPresenceTimeout = null;
+let pairVoiceConnection = null;
+let pairVoiceStream = null;
+let pairVoiceStatus = "idle";
+let pairVoicePendingCandidates = [];
+let pairVoiceInitiator = false;
+let pairIgnoreLocalScrollUntil = 0;
+let pairFollowScrollTarget = null;
+let pairFollowAnimationFrame = 0;
+let pairPartnerPresence = null;
 let joinRequestContext = { sessionId: "", name: "" };
 let lastAnnouncementText = "";
 let activeDialogResolver = null;
@@ -2344,16 +2457,32 @@ let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
 const editableTextExtensions = ["html", "htm", "css", "scss", "less", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "jsonc", "env", "md", "txt"];
+const ZIP_IMPORT_BATCH_SIZE = 12;
+const LARGE_PROJECT_FILE_THRESHOLD = 160;
+const LARGE_PROJECT_DIAGNOSTIC_LIMIT = 32;
+const MAX_SAVED_PROJECTS = 24;
+const PROJECT_LIBRARY_ARCHIVE_FORMAT = "codx-project-library";
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
 const AUTOSAVE_RESTORE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const DEVICE_ID_KEY = "codxDeviceId";
+const COLLAB_MANAGE_TUTORIAL_KEY = "codxCollabManageTutorialSeen";
+const MEDIA_DATABASE_NAME = "codxEditorMedia";
+const MEDIA_DATABASE_STORE = "assets";
+const MEDIA_DATABASE_VERSION = 1;
+const MAX_DEVELOPER_MEDIA_SOURCE_CHARS = 1024 * 1024;
+const MAX_INLINE_MEDIA_SOURCE_CHARS = 8 * 1024 * 1024;
+const MAX_LIVE_MEDIA_TRANSFER_BYTES = 4 * 1024 * 1024;
+const MAX_PUBLISH_MEDIA_BYTES = 12 * 1024 * 1024;
 let autosaveTimer = null;
+let autosaveIdleCallback = null;
 let lastAutosaveAt = null;
 let sessionSyncTimeout = null;
 let lastEditorInputType = "";
 let fileNameMigrationNoticeShown = false;
+let mediaDatabasePromise = null;
+let collabManageTutorialEl = null;
 const defaultScriptWelcomeText = `console.log("WELCOME TO CODX EDITOR");`;
 
 function normalizeProjectFileName(value, fallback = "file.txt") {
@@ -2388,12 +2517,14 @@ function normalizeProjectFileNamesInPlace(files, previewTarget = currentPreviewT
   const renames = [];
   files.forEach((file, index) => {
     if (!file) return;
+    const mediaKind = getProjectMediaKind(file);
     const oldName = String(file.name || `file-${index + 1}.txt`);
     const nextName = makeUniqueProjectFileName(normalizeProjectFileName(oldName, `file-${index + 1}.txt`), usedNames);
     usedNames.add(nextName.toLowerCase());
     if (oldName !== nextName) {
       file.name = nextName;
-      file.type = getFileType(nextName) || file.type;
+      file.type = mediaKind ? "media" : getFileType(nextName) || file.type;
+      if (mediaKind) file.mediaType = mediaKind;
       renames.push([oldName, nextName]);
     }
   });
@@ -2416,7 +2547,7 @@ function normalizeProjectFileNamesInPlace(files, previewTarget = currentPreviewT
   return true;
 }
 
-const starterTemplates = [
+const fallbackStarterTemplates = [
   {
     id: "landing-page",
     name: "Landing Page",
@@ -3011,11 +3142,238 @@ button:hover {
   },
 ];
 
+const starterTemplates = Array.isArray(window.CODX_STARTER_TEMPLATES)
+  && window.CODX_STARTER_TEMPLATES.length
+  ? window.CODX_STARTER_TEMPLATES
+  : fallbackStarterTemplates;
+
+function renderStarterTemplatePreview(template) {
+  const preview = String(template?.preview || "signal").toLowerCase();
+  const safePreview = ["signal", "ledger", "concierge", "dashboard", "event", "shop", "workspace", "loop"].includes(preview)
+    ? preview
+    : "signal";
+  const previewScenes = {
+    signal: `
+      <span class="preview-orb"></span>
+      <span class="preview-kicker"></span>
+      <span class="preview-display"></span>
+      <span class="preview-display short"></span>
+      <span class="preview-terminal"><i></i><i></i><i></i></span>`,
+    ledger: `
+      <span class="preview-ledger-index">04</span>
+      <span class="preview-ledger-rule"></span>
+      <span class="preview-ledger-title"></span>
+      <span class="preview-ledger-image"></span>
+      <span class="preview-ledger-copy"></span>`,
+    concierge: `
+      <span class="preview-form-progress"><i></i></span>
+      <span class="preview-form-number">02</span>
+      <span class="preview-form-title"></span>
+      <span class="preview-form-choice"></span>
+      <span class="preview-form-choice second"></span>`,
+    dashboard: `
+      <span class="preview-dash-rail"><i></i><i></i><i></i></span>
+      <span class="preview-dash-stat"></span>
+      <span class="preview-dash-stat second"></span>
+      <span class="preview-dash-chart"><i></i></span>`,
+    event: `
+      <span class="preview-event-moon"></span>
+      <span class="preview-event-date">09—12</span>
+      <span class="preview-event-title"></span>
+      <span class="preview-event-ticket"></span>`,
+    shop: `
+      <span class="preview-shop-nav"></span>
+      <span class="preview-shop-type">ATELIER</span>
+      <span class="preview-shop-product one"></span>
+      <span class="preview-shop-product two"></span>
+      <span class="preview-shop-product three"></span>`,
+    workspace: `
+      <span class="preview-workspace-dock"><i></i><i></i><i></i><i></i></span>
+      <span class="preview-workspace-window large"><b></b><i></i><i></i></span>
+      <span class="preview-workspace-window note">MOVE<br>IDEAS</span>
+      <span class="preview-workspace-cursor">↖</span>`,
+    loop: `
+      <span class="preview-loop-title">LOOP / 08</span>
+      <span class="preview-loop-controls"><i></i><i></i><b></b></span>
+      <span class="preview-loop-grid">${"<i></i>".repeat(24)}</span>`,
+  };
+  return `
+    <div class="template-preview template-preview-${safePreview}" aria-hidden="true">
+      <div class="template-preview-bar">
+        <span></span><span></span><span></span>
+        <small>${escapeHtml(template?.category || "Website")}</small>
+      </div>
+      <div class="template-preview-scene">${previewScenes[safePreview]}</div>
+    </div>`;
+}
+
+function getStarterTemplateGroup(template) {
+  const explicitGroup = String(template?.group || "").trim().toLowerCase();
+  if (explicitGroup) return explicitGroup;
+  const preview = String(template?.preview || "").toLowerCase();
+  if (["dashboard", "concierge", "board", "workspace", "loop"].includes(preview)) return "apps";
+  if (preview === "ledger") return "portfolios";
+  if (preview === "shop") return "commerce";
+  return "websites";
+}
+
+function buildStarterTemplatePreviewDocument(template) {
+  const files = Array.isArray(template?.files) ? template.files : [];
+  const htmlFile = files.find((file) => String(file.type || "").toLowerCase() === "html");
+  const cssFile = files.find((file) => String(file.type || "").toLowerCase() === "css");
+  const jsFile = files.find((file) => String(file.type || "").toLowerCase() === "js");
+  if (!htmlFile) return "<!doctype html><html><body>No preview is available.</body></html>";
+
+  const safeCss = String(cssFile?.content || "").replace(/<\/style/gi, "<\\/style");
+  const safeJs = String(jsFile?.content || "").replace(/<\/script/gi, "<\\/script");
+  let html = String(htmlFile.content || "");
+  const styleTag = `<style data-codx-template-preview>${safeCss}</style>`;
+  const scriptTag = `<script data-codx-template-preview>${safeJs}<\/script>`;
+
+  html = html.replace(
+    /<link\b[^>]*href=["'](?:\.\/)?style\.css["'][^>]*>/i,
+    () => styleTag,
+  );
+  if (!html.includes(styleTag)) {
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, () => `${styleTag}</head>`) : `${styleTag}${html}`;
+  }
+  html = html.replace(
+    /<script\b[^>]*src=["'](?:\.\/)?script\.js["'][^>]*>\s*<\/script>/i,
+    () => scriptTag,
+  );
+  if (!html.includes(scriptTag)) {
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, () => `${scriptTag}</body>`) : `${html}${scriptTag}`;
+  }
+  const baseTag = '<base target="_blank">';
+  return /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, (_match, attributes) => `<head${attributes}>${baseTag}`)
+    : `${baseTag}${html}`;
+}
+
+function closeStarterTemplatePreview() {
+  const modal = document.getElementById("starterTemplatePreviewModal");
+  if (!modal) return;
+  if (modal._escapeHandler) document.removeEventListener("keydown", modal._escapeHandler);
+  modal.remove();
+  document.body.classList.remove("template-preview-modal-open");
+}
+
+async function applyStarterTemplate(template) {
+  if (!template) return false;
+  if (hasUnsavedChanges) {
+    const decision = await showUnsavedProjectOpenDialog(template.name);
+    if (!decision?.ok) return false;
+    if (decision.action === "save") {
+      const saved = await saveCurrentProjectBeforeOpeningAnother();
+      if (!saved) return false;
+    } else if (decision.action !== "discard") {
+      return false;
+    }
+  }
+
+  const applied = applyProjectState(
+    {
+      files: template.files,
+      activeFileName: template.files[0]?.name || "",
+      previewTarget: { mode: "html", fileName: template.files[0]?.name || "" },
+    },
+    "template",
+  );
+  if (!applied) return false;
+  activeSavedProjectName = null;
+  closeStarterTemplatePreview();
+  closeProjectLibrary();
+  showNotification(`Opened ${template.name}.`, "success");
+  return true;
+}
+
+function showStarterTemplatePreview(template) {
+  if (!template) return;
+  closeStarterTemplatePreview();
+  const modal = document.createElement("div");
+  modal.id = "starterTemplatePreviewModal";
+  modal.className = "starter-template-preview-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "starterTemplatePreviewTitle");
+  modal.innerHTML = `
+    <div class="starter-template-preview-dialog">
+      <header class="starter-template-preview-head">
+        <div class="starter-template-preview-identity">
+          <span class="template-icon" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")}"><i class="fa-solid ${escapeHtml(template.icon || "fa-layer-group")}"></i></span>
+          <div><small>${escapeHtml(template.category || "Starter concept")}</small><h2 id="starterTemplatePreviewTitle">${escapeHtml(template.name)}</h2></div>
+        </div>
+        <div class="starter-template-device-switch" aria-label="Preview size">
+          <button class="active" type="button" data-preview-device="desktop" title="Desktop preview"><i class="fa-solid fa-desktop"></i><span>Desktop</span></button>
+          <button type="button" data-preview-device="tablet" title="Tablet preview"><i class="fa-solid fa-tablet-screen-button"></i><span>Tablet</span></button>
+          <button type="button" data-preview-device="phone" title="Phone preview"><i class="fa-solid fa-mobile-screen-button"></i><span>Phone</span></button>
+        </div>
+        <button class="starter-template-preview-close" type="button" aria-label="Close live preview">&times;</button>
+      </header>
+      <div class="starter-template-preview-stage" data-device="desktop">
+        <div class="starter-template-browser-frame">
+          <div class="starter-template-browser-bar"><span></span><span></span><span></span><p>${escapeHtml(template.name.toLowerCase().replace(/\s+/g, "-"))}.preview</p></div>
+          <iframe title="Live preview of ${escapeHtml(template.name)}" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+        </div>
+      </div>
+      <footer class="starter-template-preview-footer">
+        <div><span>${escapeHtml(template.tone || "Art-directed starter")}</span><p>${escapeHtml(template.description || "")}</p></div>
+        <button class="run-button starter-template-use-preview" type="button"><strong>USE THIS CONCEPT</strong><i class="fa-solid fa-arrow-right"></i></button>
+      </footer>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("template-preview-modal-open");
+
+  const iframe = modal.querySelector("iframe");
+  iframe.srcdoc = buildStarterTemplatePreviewDocument(template);
+  modal.querySelector(".starter-template-preview-close")?.addEventListener("click", closeStarterTemplatePreview);
+  modal.querySelector(".starter-template-use-preview")?.addEventListener("click", () => applyStarterTemplate(template));
+  modal.querySelectorAll("[data-preview-device]").forEach((button) => {
+    button.addEventListener("click", () => {
+      modal.querySelectorAll("[data-preview-device]").forEach((entry) => entry.classList.remove("active"));
+      button.classList.add("active");
+      modal.querySelector(".starter-template-preview-stage").dataset.device = button.dataset.previewDevice;
+    });
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeStarterTemplatePreview();
+  });
+  modal._escapeHandler = (event) => {
+    if (event.key === "Escape") closeStarterTemplatePreview();
+  };
+  document.addEventListener("keydown", modal._escapeHandler);
+  modal.querySelector(".starter-template-preview-close")?.focus({ preventScroll: true });
+}
+
 function resetTransientCollabUiState() {
+  dismissCollabManageTutorial();
+  clearTimeout(sessionSyncTimeout);
+  sessionSyncTimeout = null;
+  lastSessionSyncAt = 0;
   currentTypingIndicator = null;
   remoteCursorState = {};
   remoteTypingState = {};
+  const editor = document.getElementById("activeEditor");
+  editor?.classList.remove("collab-live-typing-caret");
+  editor?.style.removeProperty("--local-collab-caret-color");
+  resetCollabUnreadMessages();
+  collabParticipantSortMode = "joined";
+  hideLocalCollabCursor();
   followedParticipantName = "";
+  stopCollabHeartbeat();
+  activePairState = null;
+  pairOverview = [];
+  pairPanelOpen = false;
+  pairToolActivity = { chat: false, suggestions: false, tasks: false };
+  pairFollowEnabled = false;
+  pairFollowSuspended = false;
+  pairPartnerPresence = null;
+  clearTimeout(pairPresenceTimeout);
+  pairPresenceTimeout = null;
+  stopPairFollowAnimation();
+  if (pairSelectionHighlight) pairSelectionHighlight.hidden = true;
+  stopPairVoice(false);
+  renderPairDock();
   lastAnnouncementText = "";
   if (announcementPopup) {
     announcementPopup.style.display = "none";
@@ -3142,7 +3500,7 @@ function setDeveloperChordArmed(value) {
     developerChordTimer = setTimeout(() => {
       developerChordArmed = false;
       developerChordTimer = null;
-    }, 1400);
+    }, 3000);
   }
 }
 
@@ -3151,9 +3509,15 @@ function getDeveloperStateSummary() {
     activeFile: activeFile ? activeFile.name : null,
     projectFileCount: projectFiles.length,
     previewTarget: currentPreviewTarget,
+    previewDevice: getPreviewDeviceSummary(),
+    previewZoom: previewZoomPercent,
+    previewGrid: previewGridEnabled,
+    previewBreakpoints: previewBreakpointIndicatorEnabled,
+    previewColorScheme: previewColorSchemeMode,
     autoRun: Boolean(autoRunCheckbox?.checked),
     consoleVisible: Boolean(showConsoleCheckbox?.checked),
     zenMode: Boolean(isZenMode),
+    mediaSourceView: Boolean(developerMediaSourceVisible),
     activeSessionId: activeSessionId || null,
     role: getMyRole(),
     participantCount: collabParticipants.length,
@@ -3162,45 +3526,297 @@ function getDeveloperStateSummary() {
 }
 
 function runDeveloperCommand(rawCommand, echoCommand = true) {
-  const command = String(rawCommand || "").trim().toLowerCase();
+  const raw = String(rawCommand || "").trim();
+  const command = raw.toLowerCase();
   if (!command) return;
   if (echoCommand) {
-    appendDeveloperConsoleLine(`> ${command}`);
+    appendDeveloperConsoleLine(`> ${raw}`);
+    if (developerCommandHistory.at(-1) !== raw) developerCommandHistory.push(raw);
+    if (developerCommandHistory.length > 50) developerCommandHistory.shift();
+    developerCommandHistoryIndex = developerCommandHistory.length;
   }
+
+  const printJson = (value) => appendDeveloperConsoleLine(JSON.stringify(value, null, 2));
+  const printFiles = () => printJson(
+    projectFiles.map((file) => ({
+      name: file.name,
+      type: file.type,
+      active: Boolean(file.active),
+      length: String(file.content || "").length,
+    })),
+  );
+
+  if (command.startsWith("device ")) {
+    const requestedDevice = command.slice(7).trim();
+    if (requestedDevice === "list") {
+      printJson({
+        responsive: "Fluid preview pane",
+        ...Object.fromEntries(
+          Object.entries(PREVIEW_DEVICE_PRESETS).map(([key, value]) => [
+            key,
+            `${value.width}×${value.height}`,
+          ]),
+        ),
+      });
+    } else if (setPreviewDevicePreset(requestedDevice)) {
+      appendDeveloperConsoleLine(`Viewport set to ${previewDeviceBadge?.textContent || requestedDevice}.`);
+    } else {
+      appendDeveloperConsoleLine(`Unknown device: ${requestedDevice}`);
+      appendDeveloperConsoleLine("Use: device list");
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("viewport ")) {
+    if (command === "viewport prompt") {
+      promptForCustomPreviewViewport();
+      return;
+    }
+    const match = command.match(/^viewport\s+(\d+)\s*(?:x|×|\s)\s*(\d+)$/);
+    if (match && setCustomPreviewViewport(match[1], match[2])) {
+      appendDeveloperConsoleLine(`Custom viewport set to ${match[1]}×${match[2]}.`);
+    } else {
+      appendDeveloperConsoleLine("Usage: viewport <width> <height>");
+      appendDeveloperConsoleLine("Allowed range: 240–3840 by 240–2160 pixels.");
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "rotate") {
+    appendDeveloperConsoleLine(
+      rotatePreviewDevice()
+        ? `Viewport rotated to ${previewDeviceState.width}×${previewDeviceState.height}.`
+        : "Choose a device or custom viewport before rotating.",
+    );
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("zoom ")) {
+    const value = command.slice(5).trim();
+    if (value === "in") setPreviewZoom(previewZoomPercent + 25);
+    else if (value === "out") setPreviewZoom(previewZoomPercent - 25);
+    else if (value === "reset") setPreviewZoom(100);
+    else if (/^\d+%?$/.test(value)) setPreviewZoom(Number.parseInt(value, 10));
+    else {
+      appendDeveloperConsoleLine("Usage: zoom <50-200>, zoom in, zoom out, or zoom reset");
+      appendDeveloperConsoleLine("");
+      return;
+    }
+    appendDeveloperConsoleLine(`Preview zoom: ${previewZoomPercent}%`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "preview refresh") {
+    refreshPreviewPane();
+    appendDeveloperConsoleLine("Preview refreshed.");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+  if (command === "preview screenshot") {
+    appendDeveloperConsoleLine("Capturing the current preview...");
+    capturePreviewScreenshot()
+      .then((message) => {
+        appendDeveloperConsoleLine(`${message}\n`);
+        showNotification(message, "success");
+      })
+      .catch((error) => {
+        const message = String(error?.message || "The preview screenshot failed.");
+        appendDeveloperConsoleLine(`${message}\n`);
+        showNotification(message, "error");
+      });
+    return;
+  }
+  if (command === "preview fullscreen") {
+    togglePreviewFullscreen();
+    appendDeveloperConsoleLine("Fullscreen preview toggled.");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+  if (command.startsWith("preview inspect")) {
+    const mode = command.slice("preview inspect".length).trim();
+    const enabled = mode === "on" ? true : mode === "off" ? false : !isPreviewInspecting;
+    setPreviewInspecting(enabled);
+    appendDeveloperConsoleLine(`Preview inspector ${enabled ? "enabled" : "disabled"}.`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "grid toggle" || command === "grid on" || command === "grid off") {
+    const enabled = command === "grid on" ? true : command === "grid off" ? false : !previewGridEnabled;
+    setPreviewGridEnabled(enabled);
+    appendDeveloperConsoleLine(`Layout grid ${enabled ? "enabled" : "disabled"}.\n`);
+    return;
+  }
+
+  if (command === "breakpoints toggle" || command === "breakpoints on" || command === "breakpoints off") {
+    const enabled = command === "breakpoints on"
+      ? true
+      : command === "breakpoints off"
+        ? false
+        : !previewBreakpointIndicatorEnabled;
+    setPreviewBreakpointIndicatorEnabled(enabled);
+    appendDeveloperConsoleLine(`Breakpoint indicator ${enabled ? "enabled" : "disabled"}.\n`);
+    return;
+  }
+
+  if (command === "scheme toggle") {
+    appendDeveloperConsoleLine(`Preview color scheme: ${cyclePreviewColorScheme()}.\n`);
+    return;
+  }
+  if (command.startsWith("scheme ")) {
+    const mode = command.slice(7).trim();
+    if (setPreviewColorScheme(mode)) appendDeveloperConsoleLine(`Preview color scheme: ${mode}.`);
+    else appendDeveloperConsoleLine("Usage: scheme <system|light|dark>");
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("file open ")) {
+    const requestedName = raw.slice("file open ".length).trim();
+    const file = projectFiles.find(
+      (item) => String(item.name || "").toLowerCase() === requestedName.toLowerCase(),
+    );
+    if (!file) appendDeveloperConsoleLine(`File not found: ${requestedName}`);
+    else {
+      switchFile(file.name);
+      appendDeveloperConsoleLine(`Opened ${file.name}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (/^media (?:source|code) (?:on|off|toggle)$/.test(command)) {
+    const requestedMode = command.split(" ").at(-1);
+    const enabled = requestedMode === "on"
+      ? true
+      : requestedMode === "off"
+        ? false
+        : !developerMediaSourceVisible;
+    setDeveloperMediaSourceVisible(enabled);
+    const activeMediaKind = getProjectMediaKind(activeFile);
+    appendDeveloperConsoleLine(
+      enabled
+        ? activeMediaKind
+          ? `Media Source View enabled for ${activeFile.name}. Close Developer Tools to inspect the safe, read-only source details.`
+          : "Media Source View enabled. Select an image, video, or audio file to inspect its safe, read-only source details."
+        : "Media Source View disabled. Media files now open as visual previews.",
+    );
+    appendDeveloperConsoleLine("");
+    showNotification(
+      enabled ? "Developer Media Source View enabled." : "Visual media previews restored.",
+      enabled ? "warn" : "success",
+    );
+    return;
+  }
+
+  if (command.startsWith("editor goto ")) {
+    const match = command.match(/^editor goto\s+(\d+)(?:\s+(\d+))?$/);
+    if (!match || !activeFile) appendDeveloperConsoleLine("Usage: editor goto <line> [column]");
+    else {
+      jumpToEditorLocation(activeFile.name, Number(match[1]), Number(match[2] || 1));
+      appendDeveloperConsoleLine(`Moved to line ${match[1]}, column ${match[2] || 1}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "editor wrap on" || command === "editor wrap off") {
+    const enabled = command.endsWith("on");
+    editorTextarea.wrap = enabled ? "soft" : "off";
+    editorTextarea.style.whiteSpace = enabled ? "pre-wrap" : "pre";
+    syncSyntaxLayerStyle(editorTextarea);
+    renderSyntaxHighlight(editorTextarea);
+    appendDeveloperConsoleLine(`Editor line wrapping ${enabled ? "enabled" : "disabled"}.`);
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("editor font ")) {
+    const size = Number(command.slice("editor font ".length).trim());
+    if (!Number.isFinite(size) || size < 10 || size > 32) {
+      appendDeveloperConsoleLine("Usage: editor font <10-32>");
+    } else {
+      editorTextSizeInput.value = String(size);
+      textSizeValue.textContent = `${size}px`;
+      applySettingsToEditors();
+      appendDeveloperConsoleLine(`Editor font size set to ${size}px.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command.startsWith("editor tabsize ")) {
+    const size = Number(command.slice("editor tabsize ".length).trim());
+    if (![2, 4, 8].includes(size)) appendDeveloperConsoleLine("Usage: editor tabsize <2|4|8>");
+    else {
+      editorTextarea.style.tabSize = String(size);
+      syncSyntaxLayerStyle(editorTextarea);
+      appendDeveloperConsoleLine(`Editor tab display size set to ${size}.`);
+    }
+    appendDeveloperConsoleLine("");
+    return;
+  }
+
+  if (command === "editor format") {
+    const result = formatActiveEditorCode();
+    appendDeveloperConsoleLine(`${result.message}\n`);
+    showNotification(result.message, result.ok ? "success" : "error");
+    return;
+  }
+
+  if (command === "tools reset") {
+    resetDeveloperToolControls();
+    appendDeveloperConsoleLine("Developer Tool controls reset to their normal editor defaults.\n");
+    showNotification("Developer Tool controls reset.", "success");
+    return;
+  }
+
   switch (command) {
     case "help":
-      appendDeveloperConsoleLine("Commands:");
-      appendDeveloperConsoleLine("help");
-      appendDeveloperConsoleLine("state");
-      appendDeveloperConsoleLine("files");
-      appendDeveloperConsoleLine("participants");
-      appendDeveloperConsoleLine("permissions");
-      appendDeveloperConsoleLine("errors");
-      appendDeveloperConsoleLine("preview");
-      appendDeveloperConsoleLine("clear");
-      appendDeveloperConsoleLine("close");
+      appendDeveloperConsoleLine("Preview controls:");
+      appendDeveloperConsoleLine("  device list | responsive | phone | tablet | laptop | desktop");
+      appendDeveloperConsoleLine("  viewport <width> <height>   rotate   zoom <50-200|in|out|reset>");
+      appendDeveloperConsoleLine("  preview status | refresh | fullscreen | inspect [on|off] | screenshot");
+      appendDeveloperConsoleLine("  grid <on|off|toggle>   breakpoints <on|off|toggle>");
+      appendDeveloperConsoleLine("  scheme <system|light|dark|toggle>");
+      appendDeveloperConsoleLine("Editor controls:");
+      appendDeveloperConsoleLine("  file list   file open <name>   editor goto <line> [column]");
+      appendDeveloperConsoleLine("  editor format   editor wrap <on|off>   editor font <10-32>");
+      appendDeveloperConsoleLine("  editor tabsize <2|4|8>   media source <on|off|toggle>");
+      appendDeveloperConsoleLine("  tools reset");
+      appendDeveloperConsoleLine("Diagnostics:");
+      appendDeveloperConsoleLine("  state   diagnostics   participants   permissions   errors");
+      appendDeveloperConsoleLine("Console: clear   close");
       break;
     case "state":
-      appendDeveloperConsoleLine(JSON.stringify(getDeveloperStateSummary(), null, 2));
+      printJson(getDeveloperStateSummary());
       break;
+    case "diagnostics": {
+      const content = String(activeFile?.content || "");
+      printJson({
+        ...getDeveloperStateSummary(),
+        activeFileLines: content ? content.split("\n").length : 0,
+        activeFileCharacters: content.length,
+        editorSelection: {
+          start: editorTextarea.selectionStart,
+          end: editorTextarea.selectionEnd,
+        },
+        previewInspecting: isPreviewInspecting,
+        browserOnline: navigator.onLine,
+      });
+      break;
+    }
     case "files":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          projectFiles.map((file) => ({
-            name: file.name,
-            type: file.type,
-            active: Boolean(file.active),
-            length: String(file.content || "").length,
-          })),
-          null,
-          2,
-        ),
-      );
+    case "file list":
+      printFiles();
       break;
     case "participants":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          collabParticipants.map((participant) => ({
+      printJson(
+        collabParticipants.map((participant) => ({
             name: participant.name,
             role: participant.role || "participant",
             currentFile: participant.currentFile || null,
@@ -3208,37 +3824,26 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
             frozenEditing: Boolean(participant.frozenEditing),
             priority: Boolean(participant.priority),
           })),
-          null,
-          2,
-        ),
       );
       break;
     case "permissions":
-      appendDeveloperConsoleLine(JSON.stringify(collabPermissions, null, 2));
+      printJson(collabPermissions);
       break;
     case "errors":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          {
+      printJson({
             counts: fileErrorCounts,
             locations: fileErrorLocations,
-          },
-          null,
-          2,
-        ),
-      );
+          });
       break;
     case "preview":
-      appendDeveloperConsoleLine(
-        JSON.stringify(
-          {
+    case "preview status":
+      printJson({
             target: currentPreviewTarget,
             title: previewTitleEl ? previewTitleEl.textContent : "",
-          },
-          null,
-          2,
-        ),
-      );
+            device: getPreviewDeviceSummary(),
+            zoom: previewZoomPercent,
+            inspecting: isPreviewInspecting,
+          });
       break;
     case "clear":
       clearDeveloperConsoleOutput();
@@ -3255,6 +3860,7 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
 
 function closeAppDialog(result = null) {
   if (appDialog) appDialog.style.display = "none";
+  if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
     appDialogInput.style.display = "none";
     appDialogInput.value = "";
@@ -3342,9 +3948,136 @@ function showAppPrompt(title, message, inputValue = "", inputPlaceholder = "") {
   });
 }
 
+function showUnsavedProjectOpenDialog(projectName) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED PROJECT";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <span>
+            <strong>Save your current project before opening another one?</strong>
+            <small>Opening <b>${escapeHtml(projectName || "this saved project")}</b> will replace the project currently in the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedProjectSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; OPEN</strong></button>
+        <button type="button" id="unsavedProjectDiscardBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-trash-can"></i><strong>DISCARD &amp; OPEN</strong></button>
+        <button type="button" id="unsavedProjectCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedProjectSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedProjectDiscardBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "discard" });
+    });
+    document.getElementById("unsavedProjectCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedProjectSaveBtn")?.focus(), 0);
+  });
+}
+
+function showUnsavedNewFileDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED CHANGES";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-file-circle-plus"></i></span>
+          <span>
+            <strong>Save the current project before creating a new file?</strong>
+            <small>You can save first, continue without saving, or cancel and return to the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedFileSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; CREATE</strong></button>
+        <button type="button" id="unsavedFileContinueBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-file-circle-plus"></i><strong>CREATE WITHOUT SAVING</strong></button>
+        <button type="button" id="unsavedFileCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedFileSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedFileContinueBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "continue" });
+    });
+    document.getElementById("unsavedFileCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedFileSaveBtn")?.focus(), 0);
+  });
+}
+
+function showUnsavedNewProjectDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "unsaved-project-open";
+    if (appDialogTitle) appDialogTitle.textContent = "UNSAVED PROJECT";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="unsaved-project-warning">
+          <span class="unsaved-project-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <span>
+            <strong>Save the current project before starting a new one?</strong>
+            <small>Starting a new project will replace all current files in the editor.</small>
+          </span>
+        </span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="unsavedProjectNewSaveBtn" class="run-button unsaved-project-save"><i class="fa-solid fa-floppy-disk"></i><strong>SAVE &amp; START NEW</strong></button>
+        <button type="button" id="unsavedProjectNewDiscardBtn" class="run-button unsaved-project-discard"><i class="fa-solid fa-trash-can"></i><strong>DISCARD &amp; START NEW</strong></button>
+        <button type="button" id="unsavedProjectNewCancelBtn" class="run-button unsaved-project-cancel"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("unsavedProjectNewSaveBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "save" });
+    });
+    document.getElementById("unsavedProjectNewDiscardBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "discard" });
+    });
+    document.getElementById("unsavedProjectNewCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false, action: "cancel" });
+    });
+    setTimeout(() => document.getElementById("unsavedProjectNewSaveBtn")?.focus(), 0);
+  });
+}
+
 function showPublishActionPrompt() {
   return new Promise((resolve) => {
     activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "publish-choice";
     if (appDialogTitle) appDialogTitle.textContent = "PUBLISH PROJECT";
     if (appDialogMessage) {
       appDialogMessage.innerHTML =
@@ -3353,9 +4086,15 @@ function showPublishActionPrompt() {
     if (appDialogInput) appDialogInput.style.display = "none";
     if (appDialogActions) {
       appDialogActions.innerHTML = `
-        <button type="button" id="publishCreateLinkBtn" class="run-button"><i class="fa-solid fa-plus"></i> <strong>CREATE A LINK</strong></button>
-        <button type="button" id="publishUpdateLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-solid fa-pen-to-square"></i> <strong>UPDATE A LINK</strong></button>
-        <button type="button" id="publishCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+        <button type="button" id="publishCreateLinkBtn" class="collab-choice-card publish-choice-card">
+          <i class="fa-solid fa-plus"></i>
+          <span>Create a link</span>
+        </button>
+        <button type="button" id="publishUpdateLinkBtn" class="collab-choice-card publish-choice-card">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span>Update a link</span>
+        </button>
+        <button type="button" id="publishCancelBtn" class="run-button publish-choice-cancel" style="background:#6b7280;"><strong>CANCEL</strong></button>
       `;
     }
     if (appDialog) appDialog.style.display = "flex";
@@ -3368,21 +4107,22 @@ function showPublishActionPrompt() {
 
 function showPublishUrlPrompt(action = "create") {
   const publishBase = `${window.location.origin}/published/`;
-  const defaultSlug = "my-project";
+  const exampleSlug = "my-custom-link";
   const isUpdate = action === "update";
   const dialog = showAppDialog({
     title: isUpdate ? "UPDATE A LINK" : "CREATE A LINK",
-    messageHtml: `${isUpdate ? "Type the custom link you want to update." : "Choose the end of your published link."}<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + defaultSlug)}</code>`,
+    messageHtml: `${isUpdate ? "Type the custom link you want to update." : "Choose the end of your published link."}<br><span style="display:block;margin-top:10px;font-size:12px;color:var(--text-muted)">Your link</span><code id="publishUrlPreview" style="display:block;margin-top:4px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(publishBase + exampleSlug)}</code>`,
     input: true,
-    inputValue: defaultSlug,
-    inputPlaceholder: "my-project",
+    inputValue: "",
+    inputPlaceholder: "Type your custom link",
     okText: isUpdate ? "NEXT" : "CREATE LINK",
     cancelText: "CANCEL",
   });
   const updatePreview = () => {
     const preview = document.getElementById("publishUrlPreview");
     if (!preview || !appDialogInput) return;
-    preview.textContent = publishBase + encodeURIComponent(appDialogInput.value.trim());
+    const typedSlug = appDialogInput.value.trim();
+    preview.textContent = publishBase + encodeURIComponent(typedSlug || exampleSlug);
   };
   if (appDialogInput) appDialogInput.addEventListener("input", updatePreview, { once: false });
   return dialog.finally(() => {
@@ -3478,7 +4218,59 @@ function showGitHubUploadSourcePicker() {
     document.getElementById("githubUploadFromCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false, source: null }));
     setTimeout(() => document.getElementById("githubUploadFromProjectBtn")?.focus(), 0);
   });
+
 }
+
+function showHelpChoiceDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "help-choice";
+    if (appDialogTitle) appDialogTitle.textContent = "HELP & LEARNING";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <span class="help-choice-heading"><i class="fa-solid fa-compass"></i> How would you like to continue?</span>
+        <span class="help-choice-copy">Follow the guided editor tour, or open the complete CodX Editor handbook.</span>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="helpTakeTourBtn" class="help-choice-button help-tour-choice">
+          <span class="help-choice-icon"><i class="fa-solid fa-route"></i></span>
+          <span><strong>TAKE A TOUR</strong><small>See each editor tool with live animations.</small></span>
+          <i class="fa-solid fa-arrow-right help-choice-arrow"></i>
+        </button>
+        <button type="button" id="helpOpenHandbookBtn" class="help-choice-button help-handbook-choice">
+          <span class="help-choice-icon"><i class="fa-solid fa-book-open"></i></span>
+          <span><strong>OPEN HANDBOOK</strong><small>Read the full guide in help.html.</small></span>
+          <i class="fa-solid fa-arrow-up-right-from-square help-choice-arrow"></i>
+        </button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("helpTakeTourBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "tour" });
+    });
+    document.getElementById("helpOpenHandbookBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "handbook" });
+    });
+    setTimeout(() => document.getElementById("helpTakeTourBtn")?.focus(), 0);
+  });
+}
+
+helpPageBtn?.addEventListener("click", async () => {
+  const result = await showHelpChoiceDialog();
+  if (!result?.ok) return;
+  if (result.action === "tour") {
+    startTutorial();
+    return;
+  }
+  if (result.action === "handbook") window.location.assign("/help.html");
+});
 
 function showAppConfirm(title, message, okText = "YES", cancelText = "NO", okVariant = "") {
   return showAppDialog({
@@ -4008,6 +4800,21 @@ let currentPreviewTarget = {
   mode: "html",
   fileName: "index.html",
 };
+const PREVIEW_DEVICE_PRESETS = Object.freeze({
+  phone: { label: "Phone", width: 390, height: 844 },
+  tablet: { label: "Tablet", width: 768, height: 1024 },
+  laptop: { label: "Laptop", width: 1440, height: 900 },
+  desktop: { label: "Desktop", width: 1920, height: 1080 },
+});
+let previewDeviceState = {
+  key: "responsive",
+  label: "Responsive",
+  width: null,
+  height: null,
+};
+let previewGridEnabled = false;
+let previewBreakpointIndicatorEnabled = false;
+let previewColorSchemeMode = "system";
 let isPreviewInspecting = false;
 let previewZoomPercent = 100;
 let previewZoomLastFocusedElement = null;
@@ -4018,6 +4825,444 @@ let roomIndicatorInterval = null;
 let isPointerInsideEditor = false;
 let lastPointerClientX = null;
 let lastPointerClientY = null;
+
+function getPreviewDeviceSummary() {
+  return {
+    mode: previewDeviceState.key,
+    label: previewDeviceState.label,
+    width: previewDeviceState.width,
+    height: previewDeviceState.height,
+    orientation:
+      previewDeviceState.width && previewDeviceState.height
+        ? previewDeviceState.width >= previewDeviceState.height
+          ? "landscape"
+          : "portrait"
+        : "fluid",
+  };
+}
+
+function updatePreviewDeviceScale() {
+  if (!previewViewportStage || !previewDeviceShell || !previewDeviceFrame) return;
+  const { width, height } = previewDeviceState;
+  if (!width || !height) {
+    previewViewportStage.classList.add("is-responsive");
+    previewDeviceShell.style.removeProperty("width");
+    previewDeviceShell.style.removeProperty("height");
+    previewDeviceFrame.style.removeProperty("width");
+    previewDeviceFrame.style.removeProperty("height");
+    previewDeviceFrame.style.removeProperty("transform");
+    updatePreviewBreakpointIndicator();
+    return;
+  }
+
+  previewViewportStage.classList.remove("is-responsive");
+  const availableWidth = Math.max(1, previewViewportStage.clientWidth - 36);
+  const availableHeight = Math.max(1, previewViewportStage.clientHeight - 36);
+  const scale = Math.max(0.08, Math.min(1, availableWidth / width, availableHeight / height));
+  previewDeviceShell.style.width = `${Math.round(width * scale)}px`;
+  previewDeviceShell.style.height = `${Math.round(height * scale)}px`;
+  previewDeviceFrame.style.width = `${width}px`;
+  previewDeviceFrame.style.height = `${height}px`;
+  previewDeviceFrame.style.transform = `scale(${scale})`;
+  updatePreviewBreakpointIndicator();
+}
+
+function applyPreviewDeviceState() {
+  updatePreviewDeviceScale();
+  const { label, width, height } = previewDeviceState;
+  const detail = width && height ? `${label} · ${width}×${height}` : label;
+  if (previewDeviceBadge) {
+    previewDeviceBadge.textContent = detail;
+    previewDeviceBadge.title = `Preview viewport: ${detail}`;
+  }
+  try {
+    iframe.contentWindow?.dispatchEvent(new Event("resize"));
+  } catch (_err) {
+    // The browser will still resize the iframe viewport.
+  }
+}
+
+function setPreviewDevicePreset(name) {
+  const key = String(name || "").toLowerCase();
+  if (key === "responsive") {
+    previewDeviceState = { key, label: "Responsive", width: null, height: null };
+    applyPreviewDeviceState();
+    return true;
+  }
+  const preset = PREVIEW_DEVICE_PRESETS[key];
+  if (!preset) return false;
+  previewDeviceState = { key, ...preset };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function setCustomPreviewViewport(width, height) {
+  const safeWidth = Math.round(Number(width));
+  const safeHeight = Math.round(Number(height));
+  if (
+    !Number.isFinite(safeWidth) ||
+    !Number.isFinite(safeHeight) ||
+    safeWidth < 240 ||
+    safeWidth > 3840 ||
+    safeHeight < 240 ||
+    safeHeight > 2160
+  ) {
+    return false;
+  }
+  previewDeviceState = {
+    key: "custom",
+    label: "Custom",
+    width: safeWidth,
+    height: safeHeight,
+  };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function rotatePreviewDevice() {
+  if (!previewDeviceState.width || !previewDeviceState.height) return false;
+  previewDeviceState = {
+    ...previewDeviceState,
+    width: previewDeviceState.height,
+    height: previewDeviceState.width,
+  };
+  applyPreviewDeviceState();
+  return true;
+}
+
+function setDeveloperShortcutPressed(command, pressed) {
+  const button = Array.from(developerConsoleShortcutButtons).find(
+    (item) => item.dataset.developerCommand === command,
+  );
+  button?.setAttribute("aria-pressed", pressed ? "true" : "false");
+}
+
+function setDeveloperMediaSourceVisible(enabled) {
+  developerMediaSourceVisible = Boolean(enabled);
+  setDeveloperShortcutPressed("media source toggle", developerMediaSourceVisible);
+  displayActiveFileInEditor({ preserveCaret: true });
+  enforceCollabPermissionsUI();
+}
+
+function setPreviewGridEnabled(enabled) {
+  previewGridEnabled = Boolean(enabled);
+  previewDeviceFrame?.classList.toggle("show-layout-grid", previewGridEnabled);
+  setDeveloperShortcutPressed("grid toggle", previewGridEnabled);
+}
+
+function getPreviewBreakpoint(width) {
+  if (width < 480) return "Phone";
+  if (width < 768) return "Small tablet";
+  if (width < 1024) return "Tablet";
+  if (width < 1440) return "Laptop";
+  return "Wide desktop";
+}
+
+function updatePreviewBreakpointIndicator() {
+  if (!previewBreakpointIndicator) return;
+  const width = Math.round(previewDeviceState.width || iframe.clientWidth || 0);
+  previewBreakpointIndicator.hidden = !previewBreakpointIndicatorEnabled;
+  if (previewBreakpointIndicatorEnabled) {
+    previewBreakpointIndicator.textContent = `${getPreviewBreakpoint(width)} breakpoint · ${width}px`;
+  }
+}
+
+function setPreviewBreakpointIndicatorEnabled(enabled) {
+  previewBreakpointIndicatorEnabled = Boolean(enabled);
+  setDeveloperShortcutPressed("breakpoints toggle", previewBreakpointIndicatorEnabled);
+  updatePreviewBreakpointIndicator();
+}
+
+function collectPreferredColorSchemeRules(ruleList, mode, output) {
+  Array.from(ruleList || []).forEach((rule) => {
+    const condition = String(rule.conditionText || "").toLowerCase();
+    if (condition.includes("prefers-color-scheme")) {
+      if (condition.includes(`prefers-color-scheme: ${mode}`) || condition.includes(`prefers-color-scheme:${mode}`)) {
+        Array.from(rule.cssRules || []).forEach((nestedRule) => output.push(nestedRule.cssText));
+      }
+      return;
+    }
+    if (rule.cssRules) collectPreferredColorSchemeRules(rule.cssRules, mode, output);
+  });
+}
+
+function applyPreviewColorSchemeSimulation() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    return;
+  }
+  if (!previewDoc?.documentElement) return;
+  previewDoc.getElementById("__codx-color-scheme-simulation")?.remove();
+  if (previewColorSchemeMode === "system") return;
+
+  const overrideRules = [];
+  Array.from(previewDoc.styleSheets || []).forEach((sheet) => {
+    if (sheet.ownerNode?.id === "__codx-color-scheme-simulation") return;
+    try {
+      collectPreferredColorSchemeRules(sheet.cssRules, previewColorSchemeMode, overrideRules);
+    } catch (_err) {
+      // Cross-origin stylesheets cannot be inspected, but color-scheme still applies.
+    }
+  });
+  const style = previewDoc.createElement("style");
+  style.id = "__codx-color-scheme-simulation";
+  style.textContent = `:root { color-scheme: ${previewColorSchemeMode} !important; }\n${overrideRules.join("\n")}`;
+  (previewDoc.head || previewDoc.documentElement).appendChild(style);
+}
+
+function setPreviewColorScheme(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  if (!["system", "light", "dark"].includes(normalized)) return false;
+  previewColorSchemeMode = normalized;
+  applyPreviewColorSchemeSimulation();
+  const button = Array.from(developerConsoleShortcutButtons).find(
+    (item) => item.dataset.developerCommand === "scheme toggle",
+  );
+  if (button) {
+    button.setAttribute("aria-pressed", normalized === "system" ? "false" : "true");
+    button.title = `Preview color scheme: ${normalized}`;
+  }
+  return true;
+}
+
+function cyclePreviewColorScheme() {
+  const next = previewColorSchemeMode === "system"
+    ? "light"
+    : previewColorSchemeMode === "light"
+      ? "dark"
+      : "system";
+  setPreviewColorScheme(next);
+  return next;
+}
+
+async function promptForCustomPreviewViewport() {
+  const previousZIndex = appDialog?.style.zIndex || "";
+  if (appDialog) appDialog.style.zIndex = "1300";
+  try {
+    const currentSize = previewDeviceState.width && previewDeviceState.height
+      ? `${previewDeviceState.width} x ${previewDeviceState.height}`
+      : "390 x 844";
+    const result = await showAppPrompt(
+      "CUSTOM PREVIEW SIZE",
+      "Enter width and height in pixels, for example 390 x 844.",
+      currentSize,
+      "390 x 844",
+    );
+    if (!result?.ok) {
+      appendDeveloperConsoleLine("Custom viewport cancelled.\n");
+      return;
+    }
+    const match = String(result.value || "").match(/^(\d+)\s*(?:x|×|\s)\s*(\d+)$/i);
+    if (!match || !setCustomPreviewViewport(match[1], match[2])) {
+      appendDeveloperConsoleLine("Invalid size. Use 240-3840 x 240-2160 pixels.\n");
+      showNotification("Enter a valid preview width and height.", "error");
+      return;
+    }
+    appendDeveloperConsoleLine(`Custom viewport set to ${match[1]} x ${match[2]}.\n`);
+  } finally {
+    if (appDialog) appDialog.style.zIndex = previousZIndex;
+    developerConsoleInput?.focus();
+  }
+}
+
+function downloadDeveloperToolBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function capturePreviewScreenshot() {
+  let previewDoc;
+  try {
+    previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  } catch (_err) {
+    throw new Error("The preview cannot be captured because it is cross-origin.");
+  }
+  if (!previewDoc?.documentElement) throw new Error("The preview is not ready yet.");
+
+  const width = Math.max(1, Math.round(previewDeviceState.width || iframe.clientWidth));
+  const height = Math.max(1, Math.round(previewDeviceState.height || iframe.clientHeight));
+  const clone = previewDoc.documentElement.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  const base = previewDoc.createElement("base");
+  base.href = previewDoc.baseURI;
+  clone.querySelector("head")?.prepend(base);
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const image = new Image();
+
+  try {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("The browser could not render the preview capture."));
+      image.src = svgUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = getComputedStyle(iframe).backgroundColor || "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    const pngBlob = await new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG creation failed.")), "image/png");
+      } catch (error) {
+        reject(error);
+      }
+    });
+    downloadDeveloperToolBlob(pngBlob, `codx-preview-${width}x${height}.png`);
+    return `Screenshot saved at ${width} x ${height}.`;
+  } catch (_error) {
+    downloadDeveloperToolBlob(svgBlob, `codx-preview-${width}x${height}.svg`);
+    return `SVG screenshot saved at ${width} x ${height}; PNG export was blocked by a preview resource.`;
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function countStructuralBraces(line, state) {
+  let delta = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (state.mode === "block-comment") {
+      if (char === "*" && next === "/") {
+        state.mode = "normal";
+        index += 1;
+      }
+      continue;
+    }
+    if (state.mode !== "normal") {
+      if (char === "\\") index += 1;
+      else if (char === state.mode) state.mode = "normal";
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      state.mode = "block-comment";
+      index += 1;
+    } else if (char === "/" && next === "/") {
+      break;
+    } else if (char === "'" || char === '"' || char === "`") {
+      state.mode = char;
+    } else if (char === "{") delta += 1;
+    else if (char === "}") delta -= 1;
+  }
+  return delta;
+}
+
+function formatBraceCode(content) {
+  const state = { mode: "normal" };
+  let depth = 0;
+  return content.split("\n").map((line) => {
+    const startsInsideString = state.mode !== "normal" && state.mode !== "block-comment";
+    if (startsInsideString) {
+      depth = Math.max(0, depth + countStructuralBraces(line, state));
+      return line;
+    }
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    const leadingClose = trimmed.startsWith("}") ? 1 : 0;
+    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    depth = Math.max(0, depth + countStructuralBraces(trimmed, state));
+    return formatted;
+  }).join("\n");
+}
+
+function formatHtmlCode(content) {
+  if (/<(pre|textarea|script|style)\b[^>]*>[\s\S]*\n[\s\S]*<\/\1>/i.test(content)) return null;
+  const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+  let depth = 0;
+  return content.split("\n").map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    const leadingClose = /^<\//.test(trimmed) ? 1 : 0;
+    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    let delta = 0;
+    for (const match of trimmed.matchAll(/<\/?([a-z][\w:-]*)\b[^>]*>/gi)) {
+      const tag = match[1].toLowerCase();
+      const token = match[0];
+      if (token.startsWith("</")) delta -= 1;
+      else if (!token.endsWith("/>") && !voidTags.has(tag)) delta += 1;
+    }
+    depth = Math.max(0, depth + delta);
+    return formatted;
+  }).join("\n");
+}
+
+function formatActiveEditorCode() {
+  if (!activeFile || !editorTextarea) return { ok: false, message: "There is no active file to format." };
+  if (editorTextarea.readOnly || !canCurrentUserEditFile(activeFile.name)) {
+    return { ok: false, message: "You do not currently have permission to edit this file." };
+  }
+  const original = editorTextarea.value;
+  const type = String(activeFile.type || getFileType(activeFile.name) || "").toLowerCase();
+  let formatted;
+  try {
+    if (type === "json") formatted = JSON.stringify(JSON.parse(original), null, 4);
+    else if (["jsonc", "js", "mjs", "cjs", "jsx", "ts", "tsx", "css", "scss", "less"].includes(type)) {
+      formatted = formatBraceCode(original);
+    } else if (["html", "htm", "xml", "svg"].includes(type)) {
+      formatted = formatHtmlCode(original);
+      if (formatted === null) {
+        return { ok: false, message: "Formatting was skipped to protect whitespace inside a multiline script, style, or preformatted block." };
+      }
+    } else return { ok: false, message: `Formatting is not available for .${type || "text"} files.` };
+  } catch (error) {
+    return { ok: false, message: `Formatting failed: ${error.message}` };
+  }
+  if (formatted === original) return { ok: true, message: `${activeFile.name} is already formatted.` };
+  const selectionStart = editorTextarea.selectionStart;
+  const selectionEnd = editorTextarea.selectionEnd;
+  beginEditorHistoryCapture(editorTextarea);
+  editorTextarea.value = formatted;
+  editorTextarea.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    inputType: "insertReplacementText",
+    data: null,
+  }));
+  editorTextarea.setSelectionRange(
+    Math.min(selectionStart, formatted.length),
+    Math.min(selectionEnd, formatted.length),
+  );
+  return { ok: true, message: `${activeFile.name} formatted. Use Undo to restore the previous version.` };
+}
+
+function resetDeveloperToolControls() {
+  setDeveloperMediaSourceVisible(false);
+  setPreviewDevicePreset("responsive");
+  setPreviewZoom(100);
+  setPreviewInspecting(false);
+  setPreviewGridEnabled(false);
+  setPreviewBreakpointIndicatorEnabled(false);
+  setPreviewColorScheme("system");
+  editorTextarea.wrap = "off";
+  editorTextarea.style.whiteSpace = "pre";
+  editorTextarea.style.removeProperty("tab-size");
+  loadSettings();
+  syncSyntaxLayerStyle(editorTextarea);
+  if (getProjectMediaKind(activeFile)) {
+    if (highlightLayer) highlightLayer.innerHTML = "";
+  } else {
+    renderSyntaxHighlight(editorTextarea);
+  }
+}
+
+if (previewViewportStage && typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(() => updatePreviewDeviceScale()).observe(previewViewportStage);
+} else {
+  window.addEventListener("resize", updatePreviewDeviceScale);
+}
+requestAnimationFrame(applyPreviewDeviceState);
 
 function getPreviewTargetForFile(rawHref) {
   const normalizedHref = String(rawHref || "").trim().replace(/^\.\/+/, "");
@@ -4176,7 +5421,7 @@ function getInspectorMarkup(element) {
   if (!element || !element.outerHTML) return "";
   const clone = element.cloneNode(true);
   clone
-    .querySelectorAll("#__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-preview-zoom-styles")
+    .querySelectorAll("#__codx-inspector-root, #__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-inspector-cursor-styles, #__codx-preview-zoom-styles")
     .forEach((node) => node.remove());
   clone.querySelectorAll("script, style").forEach((node) => {
     node.textContent = node.tagName === "SCRIPT" ? "/* script content */" : "/* styles */";
@@ -4188,15 +5433,73 @@ function getInspectorMarkup(element) {
 
 function removePreviewInspector(previewDoc) {
   if (!previewDoc) return;
+  previewDoc.getElementById("__codx-inspector-root")?.remove();
   previewDoc.getElementById("__codx-inspector-overlay")?.remove();
   previewDoc.getElementById("__codx-inspector-outline")?.remove();
+  previewDoc.getElementById("__codx-inspector-styles")?.remove();
+  previewDoc.getElementById("__codx-inspector-cursor-styles")?.remove();
   previewDoc.documentElement?.classList.remove("__codx-inspecting");
   previewDoc.__codxInspectedElement = null;
 }
 
+function ensurePreviewInspector(previewDoc) {
+  let root = previewDoc.getElementById("__codx-inspector-root");
+  if (!root) {
+    root = previewDoc.createElement("div");
+    root.id = "__codx-inspector-root";
+    [
+      ["all", "initial"],
+      ["display", "block"],
+      ["position", "fixed"],
+      ["inset", "0"],
+      ["width", "100vw"],
+      ["height", "100vh"],
+      ["overflow", "visible"],
+      ["pointer-events", "none"],
+      ["z-index", "2147483647"],
+    ].forEach(([property, value]) => root.style.setProperty(property, value, "important"));
+
+    const shadow = root.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host { all: initial; pointer-events: none; }
+        *, *::before, *::after { box-sizing: border-box; text-shadow: none; }
+        #outline { display: block; position: fixed; z-index: 1; pointer-events: none; border: 2px solid #58a6ff; background: rgba(88,166,255,.12); }
+        #overlay { display: block; position: fixed; z-index: 2; pointer-events: none; max-height: 220px; overflow: hidden; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #c9d1d9; box-shadow: 0 12px 32px rgba(0,0,0,.38); font: 12px/1.5 Consolas, Monaco, monospace; text-align: left; }
+        .label { display: block; margin: 0; padding: 5px 9px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+        pre { display: block; margin: 0; padding: 9px 11px; max-height: 184px; overflow: hidden; border: 0; background: #0d1117; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+        code { display: block; margin: 0; padding: 0; border: 0; background: transparent; color: #c9d1d9; font: inherit; white-space: inherit; }
+        .token { display: inline; margin: 0; padding: 0; border: 0; background: transparent; font: inherit; }
+        .token.comment { color: #8b949e; font-style: italic; }
+        .token.keyword { color: #ff7b72; }
+        .token.string { color: #a5d6ff; }
+        .token.tag, .token.tag-punctuation { color: #7ee787; }
+        .token.attr { color: #d2a8ff; }
+        .token.number, .token.builtin, .token.constant { color: #79c0ff; }
+        .token.property { color: #ffa657; }
+        .token.selector { color: #f2cc60; }
+        .token.operator, .token.punctuation { color: #c9d1d9; }
+        .token.identifier, .token.variable, .token.declaration { color: #c4a7e7; }
+        .token.function, .token.method, .token.property-access { color: #ff9bce; }
+        .token.json-key, .token.env-key { color: #7ee787; }
+        .token.html-text { color: #f0f6fc; }
+      </style>
+      <div id="outline"></div>
+      <div id="overlay"><div class="label">HTML</div><pre><code></code></pre></div>
+    `;
+    previewDoc.documentElement.appendChild(root);
+  }
+  return {
+    root,
+    outline: root.shadowRoot?.getElementById("outline"),
+    overlay: root.shadowRoot?.getElementById("overlay"),
+  };
+}
+
 function positionPreviewInspector(previewDoc, element) {
-  const overlay = previewDoc?.getElementById("__codx-inspector-overlay");
-  const outline = previewDoc?.getElementById("__codx-inspector-outline");
+  const root = previewDoc?.getElementById("__codx-inspector-root");
+  const overlay = root?.shadowRoot?.getElementById("overlay");
+  const outline = root?.shadowRoot?.getElementById("outline");
   if (!overlay || !outline || !element?.isConnected) return;
 
   const rect = element.getBoundingClientRect();
@@ -4219,22 +5522,15 @@ function positionPreviewInspector(previewDoc, element) {
 }
 
 function showPreviewInspector(previewDoc, element) {
-  if (!element || element.id?.startsWith("__codx-inspector")) return;
-  let overlay = previewDoc.getElementById("__codx-inspector-overlay");
-  let outline = previewDoc.getElementById("__codx-inspector-outline");
-  if (!outline) {
-    outline = previewDoc.createElement("div");
-    outline.id = "__codx-inspector-outline";
-    previewDoc.body.appendChild(outline);
-  }
-  if (!overlay) {
-    overlay = previewDoc.createElement("div");
-    overlay.id = "__codx-inspector-overlay";
-    overlay.innerHTML = '<div class="__codx-inspector-label">HTML</div><pre><code></code></pre>';
-    previewDoc.body.appendChild(overlay);
-  }
+  if (!element || element.nodeType !== 1 || element.id?.startsWith("__codx-inspector")) return;
+  const { overlay, outline } = ensurePreviewInspector(previewDoc);
+  if (!overlay || !outline) return;
   previewDoc.__codxInspectedElement = element;
-  overlay.querySelector("code").innerHTML = highlightHtml(getInspectorMarkup(element));
+  const markup = getInspectorMarkup(element);
+  const codeElement = overlay.querySelector("code");
+  codeElement.innerHTML = markup ? highlightHtml(markup) : '<span class="token comment">No HTML available</span>';
+  overlay.style.display = "block";
+  outline.style.display = "block";
   positionPreviewInspector(previewDoc, element);
 }
 
@@ -4250,26 +5546,10 @@ function bindPreviewInspector() {
   if (!isPreviewInspecting) return;
 
   previewDoc.documentElement.classList.add("__codx-inspecting");
-  if (!previewDoc.getElementById("__codx-inspector-styles")) {
+  if (!previewDoc.getElementById("__codx-inspector-cursor-styles")) {
     const styles = previewDoc.createElement("style");
-    styles.id = "__codx-inspector-styles";
-    styles.textContent = `
-      html.__codx-inspecting, html.__codx-inspecting * { cursor: crosshair !important; }
-      #__codx-inspector-outline { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #58a6ff; background: rgba(88,166,255,.12); box-sizing: border-box; }
-      #__codx-inspector-overlay { position: fixed; z-index: 2147483646; pointer-events: none; box-sizing: border-box; max-height: 190px; overflow: hidden; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #c9d1d9; box-shadow: 0 12px 32px rgba(0,0,0,.38); font: 12px/1.5 Consolas, Monaco, monospace; }
-      #__codx-inspector-overlay .__codx-inspector-label { padding: 4px 8px; background: #161b22; color: #8b949e; border-bottom: 1px solid #30363d; font: 700 10px/1.3 system-ui, sans-serif; letter-spacing: .08em; }
-      #__codx-inspector-overlay pre { margin: 0; padding: 8px 10px; max-height: 155px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-      #__codx-inspector-overlay .token.comment { color: #8b949e; } #__codx-inspector-overlay .token.keyword { color: #ff7b72; }
-      #__codx-inspector-overlay .token.string { color: #a5d6ff; } #__codx-inspector-overlay .token.tag, #__codx-inspector-overlay .token.tag-punctuation { color: #7ee787; }
-      #__codx-inspector-overlay .token.attr { color: #d2a8ff; } #__codx-inspector-overlay .token.number { color: #79c0ff; }
-      #__codx-inspector-overlay .token.property { color: #ffa657; } #__codx-inspector-overlay .token.selector { color: #f2cc60; }
-      #__codx-inspector-overlay .token.operator, #__codx-inspector-overlay .token.punctuation { color: #c9d1d9; }
-      #__codx-inspector-overlay .token.identifier, #__codx-inspector-overlay .token.variable, #__codx-inspector-overlay .token.declaration { color: #c4a7e7; }
-      #__codx-inspector-overlay .token.function, #__codx-inspector-overlay .token.method, #__codx-inspector-overlay .token.property-access { color: #ff9bce; }
-      #__codx-inspector-overlay .token.builtin, #__codx-inspector-overlay .token.constant { color: #79c0ff; }
-      #__codx-inspector-overlay .token.json-key, #__codx-inspector-overlay .token.env-key { color: #7ee787; }
-      #__codx-inspector-overlay .token.html-text { color: #f0f6fc; }
-    `;
+    styles.id = "__codx-inspector-cursor-styles";
+    styles.textContent = "html.__codx-inspecting, html.__codx-inspecting * { cursor: crosshair !important; }";
     (previewDoc.head || previewDoc.documentElement).appendChild(styles);
   }
 
@@ -4277,6 +5557,11 @@ function bindPreviewInspector() {
     previewDoc.__codxInspectorBound = true;
     previewDoc.addEventListener("pointerover", (event) => {
       if (isPreviewInspecting) showPreviewInspector(previewDoc, event.target);
+    }, true);
+    previewDoc.addEventListener("pointermove", (event) => {
+      if (isPreviewInspecting && previewDoc.__codxInspectedElement !== event.target) {
+        showPreviewInspector(previewDoc, event.target);
+      }
     }, true);
     previewDoc.addEventListener("click", (event) => {
       if (!isPreviewInspecting) return;
@@ -4287,6 +5572,9 @@ function bindPreviewInspector() {
       if (isPreviewInspecting) positionPreviewInspector(previewDoc, previewDoc.__codxInspectedElement);
     }, true);
   }
+
+  const initialElement = previewDoc.body?.firstElementChild || previewDoc.body;
+  if (initialElement) showPreviewInspector(previewDoc, initialElement);
 }
 
 function setPreviewInspecting(enabled) {
@@ -4299,6 +5587,30 @@ function setPreviewInspecting(enabled) {
     previewInspectBtn.setAttribute("aria-label", previewInspectBtn.title);
   }
   bindPreviewInspector();
+}
+
+function refreshPreviewPane() {
+  if (!previewRefreshBtn || previewRefreshBtn.disabled) return;
+  const originalTitle = "Refresh preview";
+  let completed = false;
+  const finishRefresh = () => {
+    iframe.removeEventListener("load", finishRefresh);
+    if (completed) return;
+    completed = true;
+    previewRefreshBtn.disabled = false;
+    previewRefreshBtn.classList.remove("is-refreshing");
+    previewRefreshBtn.title = originalTitle;
+    previewRefreshBtn.setAttribute("aria-label", originalTitle);
+  };
+
+  previewRefreshBtn.disabled = true;
+  previewRefreshBtn.classList.add("is-refreshing");
+  previewRefreshBtn.title = "Refreshing preview";
+  previewRefreshBtn.setAttribute("aria-label", "Refreshing preview");
+  iframe.addEventListener("load", finishRefresh, { once: true });
+
+  updatePreview();
+  setTimeout(finishRefresh, 1400);
 }
 
 function applyPreviewZoom() {
@@ -4353,6 +5665,7 @@ function closePreviewZoomModal() {
   previewZoomLastFocusedElement = null;
 }
 
+previewRefreshBtn?.addEventListener("click", refreshPreviewPane);
 previewInspectBtn?.addEventListener("click", () => setPreviewInspecting(!isPreviewInspecting));
 previewZoomBtn?.addEventListener("click", openPreviewZoomModal);
 closePreviewZoomBtn?.addEventListener("click", closePreviewZoomModal);
@@ -4373,8 +5686,372 @@ iframe.addEventListener("load", () => {
   bindPreviewNavigationHandlers();
   bindPreviewInspector();
   applyPreviewZoom();
+  applyPreviewColorSchemeSimulation();
+  updatePreviewBreakpointIndicator();
 });
 let activeFile = projectFiles[0];
+
+function getProjectMediaKind(file) {
+  if (!file) return "";
+  const declaredType = String(file.mediaType || file.type || "").trim().toLowerCase();
+  if (["image", "img"].includes(declaredType)) return "image";
+  if (declaredType === "video") return "video";
+  if (declaredType === "audio") return "audio";
+
+  const ext = getFileType(String(file.name || ""));
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"].includes(ext)) {
+    return "image";
+  }
+  if (["mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "video";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac"].includes(ext)) return "audio";
+  return "";
+}
+
+function normalizeProjectMediaMetadata(files) {
+  if (!Array.isArray(files)) return [];
+  files.forEach((file) => {
+    const mediaKind = getProjectMediaKind(file);
+    if (!mediaKind) return;
+    file.type = "media";
+    file.mediaType = mediaKind;
+  });
+  return files;
+}
+
+function openMediaDatabase() {
+  if (mediaDatabasePromise) return mediaDatabasePromise;
+  mediaDatabasePromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB is unavailable."));
+      return;
+    }
+    const request = indexedDB.open(MEDIA_DATABASE_NAME, MEDIA_DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(MEDIA_DATABASE_STORE)) {
+        database.createObjectStore(MEDIA_DATABASE_STORE, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Unable to open media storage."));
+  });
+  return mediaDatabasePromise;
+}
+
+function createMediaStorageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `media-${crypto.randomUUID()}`;
+  }
+  return `media-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function setRuntimeMediaProperty(file, property, value) {
+  if (!file) return;
+  Object.defineProperty(file, property, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+function attachRuntimeMediaBlob(file, blob) {
+  if (!file || !(blob instanceof Blob)) return "";
+  if (file.mediaObjectUrl) URL.revokeObjectURL(file.mediaObjectUrl);
+  const objectUrl = URL.createObjectURL(blob);
+  setRuntimeMediaProperty(file, "mediaBlob", blob);
+  setRuntimeMediaProperty(file, "mediaObjectUrl", objectUrl);
+  setRuntimeMediaProperty(file, "mediaRestoreFailed", false);
+  file.mediaSize = Number(blob.size || 0);
+  file.mediaMimeType = String(blob.type || file.mediaMimeType || "application/octet-stream");
+  file.content = "";
+  return objectUrl;
+}
+
+function getProjectMediaSource(file) {
+  if (!file) return "";
+  if (file.mediaObjectUrl) return String(file.mediaObjectUrl);
+  if (file.mediaBlob instanceof Blob) return attachRuntimeMediaBlob(file, file.mediaBlob);
+  const source = String(file.content || "");
+  if (source.startsWith("data:") && source.length > MAX_INLINE_MEDIA_SOURCE_CHARS) return "";
+  return source;
+}
+
+function releaseProjectMediaObjectUrls(files = projectFiles) {
+  (Array.isArray(files) ? files : []).forEach((file) => {
+    if (!file?.mediaObjectUrl) return;
+    URL.revokeObjectURL(file.mediaObjectUrl);
+    setRuntimeMediaProperty(file, "mediaObjectUrl", "");
+  });
+}
+
+function persistMediaBlob(file, blob) {
+  if (!file || !(blob instanceof Blob)) return Promise.reject(new Error("No media data was provided."));
+  file.mediaStorageId = String(file.mediaStorageId || createMediaStorageId());
+  return openMediaDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(MEDIA_DATABASE_STORE, "readwrite");
+    transaction.objectStore(MEDIA_DATABASE_STORE).put({
+      id: file.mediaStorageId,
+      name: String(file.name || "media"),
+      mimeType: String(blob.type || file.mediaMimeType || "application/octet-stream"),
+      size: Number(blob.size || 0),
+      blob,
+      savedAt: Date.now(),
+    });
+    transaction.oncomplete = () => resolve(file.mediaStorageId);
+    transaction.onerror = () => reject(transaction.error || new Error("Unable to store media."));
+    transaction.onabort = () => reject(transaction.error || new Error("Media storage was cancelled."));
+  }));
+}
+
+function readMediaBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to encode media."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function buildPublishableProjectFiles() {
+  const mediaNeedingEncoding = projectFiles.filter(
+    (file) => file.mediaBlob instanceof Blob && !String(file.content || ""),
+  );
+  const totalBytes = mediaNeedingEncoding.reduce(
+    (total, file) => total + Number(file.mediaBlob?.size || file.mediaSize || 0),
+    0,
+  );
+  if (totalBytes > MAX_PUBLISH_MEDIA_BYTES) {
+    throw new Error(
+      `Local media is ${formatMediaByteSize(totalBytes)}. Direct publishing supports up to ${formatMediaByteSize(MAX_PUBLISH_MEDIA_BYTES)} of local media; export the project as ZIP for larger videos.`,
+    );
+  }
+
+  const encodedContent = new Map();
+  for (const file of mediaNeedingEncoding) {
+    encodedContent.set(file, await readMediaBlobAsDataUrl(file.mediaBlob));
+  }
+  return projectFiles.map((file) => ({
+    name: file.name,
+    type: file.type,
+    mediaType: file.mediaType || getProjectMediaKind(file) || undefined,
+    content: encodedContent.get(file) || file.content || "",
+    active: Boolean(file.active),
+  }));
+}
+
+function readPersistedMediaBlob(storageId) {
+  const id = String(storageId || "").trim();
+  if (!id) return Promise.resolve(null);
+  return openMediaDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(MEDIA_DATABASE_STORE, "readonly");
+    const request = transaction.objectStore(MEDIA_DATABASE_STORE).get(id);
+    request.onsuccess = () => resolve(request.result?.blob instanceof Blob ? request.result.blob : null);
+    request.onerror = () => reject(request.error || new Error("Unable to restore media."));
+  }));
+}
+
+async function hydrateStoredProjectMedia(files) {
+  const candidates = (Array.isArray(files) ? files : []).filter(
+    (file) => getProjectMediaKind(file) && file.mediaStorageId && !file.mediaBlob && !file.content,
+  );
+  if (!candidates.length) return;
+  const hydratedFiles = (await Promise.all(candidates.map(async (file) => {
+    try {
+      const blob = await readPersistedMediaBlob(file.mediaStorageId);
+      if (!blob || !projectFiles.includes(file)) {
+        if (projectFiles.includes(file)) setRuntimeMediaProperty(file, "mediaRestoreFailed", true);
+        return null;
+      }
+      attachRuntimeMediaBlob(file, blob);
+      return file;
+    } catch (_error) {
+      if (projectFiles.includes(file)) setRuntimeMediaProperty(file, "mediaRestoreFailed", true);
+      return null;
+    }
+  }))).filter(Boolean);
+  if (activeFile && (hydratedFiles.includes(activeFile) || activeFile.mediaRestoreFailed)) {
+    displayActiveFileInEditor({ preserveCaret: true });
+    enforceCollabPermissionsUI();
+  }
+  if (!hydratedFiles.length) return;
+  if (autoRunCheckbox?.checked) updatePreview();
+}
+
+function formatMediaByteSize(value) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = bytes / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size >= 10 ? size.toFixed(1) : size.toFixed(2)} ${units[unitIndex]}`;
+}
+
+function getDeveloperMediaSourceText(file) {
+  const source = String(file?.content || "");
+  if (!file) return "";
+  if (file.mediaBlob instanceof Blob || file.mediaStorageId) {
+    return [
+      "Binary media source (read-only)",
+      `Name: ${file.name || "media"}`,
+      `Type: ${file.mediaMimeType || file.mediaBlob?.type || getProjectMediaKind(file) || "unknown"}`,
+      `Size: ${formatMediaByteSize(file.mediaSize || file.mediaBlob?.size || 0)}`,
+      "The binary bytes are kept out of the code editor to prevent excessive memory use.",
+    ].join("\n");
+  }
+  if (source.length > MAX_DEVELOPER_MEDIA_SOURCE_CHARS) {
+    return [
+      "Large media source (read-only)",
+      `Name: ${file.name || "media"}`,
+      `Stored characters: ${source.length.toLocaleString()}`,
+      "The encoded payload is hidden to prevent this tab from running out of memory.",
+    ].join("\n");
+  }
+  return source;
+}
+
+function getMediaViewerIconClass(kind) {
+  if (kind === "image") return "fa-solid fa-image";
+  if (kind === "video") return "fa-solid fa-video";
+  if (kind === "audio") return "fa-solid fa-volume-high";
+  return "fa-solid fa-photo-film";
+}
+
+function showMediaViewerFallback(message) {
+  if (!editorMediaViewerContent) return;
+  const fallback = document.createElement("div");
+  fallback.className = "editor-media-empty-state";
+  const icon = document.createElement("i");
+  icon.className = "fa-solid fa-triangle-exclamation";
+  icon.setAttribute("aria-hidden", "true");
+  const text = document.createElement("p");
+  text.textContent = message;
+  fallback.append(icon, text);
+  editorMediaViewerContent.replaceChildren(fallback);
+}
+
+function renderActiveMediaFile(file, kind) {
+  if (!editorMediaViewer || !editorMediaViewerContent) return;
+  editorMediaViewer.hidden = false;
+  if (editorMediaViewerName) editorMediaViewerName.textContent = file.name || "Media file";
+  if (editorMediaViewerKind) editorMediaViewerKind.textContent = kind.toUpperCase();
+  if (editorMediaViewerIcon) {
+    editorMediaViewerIcon.innerHTML = `<i class="${getMediaViewerIconClass(kind)}"></i>`;
+  }
+  editorMediaViewerContent.replaceChildren();
+
+  const source = getProjectMediaSource(file);
+  if (!source) {
+    const encodedSource = String(file.content || "");
+    showMediaViewerFallback(
+      encodedSource.startsWith("data:") && encodedSource.length > MAX_INLINE_MEDIA_SOURCE_CHARS
+        ? "This older encoded media file is too large to open safely. Remove it and add the original file again to use the memory-safe viewer."
+        : file.mediaRestoreFailed
+          ? "This media file could not be restored from browser storage. Add the original file again to reconnect it."
+          : file.mediaStorageId
+          ? "Restoring this media file from browser storage..."
+          : "This media file has no previewable content.",
+    );
+    return;
+  }
+
+  let mediaElement;
+  if (kind === "image") {
+    mediaElement = document.createElement("img");
+    mediaElement.alt = file.name ? `Preview of ${file.name}` : "Image preview";
+  } else if (kind === "video") {
+    mediaElement = document.createElement("video");
+    mediaElement.controls = true;
+    mediaElement.playsInline = true;
+    mediaElement.preload = "metadata";
+  } else if (kind === "audio") {
+    const audioCard = document.createElement("div");
+    audioCard.className = "editor-media-audio-card";
+    const audioIcon = document.createElement("i");
+    audioIcon.className = "fa-solid fa-music";
+    audioIcon.setAttribute("aria-hidden", "true");
+    mediaElement = document.createElement("audio");
+    mediaElement.controls = true;
+    mediaElement.preload = "metadata";
+    audioCard.append(audioIcon, mediaElement);
+    editorMediaViewerContent.appendChild(audioCard);
+  }
+
+  if (!mediaElement) {
+    showMediaViewerFallback("This file type cannot be previewed in the editor.");
+    return;
+  }
+  mediaElement.addEventListener("error", () => {
+    if (activeFile === file) showMediaViewerFallback("The browser could not display this media file.");
+  }, { once: true });
+  mediaElement.src = source;
+  if (kind !== "audio") editorMediaViewerContent.appendChild(mediaElement);
+}
+
+function displayActiveFileInEditor(options = {}) {
+  const editor = document.getElementById("activeEditor");
+  if (!editor) return false;
+  const codeContainer = editor.closest(".code-container");
+  const mediaKind = getProjectMediaKind(activeFile);
+  const isMediaFile = Boolean(mediaKind);
+  const showMediaSource = isMediaFile && developerMediaSourceVisible;
+  codeContainer?.classList.toggle("media-file-active", isMediaFile && !showMediaSource);
+  codeContainer?.classList.toggle("media-source-active", showMediaSource);
+  hideSuggestions();
+
+  if (isMediaFile && activeFile && !showMediaSource) {
+    editor.value = "";
+    editor.setAttribute("aria-hidden", "true");
+    editor.tabIndex = -1;
+    editor.blur();
+    if (lineNumbers) lineNumbers.textContent = "";
+    if (highlightLayer) highlightLayer.innerHTML = "";
+    if (undoEditorBtn) undoEditorBtn.disabled = true;
+    if (redoEditorBtn) redoEditorBtn.disabled = true;
+    renderActiveMediaFile(activeFile, mediaKind);
+    return true;
+  }
+
+  if (editorMediaViewer) editorMediaViewer.hidden = true;
+  if (editorMediaViewerContent) editorMediaViewerContent.replaceChildren();
+  editor.removeAttribute("aria-hidden");
+  editor.removeAttribute("tabindex");
+  const previousCaret = Number(editor.selectionStart || 0);
+  editor.value = activeFile
+    ? showMediaSource
+      ? getDeveloperMediaSourceText(activeFile)
+      : String(activeFile.content || "")
+    : "";
+  const requestedCaret = Number.isFinite(options.cursorPosition)
+    ? Number(options.cursorPosition)
+    : options.preserveCaret
+      ? previousCaret
+      : editor.value.length;
+  const caret = Math.max(0, Math.min(requestedCaret, editor.value.length));
+  editor.selectionStart = editor.selectionEnd = caret;
+  updateLineNumbers(editor);
+  syncScroll(editor);
+  syncSyntaxLayerStyle(editor);
+  if (showMediaSource) {
+    if (highlightLayer) highlightLayer.innerHTML = "";
+    clearInlineHtmlCorrectionDisplay(editor);
+    editor.readOnly = true;
+    editor.title = "Read-only media source enabled from Developer Tools.";
+    if (undoEditorBtn) undoEditorBtn.disabled = true;
+    if (redoEditorBtn) redoEditorBtn.disabled = true;
+  } else {
+    renderSyntaxHighlight(editor);
+    syncInlineHtmlCorrectionDisplay(editor);
+  }
+  if (options.resetAllHistory) resetAllEditorHistory(editor);
+  else if (!showMediaSource) syncEditorHistoryState(editor);
+  if (options.focus) editor.focus();
+  return showMediaSource;
+}
 
 function getDefaultHtmlStarter() {
   return `<!DOCTYPE html>
@@ -4386,7 +6063,7 @@ function getDefaultHtmlStarter() {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    
+${"    "}
     <script src="script.js"></script>
 </body>
 </html>`;
@@ -4527,7 +6204,7 @@ function resolvePreviewAssetPath(assetPath) {
   const cleanPath = normalizedPath.replace(/^\.\/+/, "").toLowerCase();
   const fileName = cleanPath.split("/").pop();
   const mediaFile = projectFiles.find((file) => {
-    if (file.type !== "media") return false;
+    if (!getProjectMediaKind(file)) return false;
     const candidate = String(file.name || "").trim().replace(/^\.\/+/, "").toLowerCase();
     return (
       candidate === cleanPath ||
@@ -4535,8 +6212,9 @@ function resolvePreviewAssetPath(assetPath) {
       candidate.split("/").pop() === fileName
     );
   });
-  if (mediaFile && mediaFile.content) {
-    return mediaFile.content;
+  const mediaSource = getProjectMediaSource(mediaFile);
+  if (mediaSource) {
+    return mediaSource;
   }
   return normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
 }
@@ -4546,6 +6224,10 @@ const defaultSettings = {
   textSize: "14",
   fontFamily: "'JetBrains Mono', 'Consolas', monospace",
   fontEmbed: "",
+  fontWeight: "400",
+  fontItalic: false,
+  fontLetterSpacing: "0",
+  fontLineHeight: "1.5",
   themeColor: "#238636",
   zenShowFiles: true,
   fullscreenPreviewPanel: true,
@@ -4582,7 +6264,11 @@ function serializeProjectState() {
     files: projectFiles.map((file) => ({
       name: file.name,
       type: file.type,
-      content: file.content,
+      mediaType: file.mediaType || getProjectMediaKind(file) || undefined,
+      mediaStorageId: file.mediaStorageId || undefined,
+      mediaSize: Number(file.mediaSize || 0) || undefined,
+      mediaMimeType: file.mediaMimeType || undefined,
+      content: file.mediaBlob instanceof Blob && file.mediaStorageId ? "" : file.content,
       active: file.active,
     })),
     activeFileName: activeFile ? activeFile.name : "",
@@ -4617,12 +6303,17 @@ function applyProjectState(snapshot, sourceLabel = "project") {
     return false;
   }
 
-  projectFiles = upgradeStarterScriptIfNeeded(files).map((file, index) => ({
+  releaseProjectMediaObjectUrls(projectFiles);
+  projectFiles = normalizeProjectMediaMetadata(upgradeStarterScriptIfNeeded(files).map((file, index) => ({
     name: normalizeProjectFileName(file.name, `file-${index + 1}.html`),
     type: String(file.type || "html"),
+    mediaType: String(file.mediaType || getProjectMediaKind(file) || ""),
+    mediaStorageId: String(file.mediaStorageId || ""),
+    mediaSize: Number(file.mediaSize || 0),
+    mediaMimeType: String(file.mediaMimeType || ""),
     content: String(file.content || ""),
     active: false,
-  }));
+  })));
 
   normalizeProjectFileNamesInPlace(projectFiles);
   const requestedActiveName = normalizeProjectFileName(snapshot?.activeFileName || "");
@@ -4645,13 +6336,11 @@ function applyProjectState(snapshot, sourceLabel = "project") {
 
   const editor = document.getElementById("activeEditor");
   if (editor && activeFile) {
-    editor.value = activeFile.content;
-    updateLineNumbers(editor);
-    syncScroll(editor);
-    resetAllEditorHistory(editor);
+    displayActiveFileInEditor({ resetAllHistory: true });
   }
   renderFileList();
   enforceCollabPermissionsUI();
+  hydrateStoredProjectMedia(projectFiles);
   hasUnsavedChanges = false;
   lastAutosaveAt = Date.now();
   updateProjectStatusUI();
@@ -4661,9 +6350,20 @@ function applyProjectState(snapshot, sourceLabel = "project") {
   return true;
 }
 
-function scheduleProjectAutosave() {
+function cancelScheduledProjectAutosave() {
   clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
+  autosaveTimer = null;
+  if (autosaveIdleCallback !== null && typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(autosaveIdleCallback);
+  }
+  autosaveIdleCallback = null;
+}
+
+function scheduleProjectAutosave() {
+  cancelScheduledProjectAutosave();
+  const persistSnapshot = () => {
+    autosaveTimer = null;
+    autosaveIdleCallback = null;
     const snapshot = serializeProjectState();
     safeLocalStorage("set", AUTOSAVE_PROJECT_KEY, JSON.stringify(snapshot));
     safeLocalStorage(
@@ -4677,7 +6377,14 @@ function scheduleProjectAutosave() {
     );
     lastAutosaveAt = Date.now();
     updateProjectStatusUI();
-  }, 350);
+  };
+
+  const shouldWaitForIdle = projectFiles.length > LARGE_PROJECT_FILE_THRESHOLD;
+  if (shouldWaitForIdle && typeof window.requestIdleCallback === "function") {
+    autosaveIdleCallback = window.requestIdleCallback(persistSnapshot, { timeout: 1800 });
+    return;
+  }
+  autosaveTimer = setTimeout(persistSnapshot, shouldWaitForIdle ? 900 : 350);
 }
 
 function getSavedProjects() {
@@ -4743,7 +6450,7 @@ function findSavedProjectNameForSnapshot(snapshot) {
 }
 
 function setSavedProjects(projects) {
-  safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects));
+  return safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects)) === true;
 }
 
 function saveCurrentProjectToLibrary(projectName) {
@@ -4777,7 +6484,7 @@ function saveCurrentProjectToLibrary(projectName) {
   } else {
     projects.unshift(nextRecord);
   }
-  setSavedProjects(projects.slice(0, 24));
+  setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
   activeSavedProjectName = trimmedName;
   hasUnsavedChanges = false;
   lastAutosaveAt = Date.now();
@@ -4793,8 +6500,59 @@ function getSuggestedProjectName() {
   return baseName || "codx-project";
 }
 
+async function saveCurrentProjectBeforeOpeningAnother() {
+  if (activeSessionId && isGroupFeatureRestrictedUser()) {
+    const me = getMyParticipant();
+    const personalDisabledFeatures = new Set(
+      Array.isArray(me?.disabledFeatures) ? me.disabledFeatures : [],
+    );
+    if (
+      collabPermissions.disableSaveProject ||
+      personalDisabledFeatures.has("saveProject")
+    ) {
+      showNotification("The host disabled saving projects for participants.", "error");
+      return false;
+    }
+  }
+
+  if (activeSavedProjectName) {
+    return saveCurrentProjectToLibrary(activeSavedProjectName);
+  }
+  const saveDialog = await showAppPrompt(
+    "SAVE PROJECT",
+    "Choose a name for this saved project:",
+    getSuggestedProjectName(),
+    "codx-project",
+  );
+  if (!saveDialog?.ok) return false;
+  return saveCurrentProjectToLibrary(saveDialog.value);
+}
+
+async function openSavedProjectFromLibrary(projectId) {
+  let project = getSavedProjects().find((entry) => entry.id === projectId);
+  if (!project?.snapshot) return;
+
+  if (hasUnsavedChanges) {
+    const decision = await showUnsavedProjectOpenDialog(project.name);
+    if (!decision?.ok) return;
+    if (decision.action === "save") {
+      const saved = await saveCurrentProjectBeforeOpeningAnother();
+      if (!saved) return;
+      project = getSavedProjects().find((entry) => entry.id === projectId) || project;
+    } else if (decision.action !== "discard") {
+      return;
+    }
+  }
+
+  if (!applyProjectState(project.snapshot, "saved project")) return;
+  activeSavedProjectName = project.name;
+  closeProjectLibrary();
+  updateProjectStatusUI();
+}
+
 async function startFreshProject() {
   applyProjectState(getFreshProjectState(), "new project");
+  activeSavedProjectName = null;
   document.title = "CodX Editor";
   clearConsole();
   showNotification("Started a fresh HTML starter project.", "success");
@@ -4809,22 +6567,14 @@ async function handleNewProject() {
     await startFreshProject();
     return;
   }
-  const confirmSave = await showAppConfirm(
-    "SAVE CURRENT PROJECT",
-    "You have unsaved changes. Save this project before starting a new one?",
-    "SAVE PROJECT",
-    "CANCEL",
-  );
-  if (!confirmSave?.ok) return;
-  const saveDialog = await showAppPrompt(
-    "SAVE PROJECT",
-    "Choose a name for this saved project:",
-    getSuggestedProjectName(),
-    "codx-project",
-  );
-  if (!saveDialog?.ok) return;
-  const saved = saveCurrentProjectToLibrary(saveDialog.value);
-  if (!saved) return;
+  const decision = await showUnsavedNewProjectDialog();
+  if (!decision?.ok) return;
+  if (decision.action === "save") {
+    const saved = await saveCurrentProjectBeforeOpeningAnother();
+    if (!saved) return;
+  } else if (decision.action !== "discard") {
+    return;
+  }
   await startFreshProject();
 }
 
@@ -4843,6 +6593,427 @@ async function deleteSavedProject(projectId) {
   setSavedProjects(projects);
   renderProjectLibrary("saved");
   showNotification("Saved project removed.", "success");
+}
+
+function getSafeArchiveFolderName(value, fallback = "project") {
+  const safeName = String(value || "")
+    .trim()
+    .replace(/[\u0000-\u001f<>:"/\\|?*]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  return safeName && safeName !== "." && safeName !== ".." ? safeName : fallback;
+}
+
+function getUniqueArchiveFolderName(projectName, usedNames, index) {
+  const baseName = getSafeArchiveFolderName(projectName, `project-${index + 1}`);
+  let folderName = baseName;
+  let suffix = 2;
+  while (usedNames.has(folderName.toLowerCase())) {
+    folderName = `${baseName} (${suffix++})`;
+  }
+  usedNames.add(folderName.toLowerCase());
+  return folderName;
+}
+
+function getSafeArchiveRelativePath(value, fallback = "file.txt") {
+  const segments = String(value || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment && segment !== "." && segment !== "..")
+    .map((segment) => segment.replace(/[\u0000-\u001f<>:"|?*]/g, "-").replace(/[. ]+$/g, ""))
+    .filter(Boolean);
+  return segments.join("/") || fallback;
+}
+
+function getMediaMimeTypeForArchiveFile(fileName) {
+  const mimeTypes = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    avif: "image/avif",
+    bmp: "image/bmp",
+    ico: "image/x-icon",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogv: "video/ogg",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+  };
+  return mimeTypes[getFileType(fileName)] || "application/octet-stream";
+}
+
+async function addSavedProjectFileToArchive(folder, file) {
+  const fileName = getSafeArchiveRelativePath(file?.name, "file.txt");
+  const mediaKind = getProjectMediaKind(file);
+  if (!mediaKind) {
+    folder.file(fileName, String(file?.content || ""));
+    return true;
+  }
+
+  const encodedMedia = String(file?.content || "").match(/^data:[^;,]+;base64,([\s\S]+)$/i);
+  if (encodedMedia) {
+    folder.file(fileName, encodedMedia[1], { base64: true });
+    return true;
+  }
+
+  if (file?.mediaStorageId) {
+    try {
+      const blob = await readPersistedMediaBlob(file.mediaStorageId);
+      if (blob instanceof Blob) {
+        folder.file(fileName, blob);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`Unable to add stored media ${fileName} to the project library ZIP.`, error);
+    }
+  }
+  return false;
+}
+
+async function zipAllSavedProjects() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
+    showNotification("The host disabled ZIP export for participants.", "error");
+    return false;
+  }
+  const projects = getSavedProjects();
+  if (!projects.length) {
+    showNotification("There are no saved projects to ZIP.", "info");
+    return false;
+  }
+
+  const dialog = await showAppPrompt(
+    "ZIP ALL PROJECTS",
+    "Name the ZIP containing all of your saved project folders:",
+    "codx-all-projects.zip",
+    "codx-all-projects.zip",
+  );
+  if (!dialog?.ok) return false;
+  const requestedName = String(dialog.value || "").trim();
+  if (!requestedName) {
+    showNotification("ZIP file name cannot be empty.", "error");
+    return false;
+  }
+  const baseZipName = requestedName.replace(/\.zip$/i, "");
+  const zipFileName = `${getSafeArchiveFolderName(baseZipName, "codx-all-projects")}.zip`;
+
+  const button = document.getElementById("zipAllProjectsBtn");
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>ZIPPING...</strong>';
+  }
+
+  try {
+    const zip = new JSZip();
+    const usedFolderNames = new Set();
+    const manifestProjects = [];
+    let missingMediaCount = 0;
+
+    for (let projectIndex = 0; projectIndex < projects.length; projectIndex += 1) {
+      const project = projects[projectIndex];
+      const folderName = getUniqueArchiveFolderName(project.name, usedFolderNames, projectIndex);
+      const folder = zip.folder(folderName);
+      const snapshot = project?.snapshot || {};
+      const files = Array.isArray(snapshot.files) ? snapshot.files : [];
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        if (!(await addSavedProjectFileToArchive(folder, files[fileIndex]))) missingMediaCount += 1;
+        if ((fileIndex + 1) % ZIP_IMPORT_BATCH_SIZE === 0) await yieldToBrowserDuringImport();
+      }
+      manifestProjects.push({
+        name: String(project.name || folderName),
+        folder: folderName,
+        updatedAt: Number(project.updatedAt || snapshot.savedAt || Date.now()),
+        activeFileName: String(snapshot.activeFileName || ""),
+        previewTarget: snapshot.previewTarget || null,
+      });
+      await yieldToBrowserDuringImport();
+    }
+
+    zip.comment = JSON.stringify({
+      format: PROJECT_LIBRARY_ARCHIVE_FORMAT,
+      version: 1,
+      exportedAt: Date.now(),
+      projects: manifestProjects,
+    });
+    const content = await zip.generateAsync({ type: "blob" });
+    downloadZipBlob(content, zipFileName);
+    const mediaNote = missingMediaCount
+      ? ` ${missingMediaCount} unavailable media file${missingMediaCount === 1 ? " was" : "s were"} skipped.`
+      : "";
+    showNotification(`Zipped ${projects.length} saved project${projects.length === 1 ? "" : "s"} as ${zipFileName}.${mediaNote}`, missingMediaCount ? "warn" : "success");
+    return true;
+  } catch (error) {
+    console.error("Saved project library ZIP error:", error);
+    showNotification("Could not ZIP the saved project library.", "error");
+    return false;
+  } finally {
+    if (projectLibraryModal?.style.display === "flex") renderProjectLibrary("saved");
+  }
+}
+
+function getNormalizedArchiveEntryPath(path) {
+  const segments = String(path || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean);
+  if (!segments.length || segments.some((segment) => segment === "." || segment === "..")) return "";
+  return segments.join("/");
+}
+
+function readProjectLibraryArchiveManifest(zip) {
+  try {
+    const parsed = JSON.parse(String(zip?.comment || ""));
+    if (parsed?.format !== PROJECT_LIBRARY_ARCHIVE_FORMAT || !Array.isArray(parsed.projects)) return null;
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function collectProjectGroupsFromArchive(zip) {
+  const entries = [];
+  zip.forEach((path, entry) => {
+    if (entry.dir) return;
+    const normalizedPath = getNormalizedArchiveEntryPath(path);
+    if (!normalizedPath || normalizedPath.startsWith("__MACOSX/")) return;
+    entries.push({ entry, normalizedPath });
+  });
+
+  const manifest = readProjectLibraryArchiveManifest(zip);
+  if (manifest) {
+    const groups = manifest.projects.map((project, index) => {
+      const folder = getNormalizedArchiveEntryPath(project?.folder || "");
+      if (!folder || folder.includes("/")) return null;
+      const prefix = `${folder}/`;
+      return {
+        name: String(project?.name || folder).trim() || folder,
+        folder,
+        updatedAt: Number(project?.updatedAt || Date.now()),
+        activeFileName: String(project?.activeFileName || ""),
+        previewTarget: project?.previewTarget || null,
+        files: entries
+          .filter(({ normalizedPath }) => normalizedPath.startsWith(prefix))
+          .map(({ entry, normalizedPath }) => ({ entry, relativePath: normalizedPath.slice(prefix.length) })),
+        order: index,
+      };
+    }).filter((group) => group?.files.length);
+    if (groups.length) return groups;
+  }
+
+  const groupsByFolder = new Map();
+  entries.forEach(({ entry, normalizedPath }) => {
+    const segments = normalizedPath.split("/");
+    if (segments.length < 2) return;
+    const folder = segments.shift();
+    const relativePath = segments.join("/");
+    if (!groupsByFolder.has(folder)) {
+      groupsByFolder.set(folder, {
+        name: folder,
+        folder,
+        updatedAt: Date.now(),
+        activeFileName: "",
+        previewTarget: null,
+        files: [],
+        order: groupsByFolder.size,
+      });
+    }
+    groupsByFolder.get(folder).files.push({ entry, relativePath });
+  });
+  return [...groupsByFolder.values()];
+}
+
+async function createSavedProjectRecordFromArchiveGroup(group, index) {
+  const usedNames = new Set();
+  const candidates = (Array.isArray(group?.files) ? group.files : []).map(({ entry, relativePath }) => {
+    const safeName = makeUniqueProjectFileName(
+      getSafeArchiveRelativePath(relativePath, `file-${usedNames.size + 1}.txt`),
+      usedNames,
+    );
+    const extension = getFileType(safeName);
+    const mediaKind = getProjectMediaKind({ name: safeName });
+    if (!editableTextExtensions.includes(extension) && !mediaKind) return null;
+    usedNames.add(safeName.toLowerCase());
+    return { entry, safeName, extension, mediaKind };
+  }).filter(Boolean);
+  if (!candidates.length) return { record: null, missingMediaCount: 0 };
+
+  const importedFiles = [];
+  let missingMediaCount = 0;
+  for (let batchIndex = 0; batchIndex < candidates.length; batchIndex += ZIP_IMPORT_BATCH_SIZE) {
+    const batch = candidates.slice(batchIndex, batchIndex + ZIP_IMPORT_BATCH_SIZE);
+    const results = await Promise.all(batch.map(async ({ entry, safeName, extension, mediaKind }) => {
+      if (!mediaKind) {
+        return {
+          name: safeName,
+          type: extension,
+          content: await entry.async("string"),
+          active: false,
+        };
+      }
+
+      const sourceBlob = await entry.async("blob");
+      const mimeType = getMediaMimeTypeForArchiveFile(safeName);
+      const blob = sourceBlob.type === mimeType ? sourceBlob : new Blob([sourceBlob], { type: mimeType });
+      const mediaFile = {
+        name: safeName,
+        type: "media",
+        mediaType: mediaKind,
+        mediaStorageId: createMediaStorageId(),
+        mediaSize: Number(blob.size || 0),
+        mediaMimeType: mimeType,
+        content: "",
+        active: false,
+      };
+      try {
+        await persistMediaBlob(mediaFile, blob);
+        return mediaFile;
+      } catch (error) {
+        console.warn(`Unable to store imported media ${safeName}.`, error);
+        missingMediaCount += 1;
+        return null;
+      }
+    }));
+    importedFiles.push(...results.filter(Boolean));
+    if (batchIndex + ZIP_IMPORT_BATCH_SIZE < candidates.length) await yieldToBrowserDuringImport();
+  }
+  if (!importedFiles.length) return { record: null, missingMediaCount };
+
+  const requestedActiveName = normalizeProjectFileName(
+    getSafeArchiveRelativePath(group.activeFileName || "", ""),
+    "",
+  );
+  const activeFile = importedFiles.find((file) => file.name === requestedActiveName)
+    || importedFiles.find((file) => file.name.toLowerCase() === "index.html")
+    || importedFiles.find((file) => file.type === "html")
+    || importedFiles[0];
+  importedFiles.forEach((file) => { file.active = file === activeFile; });
+
+  const requestedPreviewName = group.previewTarget?.mode === "html"
+    ? normalizeProjectFileName(
+        getSafeArchiveRelativePath(group.previewTarget.fileName || "", ""),
+        "",
+      )
+    : "";
+  const previewFile = importedFiles.find((file) => file.type === "html" && file.name === requestedPreviewName)
+    || importedFiles.find((file) => file.type === "html");
+  const projectName = String(group.name || "").trim()
+    || String(group.folder || "").trim()
+    || `Imported project ${index + 1}`;
+  const updatedAt = Number(group.updatedAt || Date.now());
+  return {
+    missingMediaCount,
+    record: {
+      id: `project-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+      name: projectName,
+      updatedAt,
+      snapshot: {
+        version: 1,
+        files: importedFiles,
+        activeFileName: activeFile.name,
+        previewTarget: previewFile
+          ? { mode: "html", fileName: previewFile.name }
+          : { mode: "auto", fileName: "" },
+        savedAt: updatedAt,
+      },
+    },
+  };
+}
+
+async function importAllSavedProjects() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableImportZip) {
+    showNotification("The host disabled ZIP import for participants.", "error");
+    return false;
+  }
+  if (activeSessionId && !isHost() && collabPermissions.disableSaveProject) {
+    showNotification("The host disabled saving projects for participants.", "error");
+    return false;
+  }
+
+  const file = await chooseZipFileWithInput();
+  if (!file) return false;
+  if (!/\.zip$/i.test(file.name || "")) {
+    showNotification("Choose a valid ZIP file containing project folders.", "error");
+    return false;
+  }
+
+  const button = document.getElementById("importAllProjectsBtn");
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>IMPORTING...</strong>';
+  }
+
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const allGroups = collectProjectGroupsFromArchive(zip);
+    if (!allGroups.length) {
+      showNotification("No project folders were found in that ZIP.", "error");
+      return false;
+    }
+
+    const groups = allGroups.slice(0, MAX_SAVED_PROJECTS);
+    const importedRecords = [];
+    const importedNames = new Set();
+    let missingMediaCount = 0;
+    for (let index = 0; index < groups.length; index += 1) {
+      const result = await createSavedProjectRecordFromArchiveGroup(groups[index], index);
+      missingMediaCount += result.missingMediaCount;
+      if (result.record) {
+        const nameKey = result.record.name.toLowerCase();
+        if (!importedNames.has(nameKey)) {
+          importedNames.add(nameKey);
+          importedRecords.push(result.record);
+        }
+      }
+      await yieldToBrowserDuringImport();
+    }
+    if (!importedRecords.length) {
+      showNotification("No supported project files were found in those folders.", "error");
+      return false;
+    }
+
+    const existingProjects = getSavedProjects();
+    const replacedCount = existingProjects.filter((project) =>
+      importedNames.has(String(project.name || "").trim().toLowerCase()),
+    ).length;
+    const retainedProjects = existingProjects.filter((project) =>
+      !importedNames.has(String(project.name || "").trim().toLowerCase()),
+    );
+    const nextProjects = [...importedRecords, ...retainedProjects].slice(0, MAX_SAVED_PROJECTS);
+    if (!setSavedProjects(nextProjects)) {
+      showNotification("Browser storage could not save the imported project library.", "error");
+      return false;
+    }
+
+    renderProjectLibrary("saved");
+    const details = [
+      replacedCount ? `${replacedCount} existing name${replacedCount === 1 ? " was" : "s were"} replaced.` : "",
+      allGroups.length > groups.length ? `Only the first ${MAX_SAVED_PROJECTS} projects were imported.` : "",
+      missingMediaCount ? `${missingMediaCount} media file${missingMediaCount === 1 ? " was" : "s were"} skipped.` : "",
+    ].filter(Boolean).join(" ");
+    showNotification(`Imported ${importedRecords.length} saved project${importedRecords.length === 1 ? "" : "s"}.${details ? ` ${details}` : ""}`, missingMediaCount ? "warn" : "success");
+    return true;
+  } catch (error) {
+    console.error("Saved project library import error:", error);
+    showNotification("That ZIP could not be imported as a project library.", "error");
+    return false;
+  } finally {
+    const currentButton = document.getElementById("importAllProjectsBtn");
+    if (currentButton) {
+      currentButton.disabled = false;
+      currentButton.innerHTML = '<i class="fa-solid fa-file-import"></i><strong>IMPORT ALL PROJECTS</strong>';
+    }
+  }
 }
 
 async function publishCurrentProject() {
@@ -4886,6 +7057,7 @@ async function publishCurrentProject() {
     if (!confirmUpdate?.ok) return;
   }
   try {
+    const publishFiles = await buildPublishableProjectFiles();
     const response = await fetch("/api/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4893,7 +7065,7 @@ async function publishCurrentProject() {
         mode,
         publishId,
         verificationKey,
-        files: projectFiles,
+        files: publishFiles,
         activeFileName: activeFile ? activeFile.name : "",
       }),
     });
@@ -4932,53 +7104,81 @@ function renderProjectLibrary(mode = "saved") {
     }
   }
   const savedProjects = getSavedProjects();
-  const tabs = `
-    <div class="collab-pill-row" style="margin-bottom:16px;">
-      <button id="savedProjectsTabBtn" class="run-button"${mode === "saved" ? ' style="background:var(--accent-color);color:#fff;"' : ""}><strong>SAVED PROJECTS</strong></button>
-      <button id="templateProjectsTabBtn" class="run-button"${mode === "templates" ? ' style="background:var(--accent-color);color:#fff;"' : ""}><strong>STARTER TEMPLATES</strong></button>
-    </div>
-  `;
+  projectLibraryModal.classList.toggle("template-library-open", mode === "templates");
+  if (projectLibraryTitle) {
+    projectLibraryTitle.textContent = mode === "templates" ? "Starter Templates" : "Saved Projects";
+  }
 
   if (mode === "templates") {
     projectLibraryBody.innerHTML =
-      tabs +
-      `<div class="template-library-grid">${starterTemplates
+      `<section class="template-library-intro">
+        <div>
+          <span class="template-library-kicker">CURATED STARTING POINTS</span>
+          <h3>Start with a point of view.</h3>
+          <p>${starterTemplates.length} responsive concepts with distinct art direction, thoughtful content, and working interactions. Every file is plain HTML, CSS, and JavaScript.</p>
+        </div>
+        <span class="template-library-count"><strong>${starterTemplates.length}</strong> concepts</span>
+      </section>
+      <div class="template-library-toolbar">
+        <label class="template-library-search">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input id="templateLibrarySearch" type="search" placeholder="Search concepts, styles, or features" autocomplete="off" />
+        </label>
+        <div class="template-library-filters" aria-label="Filter starter concepts">
+          <button class="active" type="button" data-template-group="all">All</button>
+          <button type="button" data-template-group="websites">Websites</button>
+          <button type="button" data-template-group="apps">Apps</button>
+          <button type="button" data-template-group="portfolios">Portfolios</button>
+          <button type="button" data-template-group="commerce">Commerce</button>
+        </div>
+      </div>
+      <div class="template-library-grid">${starterTemplates
         .map(
           (template) => `
-            <article class="template-card" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")};">
+            <article class="template-card template-card-${escapeHtml(template.preview || "signal")}" data-template-card data-template-group="${escapeHtml(getStarterTemplateGroup(template))}" data-template-search="${escapeHtml([template.name, template.category, template.tone, template.description, ...(template.highlights || [])].join(" ").toLowerCase())}" style="--template-accent:${escapeHtml(template.accent || "#4CAF50")};--template-accent-2:${escapeHtml(template.accent2 || template.accent || "#4CAF50")};">
               <div class="template-card-top">
                 <span class="template-icon"><i class="fa-solid ${escapeHtml(template.icon || "fa-layer-group")}"></i></span>
-                <span class="template-tone">${escapeHtml(template.tone || "Starter")}</span>
-              </div>
-              <div class="template-preview" aria-hidden="true">
-                <span class="template-preview-dot"></span>
-                <span class="template-preview-dot"></span>
-                <span class="template-preview-dot"></span>
-                <div class="template-preview-hero"></div>
-                <div class="template-preview-line wide"></div>
-                <div class="template-preview-line"></div>
-                <div class="template-preview-cards">
-                  <span></span><span></span><span></span>
+                <div class="template-card-labels">
+                  <span class="template-category">${escapeHtml(template.category || "Website")}</span>
+                  <span class="template-tone">${escapeHtml(template.tone || "Starter")}</span>
                 </div>
               </div>
+              ${renderStarterTemplatePreview(template)}
               <h4 class="template-title">${escapeHtml(template.name)}</h4>
               <div class="template-description">${escapeHtml(template.description)}</div>
               <div class="template-meta-row">
                 <span class="template-meta-pill"><i class="fa-solid fa-folder-tree"></i> ${template.files.length} files</span>
-                <span class="template-meta-pill"><i class="fa-solid fa-code"></i> ${escapeHtml(template.files.map((file) => file.type.toUpperCase()).join(" • "))}</span>
+                <span class="template-meta-pill"><i class="fa-solid fa-wand-magic-sparkles"></i> ${escapeHtml(template.level || "Interactive")}</span>
               </div>
               <div class="template-highlights">
                 ${(Array.isArray(template.highlights) ? template.highlights : [])
                   .map((item) => `<span class="template-highlight-pill">${escapeHtml(item)}</span>`)
                   .join("")}
               </div>
-              <button class="run-button apply-template-btn" data-template="${escapeHtml(template.id)}"><strong>USE TEMPLATE</strong></button>
+              <div class="template-card-actions">
+                <button class="run-button preview-template-btn" data-template="${escapeHtml(template.id)}" type="button"><i class="fa-solid fa-eye"></i><span>LIVE PREVIEW</span></button>
+                <button class="run-button apply-template-btn" data-template="${escapeHtml(template.id)}" type="button"><span>USE CONCEPT</span><i class="fa-solid fa-arrow-right"></i></button>
+              </div>
             </article>`,
         )
-        .join("")}</div>`;
+        .join("")}</div>
+      <div id="templateLibraryEmpty" class="template-library-empty" hidden>
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <strong>No concept matches that search.</strong>
+        <span>Try another keyword or choose a different category.</span>
+      </div>`;
   } else {
     projectLibraryBody.innerHTML =
-      tabs +
+      `<div class="project-library-actions">
+        <button id="zipAllProjectsBtn" class="run-button" type="button"${savedProjects.length ? "" : " disabled"}>
+          <i class="fa-solid fa-file-zipper" aria-hidden="true"></i>
+          <span><strong>ZIP ALL PROJECTS</strong><small>Download every saved project in its own folder.</small></span>
+        </button>
+        <button id="importAllProjectsBtn" class="run-button" type="button">
+          <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+          <span><strong>IMPORT ALL PROJECTS</strong><small>Add project folders from a library ZIP.</small></span>
+        </button>
+      </div>` +
       (savedProjects.length
         ? `<div class="collab-participant-list">${savedProjects
             .map(
@@ -5002,41 +7202,57 @@ function renderProjectLibrary(mode = "saved") {
 
   projectLibraryModal.style.display = "flex";
 
-  const savedTabBtn = document.getElementById("savedProjectsTabBtn");
-  const templateTabBtn = document.getElementById("templateProjectsTabBtn");
-  if (savedTabBtn) savedTabBtn.onclick = () => renderProjectLibrary("saved");
-  if (templateTabBtn) templateTabBtn.onclick = () => renderProjectLibrary("templates");
+  const zipAllProjectsBtn = document.getElementById("zipAllProjectsBtn");
+  const importAllProjectsBtn = document.getElementById("importAllProjectsBtn");
+  if (zipAllProjectsBtn) zipAllProjectsBtn.onclick = zipAllSavedProjects;
+  if (importAllProjectsBtn) importAllProjectsBtn.onclick = importAllSavedProjects;
 
   document.querySelectorAll(".open-saved-project-btn").forEach((btn) => {
-    btn.onclick = () => {
-      const project = savedProjects.find((entry) => entry.id === btn.dataset.projectId);
-      if (!project?.snapshot) return;
-      applyProjectState(project.snapshot, "saved project");
-      activeSavedProjectName = project.name;
-      closeProjectLibrary();
-      updateProjectStatusUI();
-    };
+    btn.onclick = () => openSavedProjectFromLibrary(btn.dataset.projectId);
   });
 
   document.querySelectorAll(".delete-saved-project-btn").forEach((btn) => {
     btn.onclick = () => deleteSavedProject(btn.dataset.projectId);
   });
 
+  document.querySelectorAll(".preview-template-btn").forEach((btn) => {
+    btn.onclick = () => {
+      const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
+      if (template) showStarterTemplatePreview(template);
+    };
+  });
+
   document.querySelectorAll(".apply-template-btn").forEach((btn) => {
     btn.onclick = () => {
       const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
-      if (!template) return;
-      applyProjectState(
-        {
-          files: template.files,
-          activeFileName: template.files[0]?.name || "",
-          previewTarget: { mode: "html", fileName: template.files[0]?.name || "" },
-        },
-        "template",
-      );
-      closeProjectLibrary();
-      showNotification(`Template "${template.name}" loaded.`, "success");
+      if (template) applyStarterTemplate(template);
     };
+  });
+
+  const templateSearch = document.getElementById("templateLibrarySearch");
+  const templateGroupButtons = [...document.querySelectorAll(".template-library-filters [data-template-group]")];
+  const templateCards = [...document.querySelectorAll("[data-template-card]")];
+  const templateEmpty = document.getElementById("templateLibraryEmpty");
+  let activeTemplateGroup = "all";
+  const filterTemplates = () => {
+    const query = String(templateSearch?.value || "").trim().toLowerCase();
+    let visibleCount = 0;
+    templateCards.forEach((card) => {
+      const groupMatches = activeTemplateGroup === "all" || card.dataset.templateGroup === activeTemplateGroup;
+      const searchMatches = !query || String(card.dataset.templateSearch || "").includes(query);
+      const visible = groupMatches && searchMatches;
+      card.hidden = !visible;
+      if (visible) visibleCount += 1;
+    });
+    if (templateEmpty) templateEmpty.hidden = visibleCount > 0;
+  };
+  templateSearch?.addEventListener("input", filterTemplates);
+  templateGroupButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTemplateGroup = button.dataset.templateGroup || "all";
+      templateGroupButtons.forEach((entry) => entry.classList.toggle("active", entry === button));
+      filterTemplates();
+    });
   });
 }
 
@@ -5132,25 +7348,39 @@ function showNotificationHtml(messageHtml, type = "info") {
   );
 }
 
-function showNotificationMarkup(messageMarkup, type = "info") {
+function showActionNotificationHtml(messageHtml, onOpen, type = "info") {
+  return showNotificationMarkup(
+    `<div class="codx-notification-message">${messageHtml || ""}</div>
+     <div class="codx-notification-action"><i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i> Click To Open</div>`,
+    type,
+    { onOpen, duration: 6000 },
+  );
+}
+
+function repositionCodxNotifications() {
+  let offsetTop = 86;
+  document.querySelectorAll(".codx-notification").forEach((item) => {
+    item.style.top = `${offsetTop}px`;
+    offsetTop += item.offsetHeight + 10;
+  });
+}
+
+function showNotificationMarkup(messageMarkup, type = "info", options = {}) {
   if (
     activeSessionId &&
     collabPermissions.quietMode &&
+    typeof options.onOpen !== "function" &&
     type !== "error" &&
     type !== "warn" &&
     !String(messageMarkup || "").toLowerCase().includes("session")
   ) {
     return;
   }
-  const existing = document.querySelectorAll(".codx-notification");
-  existing.forEach((item, index) => {
-    item.style.top = `${86 + index * 78}px`;
-  });
 
   const notification = document.createElement("div");
   notification.className = `codx-notification codx-notification-${type}`;
-  const offsetTop = 86 + existing.length * 78;
-  notification.style.top = `${offsetTop}px`;
+  const duration = Math.max(1000, Number(options.duration) || 3000);
+  notification.style.setProperty("--codx-notification-duration", `${duration}ms`);
 
   const icon =
     type === "error"
@@ -5179,20 +7409,102 @@ function showNotificationMarkup(messageMarkup, type = "info") {
       ${messageMarkup}
     </div>
   `;
+  const hasOpenAction = typeof options.onOpen === "function";
+  if (hasOpenAction) {
+    notification.classList.add("is-actionable");
+    notification.setAttribute("role", "button");
+    notification.setAttribute("tabindex", "0");
+    const readableMessage = notification.querySelector(".codx-notification-message")?.textContent?.trim() || label;
+    notification.setAttribute("aria-label", `${readableMessage}. Click to open`);
+  } else {
+    notification.setAttribute("role", "status");
+  }
   document.body.appendChild(notification);
-  setTimeout(() => {
+  repositionCodxNotifications();
+
+  let isDismissed = false;
+  let autoDismissTimer = 0;
+  const dismiss = () => {
+    if (isDismissed) return;
+    isDismissed = true;
     notification.classList.add("is-leaving");
     setTimeout(() => {
       notification.remove();
-      document.querySelectorAll(".codx-notification").forEach((item, index) => {
-        item.style.top = `${86 + index * 78}px`;
-      });
+      repositionCodxNotifications();
     }, 300);
-  }, 3000);
+  };
+
+  if (hasOpenAction) {
+    const open = () => {
+      clearTimeout(autoDismissTimer);
+      try {
+        options.onOpen();
+      } finally {
+        dismiss();
+      }
+    };
+    notification.addEventListener("click", open);
+    notification.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    });
+  }
+
+  autoDismissTimer = setTimeout(dismiss, duration);
+  return notification;
 }
 
-const consoleErrorObserver = new MutationObserver(() => {
+const previewRuntimeNotificationHistory = new Map();
+
+function openPreviewErrorFromNotification(message) {
+  const errorMessage = String(message || "").trim();
+  if (showConsoleCheckbox && !showConsoleCheckbox.disabled) {
+    showConsoleCheckbox.checked = true;
+    showConsoleCheckbox.dispatchEvent(new Event("change"));
+  }
+  const location = extractErrorLocationFromConsoleMessage(errorMessage);
+  if (location) jumpToEditorLocation(location.fileName, location.line, location.col || 1);
+  requestAnimationFrame(() => {
+    const matchingLine = Array.from(consoleOutput?.querySelectorAll("div.error") || [])
+      .find((line) => String(line.textContent || "").trim() === errorMessage);
+    if (!matchingLine) return;
+    matchingLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    matchingLine.classList.add("notification-target-flash");
+    setTimeout(() => matchingLine.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
+function notifyPreviewRuntimeError(message) {
+  const text = String(message || "").trim();
+  if (!text || !/^(?:Error:\s*\[|Promise rejected:|File not found:)/i.test(text)) return;
+  const now = Date.now();
+  const previousAt = Number(previewRuntimeNotificationHistory.get(text) || 0);
+  if (now - previousAt < 8000) return;
+  previewRuntimeNotificationHistory.set(text, now);
+  if (previewRuntimeNotificationHistory.size > 50) {
+    const oldest = previewRuntimeNotificationHistory.keys().next().value;
+    previewRuntimeNotificationHistory.delete(oldest);
+  }
+  const summary = text.length > 150 ? `${text.slice(0, 147)}...` : text;
+  showActionNotificationHtml(
+    `<strong>Preview error:</strong> ${escapeHtml(summary)}`,
+    () => openPreviewErrorFromNotification(text),
+    "error",
+  );
+}
+
+const consoleErrorObserver = new MutationObserver((mutations) => {
   updateFileErrorCountsFromConsole();
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const errorLines = [];
+      if (node.matches("div.error:not(.codx-diagnostic-line)")) errorLines.push(node);
+      node.querySelectorAll?.("div.error:not(.codx-diagnostic-line)").forEach((line) => errorLines.push(line));
+      errorLines.forEach((line) => notifyPreviewRuntimeError(line.textContent));
+    });
+  });
 });
 if (consoleOutput) {
   consoleErrorObserver.observe(consoleOutput, {
@@ -5214,14 +7526,31 @@ function debouncedUpdatePreview() {
 }
 
 function scheduleSessionUpdate() {
+  if (activeSessionId && !isApplyingRemoteState) {
+    collabPendingLocalSync = true;
+    collabLocalSyncRevision += 1;
+  }
   clearTimeout(sessionSyncTimeout);
-  sessionSyncTimeout = setTimeout(() => {
+  const syncInterval = 72;
+  const now = performance.now();
+  const elapsed = now - lastSessionSyncAt;
+  if (elapsed >= syncInterval) {
+    sessionSyncTimeout = null;
+    lastSessionSyncAt = now;
     emitSessionUpdate();
-  }, 120);
+    return;
+  }
+  sessionSyncTimeout = setTimeout(() => {
+    sessionSyncTimeout = null;
+    lastSessionSyncAt = performance.now();
+    emitSessionUpdate();
+  }, syncInterval - elapsed);
 }
 
-function renderFileList() {
-  const normalizedLegacyNames = normalizeProjectFileNamesInPlace(projectFiles);
+function renderFileList(options = {}) {
+  const normalizedLegacyNames = options.skipNameNormalization
+    ? false
+    : normalizeProjectFileNamesInPlace(projectFiles);
   if (normalizedLegacyNames) {
     scheduleProjectAutosave();
     if (!fileNameMigrationNoticeShown) {
@@ -5230,7 +7559,11 @@ function renderFileList() {
     }
   }
   __codxRescanProjectSuggestionCacheSoon();
-  fileList.innerHTML = "";
+  const fileListFragment = document.createDocumentFragment();
+  const canManageFileVisibility = Boolean(activeSessionId && canUseCoHostTools());
+  const visibilityParticipants = canManageFileVisibility
+    ? getModeratableCollabParticipants()
+    : [];
   projectFiles.forEach((file) => {
     const fileItem = document.createElement("div");
     fileItem.className = `file-item ${file.active ? "active" : ""}`;
@@ -5332,39 +7665,55 @@ function renderFileList() {
     trashIcon.className = "fa-solid fa-trash";
     deleteBtn.appendChild(trashIcon);
 
+    let visibilityBtn = null;
+    if (canManageFileVisibility) {
+      const hiddenCount = visibilityParticipants.filter((participant) =>
+        participantCannotSeeFile(participant, file.name),
+      ).length;
+      visibilityBtn = document.createElement("button");
+      visibilityBtn.className = `file-visibility-action${hiddenCount ? " has-hidden-users" : ""}`;
+      visibilityBtn.dataset.file = file.name;
+      visibilityBtn.setAttribute("aria-label", `Manage visibility for ${file.name}`);
+      visibilityBtn.title = hiddenCount
+        ? `${hiddenCount} participant(s) cannot see this file`
+        : "Everyone can see this file";
+      const eyeIcon = document.createElement("i");
+      eyeIcon.className = hiddenCount ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+      visibilityBtn.appendChild(eyeIcon);
+    }
+
     fileItem.appendChild(nameSpan);
+    if (visibilityBtn) fileItem.appendChild(visibilityBtn);
     fileItem.appendChild(renameBtn);
     fileItem.appendChild(deleteBtn);
 
     fileItem.addEventListener("click", (e) => {
-      if (e.target.closest(".delete-file") || e.target.closest(".rename-file"))
+      if (e.target.closest(".delete-file") || e.target.closest(".rename-file") || e.target.closest(".file-visibility-action"))
         return;
       switchFile(file.name);
     });
     renameBtn.addEventListener("click", () => renameFile(file.name));
     deleteBtn.addEventListener("click", () => deleteFile(file.name));
-    fileList.appendChild(fileItem);
+    if (visibilityBtn) {
+      visibilityBtn.addEventListener("click", () => showFileVisibilityEditor(file.name, "quick", true));
+    }
+    fileListFragment.appendChild(fileItem);
   });
+  fileList.replaceChildren(fileListFragment);
   enforceCollabPermissionsUI();
 }
 
 function switchFile(fileName) {
+  if (pairSelectionHighlight) pairSelectionHighlight.hidden = true;
   const previousPreviewTarget = { ...currentPreviewTarget };
   const normalizedFileName = String(fileName || "").trim().toLowerCase();
   projectFiles.forEach((file) => {
     file.active = String(file.name || "").trim().toLowerCase() === normalizedFileName;
     if (file.active) {
       activeFile = file;
-      const editor = document.getElementById("activeEditor");
-      editor.value = file.content;
-      updateLineNumbers(editor);
-      syncScroll(editor);
-      syncInlineHtmlCorrectionDisplay(editor);
-      syncEditorHistoryState(editor);
-      // Hide suggestions when switching files
-      hideSuggestions();
     }
   });
+  displayActiveFileInEditor();
   if (activeFile && activeFile.type === "html") {
     currentPreviewTarget = { mode: "html", fileName: activeFile.name };
   } else {
@@ -5375,6 +7724,7 @@ function switchFile(fileName) {
   refreshDiagnosticsState();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
+  emitPairPresenceSoon(true);
 }
 
 async function createNewFile() {
@@ -5384,7 +7734,7 @@ async function createNewFile() {
   }
   const dialog = await showAppPrompt(
     "NEW FILE",
-    "Enter a file name. Spaces become dashes; underscores and dashes are allowed.",
+    `Enter a file name. Supported extensions: ${editableTextExtensions.map((extension) => `.${extension}`).join(", ")}. Spaces become dashes; underscores and dashes are allowed.`,
     "",
     "newfile.html",
   );
@@ -5422,18 +7772,36 @@ async function createNewFile() {
     currentPreviewTarget = { mode: "html", fileName: newFile.name };
   }
 
-  const editor = document.getElementById("activeEditor");
-  editor.value = newFile.content; // Set editor value to the template
-  updateLineNumbers(editor);
   const cursorPos = getHtmlStarterCursorPosition(newFile.content);
-  editor.focus();
-  editor.setSelectionRange(cursorPos, cursorPos);
+  displayActiveFileInEditor({ cursorPosition: cursorPos, focus: true });
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
   renderFileList();
   scheduleProjectAutosave();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
   document.title = "CodX Editor";
   showNotification(`File ${trimmedName} created`, "success");
+}
+
+async function handleCreateNewFileRequest() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableNewFile) {
+    showNotification("The host disabled creating new files for participants.", "error");
+    return;
+  }
+  if (!hasUnsavedChanges) {
+    await createNewFile();
+    return;
+  }
+  const decision = await showUnsavedNewFileDialog();
+  if (!decision?.ok) return;
+  if (decision.action === "save") {
+    const saved = await saveCurrentProjectBeforeOpeningAnother();
+    if (!saved) return;
+  } else if (decision.action !== "continue") {
+    return;
+  }
+  await createNewFile();
 }
 
 async function renameFile(oldName) {
@@ -5515,6 +7883,13 @@ async function deleteFile(fileName) {
   );
   if (dialog?.ok) {
     const normalizedFileName = String(fileName || "").trim().toLowerCase();
+    const deletedFile = projectFiles.find(
+      (file) => String(file.name || "").trim().toLowerCase() === normalizedFileName,
+    );
+    if (deletedFile?.mediaObjectUrl) {
+      URL.revokeObjectURL(deletedFile.mediaObjectUrl);
+      setRuntimeMediaProperty(deletedFile, "mediaObjectUrl", "");
+    }
     projectFiles = projectFiles.filter(
       (file) => String(file.name || "").trim().toLowerCase() !== normalizedFileName,
     );
@@ -5524,10 +7899,7 @@ async function deleteFile(fileName) {
     ) {
       activeFile = projectFiles[0];
       activeFile.active = true;
-      const editor = document.getElementById("activeEditor");
-      editor.value = activeFile.content;
-      updateLineNumbers(editor);
-      syncScroll(editor);
+      displayActiveFileInEditor();
     }
     if (
       currentPreviewTarget.fileName &&
@@ -5563,6 +7935,16 @@ function loadSettings() {
         editorFontFamilySelect.value = defaultSettings.fontFamily;
       }
       editorFontEmbedInput.value = settings.fontEmbed || "";
+      if (editorFontWeightInput) {
+        editorFontWeightInput.value = normalizeEditorFontWeight(settings.fontWeight || defaultSettings.fontWeight);
+      }
+      if (editorFontItalicInput) editorFontItalicInput.checked = Boolean(settings.fontItalic);
+      if (editorFontLetterSpacingInput) {
+        editorFontLetterSpacingInput.value = settings.fontLetterSpacing ?? defaultSettings.fontLetterSpacing;
+      }
+      if (editorFontLineHeightInput) {
+        editorFontLineHeightInput.value = settings.fontLineHeight ?? defaultSettings.fontLineHeight;
+      }
       if (zenShowFilesCheckbox) {
         zenShowFilesCheckbox.checked =
           settings.zenShowFiles !== undefined
@@ -5599,6 +7981,10 @@ function resetToDefaultSettings() {
   textSizeValue.textContent = defaultSettings.textSize + "px";
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
+  if (editorFontWeightInput) editorFontWeightInput.value = defaultSettings.fontWeight;
+  if (editorFontItalicInput) editorFontItalicInput.checked = defaultSettings.fontItalic;
+  if (editorFontLetterSpacingInput) editorFontLetterSpacingInput.value = defaultSettings.fontLetterSpacing;
+  if (editorFontLineHeightInput) editorFontLineHeightInput.value = defaultSettings.fontLineHeight;
   if (zenShowFilesCheckbox) zenShowFilesCheckbox.checked = defaultSettings.zenShowFiles;
   if (fullscreenPreviewPanelCheckbox) {
     fullscreenPreviewPanelCheckbox.checked = defaultSettings.fullscreenPreviewPanel;
@@ -5647,7 +8033,70 @@ function getGoogleFontFamilyName(cssUrl) {
   }
 }
 
+function normalizeEditorFontWeight(value) {
+  const numeric = Math.round(Number(value) / 100) * 100;
+  return String(Math.min(900, Math.max(100, Number.isFinite(numeric) ? numeric : 400)));
+}
+
+function getEditorFontWeightLabel(weight) {
+  return ({
+    100: "Thin",
+    200: "Extra Light",
+    300: "Light",
+    400: "Normal",
+    500: "Medium",
+    600: "Semi Bold",
+    700: "Bold",
+    800: "Extra Bold",
+    900: "Black",
+  })[Number(weight)] || "Normal";
+}
+
+function updateGoogleFontCustomizationUI(cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value)) {
+  const hasGoogleEmbed = Boolean(cssUrl);
+  if (googleFontCustomization) googleFontCustomization.hidden = !hasGoogleEmbed;
+  if (googleFontDetectedName) {
+    googleFontDetectedName.textContent = hasGoogleEmbed
+      ? `${getGoogleFontFamilyName(cssUrl) || "Google Font"} detected`
+      : "Font detected";
+  }
+  const weight = normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight);
+  if (editorFontWeightInput) editorFontWeightInput.value = weight;
+  if (editorFontWeightValue) editorFontWeightValue.textContent = `${weight} · ${getEditorFontWeightLabel(weight)}`;
+  if (editorFontLetterSpacingValue) {
+    editorFontLetterSpacingValue.textContent = `${Number(editorFontLetterSpacingInput?.value || 0).toFixed(1).replace(".0", "")}px`;
+  }
+  if (editorFontLineHeightValue) {
+    editorFontLineHeightValue.textContent = Number(editorFontLineHeightInput?.value || 1.5).toFixed(1);
+  }
+}
+
+function getCustomizedGoogleFontsCssUrl(cssUrl) {
+  if (!cssUrl) return "";
+  try {
+    const url = new URL(cssUrl);
+    const families = url.searchParams.getAll("family");
+    if (!families.length) return cssUrl;
+    const firstFamilyName = decodeURIComponent(families[0]).replace(/\+/g, " ").split(":")[0].trim();
+    if (!firstFamilyName) return cssUrl;
+    const weight = normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight);
+    url.searchParams.delete("family");
+    url.searchParams.append("family", `${firstFamilyName}:wght@${weight}`);
+    families.slice(1).forEach((family) => url.searchParams.append("family", family));
+    if (!url.searchParams.has("display")) url.searchParams.set("display", "swap");
+    return url
+      .toString()
+      .replace(/%3A/gi, ":")
+      .replace(/%40/gi, "@")
+      .replace(/%2C/gi, ",")
+      .replace(/%3B/gi, ";");
+  } catch {
+    return cssUrl;
+  }
+}
+
 function applyGoogleFontImport(cssUrl) {
+  cssUrl = getCustomizedGoogleFontsCssUrl(cssUrl);
   let linkEl = document.getElementById("editorGoogleFontImport");
   if (!cssUrl) {
     if (linkEl) linkEl.remove();
@@ -5683,23 +8132,35 @@ function getEffectiveEditorFontFamily() {
 }
 
 function updateFontControlsState() {
-  const hasGoogleEmbed = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value);
+  const hasGoogleEmbed = Boolean(cssUrl);
   editorFontFamilySelect.disabled = hasGoogleEmbed;
   editorFontFamilySelect.title = hasGoogleEmbed
     ? "Disabled because a Google Fonts embed link is active."
     : "";
+  updateGoogleFontCustomizationUI(cssUrl);
 }
 
 function updatePreviewBox() {
+  const useGoogleCustomization = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const selectedWeight = useGoogleCustomization ? editorFontWeightInput?.value || defaultSettings.fontWeight : defaultSettings.fontWeight;
+  const selectedItalic = useGoogleCustomization && Boolean(editorFontItalicInput?.checked);
+  const selectedSpacing = useGoogleCustomization ? editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing : defaultSettings.fontLetterSpacing;
+  const selectedLineHeight = useGoogleCustomization ? editorFontLineHeightInput?.value || defaultSettings.fontLineHeight : defaultSettings.fontLineHeight;
   settingsPreview.style.backgroundColor = editorBgColorInput.value;
   settingsPreview.style.borderColor = themeColorInput.value;
   settingsPreview.style.fontSize = editorTextSizeInput.value + "px";
   settingsPreview.style.fontFamily = getEffectiveEditorFontFamily();
-  settingsPreview.style.lineHeight = "1.5";
+  settingsPreview.style.fontWeight = selectedWeight;
+  settingsPreview.style.fontStyle = selectedItalic ? "italic" : "normal";
+  settingsPreview.style.letterSpacing = `${selectedSpacing}px`;
+  settingsPreview.style.lineHeight = selectedLineHeight;
   settingsPreviewCode.style.fontSize = editorTextSizeInput.value + "px";
   settingsPreviewCode.style.fontFamily = getEffectiveEditorFontFamily();
-  settingsPreviewCode.style.lineHeight = "1.5";
-  settingsPreviewCode.style.letterSpacing = "normal";
+  settingsPreviewCode.style.fontWeight = selectedWeight;
+  settingsPreviewCode.style.fontStyle = selectedItalic ? "italic" : "normal";
+  settingsPreviewCode.style.lineHeight = selectedLineHeight;
+  settingsPreviewCode.style.letterSpacing = `${selectedSpacing}px`;
   settingsPreviewCode.style.tabSize = "4";
   settingsPreviewCode.innerHTML = highlightJs(settingsPreviewSampleCode);
 }
@@ -5709,9 +8170,18 @@ function applySettingsToEditors() {
   if (!editor) return;
   const editorWrapper = editor.closest(".editor-wrapper");
   const selectedBg = editorBgColorInput.value || defaultSettings.bgColor;
+  const useGoogleCustomization = Boolean(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  const selectedWeight = useGoogleCustomization ? editorFontWeightInput?.value || defaultSettings.fontWeight : defaultSettings.fontWeight;
+  const selectedItalic = useGoogleCustomization && Boolean(editorFontItalicInput?.checked);
+  const selectedSpacing = useGoogleCustomization ? editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing : defaultSettings.fontLetterSpacing;
+  const selectedLineHeight = useGoogleCustomization ? editorFontLineHeightInput?.value || defaultSettings.fontLineHeight : defaultSettings.fontLineHeight;
 
   editor.style.fontSize = editorTextSizeInput.value + "px";
   editor.style.fontFamily = getEffectiveEditorFontFamily();
+  editor.style.fontWeight = selectedWeight;
+  editor.style.fontStyle = selectedItalic ? "italic" : "normal";
+  editor.style.letterSpacing = `${selectedSpacing}px`;
+  editor.style.lineHeight = selectedLineHeight;
   editor.style.backgroundColor = "transparent";
   if (editorWrapper) {
     editorWrapper.style.backgroundColor = selectedBg;
@@ -5720,6 +8190,7 @@ function applySettingsToEditors() {
     highlightLayer.style.backgroundColor = selectedBg;
   }
   lineNumbers.style.fontSize = editorTextSizeInput.value + "px";
+  lineNumbers.style.lineHeight = selectedLineHeight;
   syncSyntaxLayerStyle(editor);
   renderSyntaxHighlight(editor);
   updateThemeColor(themeColorInput.value);
@@ -5828,6 +8299,37 @@ editorFontEmbedInput.addEventListener("input", () => {
   updatePreviewBox();
 });
 
+if (editorFontWeightInput) {
+  editorFontWeightInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+  editorFontWeightInput.addEventListener("change", () => {
+    applyGoogleFontImport(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
+  });
+}
+
+if (editorFontItalicInput) {
+  editorFontItalicInput.addEventListener("change", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
+if (editorFontLetterSpacingInput) {
+  editorFontLetterSpacingInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
+if (editorFontLineHeightInput) {
+  editorFontLineHeightInput.addEventListener("input", () => {
+    updateGoogleFontCustomizationUI();
+    updatePreviewBox();
+  });
+}
+
 settingsBtn.addEventListener("click", () => {
   loadSettings();
   settingsModal.style.display = "flex";
@@ -5858,6 +8360,10 @@ applySettingsBtn.addEventListener("click", () => {
     textSize: editorTextSizeInput.value,
     fontFamily: editorFontFamilySelect.value,
     fontEmbed: cssUrl || "",
+    fontWeight: normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight),
+    fontItalic: Boolean(editorFontItalicInput?.checked),
+    fontLetterSpacing: editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing,
+    fontLineHeight: editorFontLineHeightInput?.value || defaultSettings.fontLineHeight,
     zenShowFiles: zenShowFilesCheckbox ? zenShowFilesCheckbox.checked : defaultSettings.zenShowFiles,
     fullscreenPreviewPanel: fullscreenPreviewPanelCheckbox
       ? fullscreenPreviewPanelCheckbox.checked
@@ -6599,7 +9105,32 @@ function getAcornJavaScriptSyntaxError(code) {
   }
 }
 
+function getProjectFilesForAutomaticDiagnostics() {
+  if (projectFiles.length <= LARGE_PROJECT_FILE_THRESHOLD) return projectFiles;
+  const selected = [];
+  const selectedNames = new Set();
+  const addFile = (file) => {
+    if (!file || !["html", "css", "js"].includes(file.type)) return;
+    const key = String(file.name || "").toLowerCase();
+    if (!key || selectedNames.has(key)) return;
+    selectedNames.add(key);
+    selected.push(file);
+  };
+  addFile(activeFile);
+  if (currentPreviewTarget?.fileName) {
+    addFile(projectFiles.find((file) =>
+      String(file.name || "").toLowerCase() === String(currentPreviewTarget.fileName).toLowerCase(),
+    ));
+  }
+  for (const file of projectFiles) {
+    if (selected.length >= LARGE_PROJECT_DIAGNOSTIC_LIMIT) break;
+    addFile(file);
+  }
+  return selected;
+}
+
 function runPreflightDiagnostics(targetEntries = null) {
+  const diagnosticFiles = getProjectFilesForAutomaticDiagnostics();
   const emitDiagnostic = (type, message, location = null) => {
     if (Array.isArray(targetEntries)) {
       targetEntries.push({ type, message, location });
@@ -6608,7 +9139,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     appendConsoleMessage(type, message);
   };
   // JS syntax checks per JS file
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "js")
     .forEach((file) => {
       const smartIssueCount = analyzeJavaScriptSource(file.content, file.name, emitDiagnostic);
@@ -6647,7 +9178,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     });
 
   // Basic CSS braces check
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "css")
     .forEach((file) => {
       const text = file.content || "";
@@ -6700,7 +9231,7 @@ function runPreflightDiagnostics(targetEntries = null) {
     });
 
   // Position-aware HTML checks for every HTML file in the project.
-  projectFiles
+  diagnosticFiles
     .filter((f) => f.type === "html")
     .forEach((htmlFile) => {
       const htmlText = htmlFile.content || "";
@@ -7025,7 +9556,7 @@ function updatePreview() {
     const normalizedSrc = (srcValue || "").trim().toLowerCase();
     const srcFileName = normalizedSrc.split("/").pop();
     return projectFiles.find((f) => {
-      if (f.type !== "media") return false;
+      if (!getProjectMediaKind(f)) return false;
       const fileName = (f.name || "").toLowerCase();
       return fileName === normalizedSrc || fileName === srcFileName;
     });
@@ -7052,8 +9583,9 @@ function updatePreview() {
 
       // Try to find the media file in projectFiles
       const mediaFile = resolveMediaFile(src);
-      if (mediaFile && mediaFile.content) {
-        return `<${tag}${before} src="${mediaFile.content}"${after}>`;
+      const mediaSource = getProjectMediaSource(mediaFile);
+      if (mediaSource) {
+        return `<${tag}${before} src="${escapeHtmlAttributeValue(mediaSource)}"${after}>`;
       } else {
         // File not found in project - it might be in the same directory or external
         // Just keep the original src
@@ -7625,7 +10157,7 @@ function restoreEditorHistorySnapshot(editor, snapshot) {
 }
 
 function undoEditorHistory(editor = document.getElementById("activeEditor")) {
-  if (!editor || !activeFile) return false;
+  if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -7644,7 +10176,7 @@ function undoEditorHistory(editor = document.getElementById("activeEditor")) {
 }
 
 function redoEditorHistory(editor = document.getElementById("activeEditor")) {
-  if (!editor || !activeFile) return false;
+  if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -7841,11 +10373,15 @@ function highlightHtml(code) {
 
     if (match[1]) {
       result += highlightHtmlSegment(match[1]);
-      result += highlightCss(match[2] || "", match.index + match[1].length);
+      const styleContent = match[2] || "";
+      result += styleContent
+        ? highlightCss(styleContent, match.index + match[1].length)
+        : "";
       result += highlightHtmlSegment(match[3]);
     } else {
       result += highlightHtmlSegment(match[4]);
-      result += highlightJs(match[5] || "");
+      const scriptContent = match[5] || "";
+      result += scriptContent ? highlightJs(scriptContent) : "";
       result += highlightHtmlSegment(match[6]);
     }
 
@@ -8323,6 +10859,8 @@ function syncSyntaxLayerStyle(textarea) {
   const computed = window.getComputedStyle(textarea);
   highlightLayer.style.fontFamily = computed.fontFamily;
   highlightLayer.style.fontSize = computed.fontSize;
+  highlightLayer.style.fontWeight = computed.fontWeight;
+  highlightLayer.style.fontStyle = computed.fontStyle;
   highlightLayer.style.lineHeight = computed.lineHeight;
   highlightLayer.style.letterSpacing = computed.letterSpacing;
   highlightLayer.style.tabSize = computed.tabSize;
@@ -8333,13 +10871,7 @@ function syncSyntaxLayerStyle(textarea) {
 // PART 6 - EDITOR INITIALIZATION
 function initializeEditor() {
   const editor = document.getElementById("activeEditor");
-  editor.value = activeFile.content;
-  updateLineNumbers(editor);
-  syncScroll(editor);
-  syncSyntaxLayerStyle(editor);
-  renderSyntaxHighlight(editor);
-  syncInlineHtmlCorrectionDisplay(editor);
-  syncEditorHistoryState(editor, { clearStacks: true });
+  displayActiveFileInEditor({ resetAllHistory: true });
 
   editor.addEventListener("beforeinput", (e) => {
     lastEditorInputType = String(e.inputType || "");
@@ -8360,8 +10892,17 @@ function initializeEditor() {
 
   // MODIFIED: Combined input listener
   editor.addEventListener("input", (e) => {
+    if (getProjectMediaKind(activeFile)) {
+      displayActiveFileInEditor();
+      return;
+    }
     if (!canCurrentUserEditFile(activeFile ? activeFile.name : "")) {
-      showNotification("You can only edit files selected by the host.", "error");
+      showNotification(
+        isPairNavigatorEditingLocked()
+          ? "You are the Navigator. Suggest a change or switch roles to edit."
+          : "You can only edit files selected by the host.",
+        "error",
+      );
       editor.value = activeFile.content;
       return;
     }
@@ -8369,6 +10910,7 @@ function initializeEditor() {
       lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo";
     hasUnsavedChanges = true;
     activeFile.content = editor.value;
+    emitPairPresenceSoon();
     __codxRescanProjectSuggestionCacheSoon();
     updateProjectStatusUI();
     updateLineNumbers(editor);
@@ -8398,6 +10940,7 @@ function initializeEditor() {
   // MODIFIED: Replaced Tab logic with comprehensive keydown handler
   editor.addEventListener("keydown", handleEditorKeyDown);
   editor.addEventListener("click", () => {
+    emitPairPresenceSoon();
     if (
       activeInlineHtmlCorrection &&
       getLineNumberFromIndex(editor.value, editor.selectionStart) === activeInlineHtmlCorrection.previewLine
@@ -8412,7 +10955,33 @@ function initializeEditor() {
   });
   editor.addEventListener("keyup", () => {
     syncInlineHtmlCorrectionDisplay(editor);
+    emitPairPresenceSoon();
   });
+  editor.addEventListener("scroll", () => {
+    syncScroll(editor);
+    if (
+      activePairState &&
+      pairFollowEnabled &&
+      Date.now() > pairIgnoreLocalScrollUntil
+    ) {
+      pairFollowEnabled = false;
+      pairFollowSuspended = true;
+      followedParticipantName = "";
+      stopPairFollowAnimation();
+      renderPairDock();
+    }
+    emitPairPresenceSoon();
+  }, { passive: true });
+  const suspendPairFollowForManualNavigation = () => {
+    if (!activePairState || !pairFollowEnabled) return;
+    pairFollowEnabled = false;
+    pairFollowSuspended = true;
+    followedParticipantName = "";
+    stopPairFollowAnimation();
+    renderPairDock();
+  };
+  editor.addEventListener("wheel", suspendPairFollowForManualNavigation, { passive: true });
+  editor.addEventListener("touchstart", suspendPairFollowForManualNavigation, { passive: true });
   editor.addEventListener("blur", () => {
     setTimeout(() => {
       const active = document.activeElement;
@@ -9702,8 +12271,8 @@ function getFileType(name) {
 
 function matchesExtensionByContext(fileName, attr, tag) {
   const ext = getFileType(fileName);
-  const imageExt = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"]);
-  const mediaExt = new Set(["mp3", "wav", "ogg", "mp4", "webm", "m4a"]);
+  const imageExt = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"]);
+  const mediaExt = new Set(["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"]);
 
   if (attr === "href" && tag === "link") return ext === "css" || imageExt.has(ext);
   if (attr === "href" && tag === "a") return true;
@@ -9751,8 +12320,9 @@ function getFileIcon(fileName) {
   if (ext === "js" || ext === "mjs") return "JS";
   if (ext === "json") return "JSON";
   if (ext === "env") return "ENV";
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "IMG";
-  if (["mp3", "wav", "ogg", "mp4", "webm", "m4a"].includes(ext)) return "MED";
+  if (ext === "txt") return "TXT";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "IMG";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "MED";
   return "FILE";
 }
 
@@ -9765,17 +12335,64 @@ function createFileExtensionIcon(fileName) {
     mjs: "fa-brands fa-js",
     json: "fa-solid fa-code",
     env: "fa-solid fa-key",
+    txt: "fa-solid fa-file-lines",
   };
-  const safeExt = ["html", "css", "js", "mjs", "json", "env"].includes(ext) ? ext : "file";
+  const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"];
+  const videoExtensions = ["mp4", "webm", "ogv", "mov", "m4v"];
+  const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
+  let safeExt = ["html", "css", "js", "mjs", "json", "env", "txt"].includes(ext) ? ext : "file";
+  let glyphClass = iconByExtension[ext] || "fa-solid fa-file-code";
+  if (imageExtensions.includes(ext)) {
+    safeExt = "image";
+    glyphClass = "fa-solid fa-image";
+  } else if (videoExtensions.includes(ext)) {
+    safeExt = "video";
+    glyphClass = "fa-solid fa-video";
+  } else if (audioExtensions.includes(ext)) {
+    safeExt = "audio";
+    glyphClass = "fa-solid fa-volume-high";
+  }
   const icon = document.createElement("span");
   icon.className = `file-extension-icon file-extension-icon-${safeExt}`;
   icon.title = `${getFileIcon(fileName)} file`;
   icon.setAttribute("aria-hidden", "true");
 
   const glyph = document.createElement("i");
-  glyph.className = iconByExtension[ext] || "fa-solid fa-file-code";
+  glyph.className = glyphClass;
   icon.appendChild(glyph);
   return icon;
+}
+
+const suggestionIconDefinitions = {
+  html: { className: "fa-brands fa-html5", label: "HTML" },
+  css: { className: "fa-brands fa-css3-alt", label: "CSS" },
+  js: { className: "fa-brands fa-js", label: "JavaScript" },
+  env: { className: "fa-solid fa-key", label: "ENV" },
+  txt: { className: "fa-solid fa-file-lines", label: "TXT" },
+  json: { className: "fa-solid fa-code", label: "JSON" },
+  image: { className: "fa-solid fa-image", label: "Image" },
+  media: { className: "fa-solid fa-photo-film", label: "Media" },
+  file: { className: "fa-solid fa-file-code", label: "File" },
+};
+
+function getSuggestionIconKind(kind, fileName = "") {
+  if (!fileName) return suggestionIconDefinitions[kind] ? kind : "file";
+  const ext = getFileType(fileName);
+  if (["html", "htm"].includes(ext)) return "html";
+  if (["css", "scss", "less"].includes(ext)) return "css";
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(ext)) return "js";
+  if (ext === "env") return "env";
+  if (ext === "txt") return "txt";
+  if (["json", "jsonc"].includes(ext)) return "json";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "image";
+  if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "media";
+  return "file";
+}
+
+function getSuggestionIconMarkup(kind, fileName = "") {
+  const iconKind = getSuggestionIconKind(kind, fileName);
+  const definition = suggestionIconDefinitions[iconKind];
+  return `<span class="suggestion-icon suggestion-icon-${iconKind}" title="${definition.label}" aria-hidden="true"><i class="${definition.className}"></i></span>`;
 }
 
 function getCaretCoordinates(textarea, pos) {
@@ -9901,10 +12518,17 @@ function showSuggestions(editor, suggestions, prefix, mode) {
     const badge = badgeLabel
       ? `<span class="suggestion-badge">${escapeHtml(badgeLabel)}</span>`
       : "";
-    const safeIcon = mode === "tag-closing" ? "</>" : tagMeta.icon || "<>";
+    const tagIconKind = tagText === "lorem"
+      ? "txt"
+      : tagText === "style"
+        ? "css"
+        : tagText === "script"
+          ? "js"
+          : "html";
+    const iconMarkup = getSuggestionIconMarkup(tagIconKind);
     const displayTag = tagMeta.insertText ? highlightedTag : `&lt;${highlightedTag}&gt;`;
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${escapeHtml(safeIcon)}</span>
+      ${iconMarkup}
       <span class="suggestion-content">
         <div class="suggestion-tag">${displayTag}${badge}</div>
         <div class="suggestion-desc">${escapeHtml(tagMeta.desc || "HTML element")}${attrs ? ` - ${escapeHtml(attrs)}` : ""}</div>
@@ -10122,7 +12746,7 @@ function showCssSuggestions(editor, suggestions, mode) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">CSS</span>
+      ${getSuggestionIconMarkup("css")}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "CSS suggestion")}</div>
@@ -10163,7 +12787,7 @@ function showHtmlAttributeSuggestions(editor, suggestions) {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">ATTR</span>
+      ${getSuggestionIconMarkup("html")}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "HTML attribute")}</div>
@@ -10188,7 +12812,7 @@ function showJsSuggestions(editor, suggestions, mode = "js") {
   suggestionPopup.innerHTML = "";
   suggestionPopup.dataset.mode = mode;
   const title = mode === "env" ? "Environment variables" : mode === "html-value" ? "HTML values" : "JavaScript";
-  const icon = mode === "env" ? "ENV" : mode === "html-value" ? "HTML" : "JS";
+  const iconKind = mode === "env" ? "env" : mode === "html-value" ? "html" : "js";
 
   const header = document.createElement("div");
   header.className = "suggestion-header";
@@ -10206,7 +12830,7 @@ function showJsSuggestions(editor, suggestions, mode = "js") {
     const suggestionItem = document.createElement("div");
     suggestionItem.className = "suggestion-item";
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${icon}</span>
+      ${getSuggestionIconMarkup(iconKind)}
       <span class="suggestion-content">
         <div class="suggestion-tag">${escapeHtml(entry.value)}</div>
         <div class="suggestion-desc">${escapeHtml(entry.desc || "JavaScript suggestion")}</div>
@@ -10259,7 +12883,7 @@ function showFileSuggestions(editor, fileSuggestions, prefix, context = null) {
         : escapeHtml(fileName);
 
     suggestionItem.innerHTML = `
-      <span class="suggestion-icon">${escapeHtml(getFileIcon(fileName))}</span>
+      ${getSuggestionIconMarkup("file", fileName)}
       <span class="suggestion-content">
         <div class="suggestion-tag">${highlightedName}</div>
         <div class="suggestion-desc">Use file path in current attribute</div>
@@ -10434,6 +13058,25 @@ function selectSuggestion(tag) {
     return;
   }
 
+  if (!isClosing && String(tag || "").toLowerCase() === "style") {
+    const replaceStart = isPlain
+      ? textBefore.length - prefix.length
+      : textBefore.length - prefix.length - 1;
+    const insertedText = "<style></style>";
+    const caretPos = replaceStart + "<style>".length;
+    applyEditorMutation(
+      editor,
+      replaceStart,
+      editor.selectionEnd,
+      insertedText,
+      caretPos,
+      caretPos,
+    );
+    hideSuggestions();
+    editor.focus();
+    return;
+  }
+
   const plainPrefixStart = textBefore.length - prefix.length;
   if (!isClosing && isPlain) {
     const smartCapture = getSmartHtmlTagCapture(editor, tag, plainPrefixStart);
@@ -10588,6 +13231,49 @@ function selectHtmlAttributeSuggestion(attrName) {
   editor.focus();
 }
 
+function getInlineStyleSelectorSuggestionLayout(editorValue, replaceStart, replaceEnd) {
+  const source = String(editorValue || "");
+  const safeStart = Math.max(0, Number(replaceStart || 0));
+  const safeEnd = Math.max(safeStart, Number(replaceEnd || safeStart));
+  const lineStart = source.lastIndexOf("\n", Math.max(0, safeStart - 1)) + 1;
+  const beforeSelector = source.slice(lineStart, safeStart);
+  const styleOpenMatch = beforeSelector.match(/^([\t ]*)<style\b[^>]*>[\t ]*$/i);
+  if (!styleOpenMatch) return null;
+  const afterSelector = source.slice(safeEnd);
+  const spaceBeforeClosingStyle = afterSelector.match(/^[\t ]*(?=<\/style\b)/i)?.[0] || "";
+  if (!/^<\/style\b/i.test(afterSelector.slice(spaceBeforeClosingStyle.length))) return null;
+  const styleIndent = styleOpenMatch[1] || "";
+  const selectorIndent = styleIndent + INDENT_UNIT;
+  return {
+    styleIndent,
+    selectorIndent,
+    propertyIndent: selectorIndent + INDENT_UNIT,
+    replaceEnd: safeEnd + spaceBeforeClosingStyle.length,
+  };
+}
+
+function buildInlineStyleSelectorSuggestion(value, layout) {
+  const selector = String(value || "");
+  const insertedText =
+    `\n${layout.selectorIndent}${selector} {` +
+    `\n${layout.propertyIndent}` +
+    `\n${layout.selectorIndent}}` +
+    `\n${layout.styleIndent}`;
+  const cursorOffset =
+    1 + layout.selectorIndent.length + selector.length + 2 + 1 + layout.propertyIndent.length;
+  return { insertedText, cursorOffset };
+}
+
+function buildIndentedCssSelectorSuggestion(value, baseIndent) {
+  const selector = String(value || "");
+  const selectorIndent = String(baseIndent || "");
+  const propertyIndent = selectorIndent + INDENT_UNIT;
+  return {
+    insertedText: `${selector} {\n${propertyIndent}\n${selectorIndent}}`,
+    cursorOffset: selector.length + 3 + propertyIndent.length,
+  };
+}
+
 function selectCssSuggestion(value) {
   const editor = document.getElementById("activeEditor");
   if (!currentSuggestionContext) return;
@@ -10598,6 +13284,7 @@ function selectCssSuggestion(value) {
   let finalReplaceEnd = replaceEnd;
   let insertedText = value;
   let cursorOffset = value.length;
+  let applyBaseIndent = true;
 
   if (mode === "css-property") {
     const afterSlice = editor.value.substring(replaceEnd);
@@ -10636,12 +13323,25 @@ function selectCssSuggestion(value) {
   } else if (mode === "css-selector") {
     const afterSlice = editor.value.substring(replaceEnd);
     if (!/^\s*\{/.test(afterSlice)) {
-      insertedText = `${value} {\n${INDENT_UNIT}\n}`;
-      cursorOffset = value.length + 3 + INDENT_UNIT.length;
+      const inlineStyleLayout = activeFile.type === "html"
+        ? getInlineStyleSelectorSuggestionLayout(editor.value, replaceStart, replaceEnd)
+        : null;
+      if (inlineStyleLayout) {
+        const inlineSuggestion = buildInlineStyleSelectorSuggestion(value, inlineStyleLayout);
+        insertedText = inlineSuggestion.insertedText;
+        cursorOffset = inlineSuggestion.cursorOffset;
+        finalReplaceEnd = inlineStyleLayout.replaceEnd;
+        applyBaseIndent = false;
+      } else {
+        const selectorSuggestion = buildIndentedCssSelectorSuggestion(value, currentIndent);
+        insertedText = selectorSuggestion.insertedText;
+        cursorOffset = selectorSuggestion.cursorOffset;
+        applyBaseIndent = false;
+      }
     }
   }
 
-  if (insertedText.includes("\n")) {
+  if (applyBaseIndent && insertedText.includes("\n")) {
     const formatted = indentMultilineSuggestionText(insertedText, cursorOffset, currentIndent);
     insertedText = formatted.text;
     cursorOffset = formatted.cursorOffset;
@@ -10839,6 +13539,26 @@ function handleAutoCloseAndIndent(e, editor) {
   return false; // Not handled
 }
 
+function getMatchingHtmlTagPairAtCaret(editor) {
+  if (!editor) return null;
+  const selectionStart = Number(editor.selectionStart || 0);
+  const selectionEnd = Number(editor.selectionEnd || selectionStart);
+  const textBefore = editor.value.substring(0, selectionStart);
+  const textAfter = editor.value.substring(selectionEnd);
+  const openTagMatch = textBefore.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/);
+  if (!openTagMatch) return null;
+  const tagName = openTagMatch[1].toLowerCase();
+  if (selfClosingTags.includes(tagName)) return null;
+  const closingTagMatch = textAfter.match(
+    new RegExp(`^([\\t ]*)(</${tagName}\\s*>)`, "i"),
+  );
+  if (!closingTagMatch) return null;
+  return {
+    tagName,
+    whitespaceLength: closingTagMatch[1].length,
+  };
+}
+
 function handleHtmlEnterIndentation(e, editor) {
   if (e.key !== "Enter" || activeFile.type !== "html") return false;
   const pos = editor.selectionStart;
@@ -10852,15 +13572,16 @@ function handleHtmlEnterIndentation(e, editor) {
 
   if (openTagMatch) {
     const tagName = openTagMatch[1].toLowerCase();
-    const closingTagPattern = new RegExp(`^</${tagName}\\s*>`, "i");
+    const matchingPair = getMatchingHtmlTagPairAtCaret(editor);
     if (!selfClosingTags.includes(tagName)) {
       const nextIndent = currentIndent + INDENT_UNIT;
       e.preventDefault();
-      const replacement = closingTagPattern.test(textAfter)
+      const replacement = matchingPair
         ? "\n" + nextIndent + "\n" + currentIndent
         : "\n" + nextIndent;
       const caretPos = pos + 1 + nextIndent.length;
-      applyEditorMutation(editor, pos, editor.selectionEnd, replacement, caretPos, caretPos);
+      const replaceEnd = editor.selectionEnd + Number(matchingPair?.whitespaceLength || 0);
+      applyEditorMutation(editor, pos, replaceEnd, replacement, caretPos, caretPos);
       return true;
     }
   }
@@ -11488,6 +14209,10 @@ function handleEditorKeyDown(e) {
     activeFile.type === "html" && isInsideStyleTag(caretContextBefore);
   const isHtmlScriptContext =
     activeFile.type === "html" && isInsideScriptTag(caretContextBefore);
+  const matchingHtmlTagPair =
+    activeFile.type === "html" && e.key === "Enter"
+      ? getMatchingHtmlTagPairAtCaret(editor)
+      : null;
   const isCssEditorContext = activeFile.type === "css" || isHtmlStyleContext;
   const isCodeEditorContext =
     isCssEditorContext || activeFile.type === "js" || isHtmlScriptContext;
@@ -11495,8 +14220,7 @@ function handleEditorKeyDown(e) {
   if (
     activeFile.type === "html" &&
     e.key === "Enter" &&
-    !isHtmlStyleContext &&
-    !isHtmlScriptContext &&
+    ((!isHtmlStyleContext && !isHtmlScriptContext) || matchingHtmlTagPair) &&
     suggestionPopup.style.display !== "block"
   ) {
     hideSuggestions();
@@ -11671,6 +14395,22 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
+  // Keep the hidden developer chord available wherever focus currently sits.
+  // The copy action remains untouched; only the second Ctrl/Cmd + X is captured.
+  if (mod && key === "c" && !e.shiftKey && !e.altKey) {
+    setDeveloperChordArmed(true);
+  } else if (developerChordArmed && mod && key === "x" && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    setDeveloperChordArmed(false);
+    openDeveloperConsole();
+    return;
+  } else if (
+    developerChordArmed &&
+    !["control", "meta", "shift", "alt"].includes(key)
+  ) {
+    setDeveloperChordArmed(false);
+  }
+
   // Prevent shortcuts from firing while suggestion box is open
   if (suggestionPopup.style.display === "block") {
     if (
@@ -11683,15 +14423,6 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (isTypingIntoFormControl) {
-    return;
-  }
-
-  if (mod && key === "c") {
-    setDeveloperChordArmed(true);
-  } else if (developerChordArmed && mod && key === "x") {
-    e.preventDefault();
-    setDeveloperChordArmed(false);
-    openDeveloperConsole();
     return;
   }
 
@@ -11711,7 +14442,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (mod && key === "q") {
     e.preventDefault();
-    createNewFile();
+    handleCreateNewFileRequest();
   }
   if (mod && e.shiftKey && key === "c") {
     e.preventDefault();
@@ -11729,13 +14460,12 @@ document.addEventListener("visibilitychange", () => {
   startBackgroundTimers();
   pruneRemoteCursors();
   applyRoomIndicators();
-  resumeCollabSession();
-});
-
-document.addEventListener("keyup", (e) => {
-  if (e.key === "Control" || e.key === "Meta") {
-    setDeveloperChordArmed(false);
+  if (activeSessionId && !collabSocket?.connected) {
+    ensureCollabSocket();
+    return;
   }
+  sendCollabHeartbeat();
+  resumeCollabSession();
 });
 
 document.addEventListener("mousedown", (e) => {
@@ -11781,12 +14511,23 @@ function canCreateFilesFromDrop() {
   return true;
 }
 
-function loadImportedProjectFiles(importedFiles, successMessage) {
+function yieldToBrowserDuringImport() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function buildImportedFileSummary(label, fileNames) {
+  const names = Array.isArray(fileNames) ? fileNames : [];
+  if (names.length <= 10) return `${label}! Files: ${names.join(", ")}`;
+  return `${label}! ${names.length} files loaded. First files: ${names.slice(0, 5).join(", ")}, and ${names.length - 5} more.`;
+}
+
+async function loadImportedProjectFiles(importedFiles, successMessage) {
   if (!Array.isArray(importedFiles) || importedFiles.length === 0) {
     showNotification("No valid project files were found.", "error");
     return false;
   }
 
+  releaseProjectMediaObjectUrls(projectFiles);
   projectFiles = importedFiles.map((file, index) => ({
     ...file,
     name: normalizeProjectFileName(file?.name, `file-${index + 1}.txt`),
@@ -11796,11 +14537,10 @@ function loadImportedProjectFiles(importedFiles, successMessage) {
   activeFile = projectFiles[0];
   const editor = document.getElementById("activeEditor");
   if (editor && activeFile) {
-    editor.value = activeFile.content;
-    updateLineNumbers(editor);
-    resetAllEditorHistory(editor);
+    displayActiveFileInEditor({ resetAllHistory: true });
   }
-  renderFileList();
+  renderFileList({ skipNameNormalization: true });
+  if (projectFiles.length > ZIP_IMPORT_BATCH_SIZE) await yieldToBrowserDuringImport();
   scheduleProjectAutosave();
   if (autoRunCheckbox.checked) updatePreview();
   syncProjectWithSession();
@@ -11885,7 +14625,7 @@ async function importProjectFromDroppedFolder(entries) {
 
   return loadImportedProjectFiles(
     importedFiles,
-    `Folder imported! Files: ${importedFiles.map((file) => file.name).join(", ")}`,
+    buildImportedFileSummary("Folder imported", importedFiles.map((file) => file.name)),
   );
 }
 
@@ -11905,8 +14645,7 @@ async function addDroppedFilesToProject(files) {
     if (projectFiles.length === 1) {
       imported.active = true;
       activeFile = imported;
-      document.getElementById("activeEditor").value = imported.content;
-      updateLineNumbers();
+      displayActiveFileInEditor();
     }
     importedCount += 1;
     showNotification(`Imported: ${imported.name}`, "success");
@@ -11949,17 +14688,87 @@ document.getElementById("activeEditor").addEventListener("mouseenter", (event) =
 });
 document.getElementById("activeEditor").addEventListener("mouseleave", () => {
   isPointerInsideEditor = false;
+  hideLocalCollabCursor();
   clearOwnSessionCursorBroadcast();
+});
+window.addEventListener("blur", hideLocalCollabCursor);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hideLocalCollabCursor();
 });
 window.addEventListener("beforeunload", clearOwnSessionCursorBroadcast);
 startBackgroundTimers();
 
 // PART 9 - ZIP EXPORT
-async function exportAsZip() {
-  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
-    showNotification("The host disabled ZIP export for participants.", "error");
-    return false;
-  }
+function showZipExportActionPrompt() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "zip-export-choice";
+    if (appDialogTitle) appDialogTitle.textContent = "EXPORT ZIP FILE";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <div class="zip-choice-intro">Create a new ZIP archive or update one already on your device.</div>
+        <div class="collab-choice-grid zip-choice-grid">
+          <button type="button" id="zipCreateChoiceBtn" class="collab-choice-card zip-choice-card">
+            <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+            <span><strong>Export ZIP File</strong><small>Create and download a new project archive.</small></span>
+          </button>
+          <button type="button" id="zipUpdateChoiceBtn" class="collab-choice-card zip-choice-card">
+            <i class="fa-solid fa-file-pen" aria-hidden="true"></i>
+            <span><strong>Update ZIP File</strong><small>Choose an existing ZIP and update it with this project.</small></span>
+          </button>
+        </div>`;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `<button type="button" id="zipChoiceCancelBtn" class="run-button" style="background:#6b7280;"><strong>CANCEL</strong></button>`;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("zipCreateChoiceBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "export" });
+    });
+    document.getElementById("zipUpdateChoiceBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "update" });
+    });
+    document.getElementById("zipChoiceCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false });
+    });
+    setTimeout(() => document.getElementById("zipCreateChoiceBtn")?.focus(), 0);
+  });
+}
+
+function downloadZipBlob(content, fileName) {
+  const url = URL.createObjectURL(content);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function createProjectZipBlob(zip = new JSZip()) {
+  projectFiles.forEach((file) => {
+    if (file.mediaBlob instanceof Blob) {
+      zip.file(file.name, file.mediaBlob);
+      return;
+    }
+    const content = String(file.content || "");
+    const encodedMedia = getProjectMediaKind(file)
+      ? content.match(/^data:[^;,]+;base64,([\s\S]+)$/i)
+      : null;
+    if (encodedMedia) {
+      zip.file(file.name, encodedMedia[1], { base64: true });
+      return;
+    }
+    zip.file(file.name, content);
+  });
+  return zip.generateAsync({ type: "blob" });
+}
+
+async function exportNewZipFile() {
   const dialog = await showAppPrompt(
     "EXPORT ZIP",
     "Name your ZIP file:",
@@ -11975,18 +14784,9 @@ async function exportAsZip() {
     return false;
   }
   const zipFileName = /\.zip$/i.test(trimmedName) ? trimmedName : `${trimmedName}.zip`;
-  const zip = new JSZip();
-  projectFiles.forEach((file) => {
-    zip.file(file.name, file.content);
-  });
   try {
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = zipFileName;
-    a.click();
-    URL.revokeObjectURL(url);
+    const content = await createProjectZipBlob();
+    downloadZipBlob(content, zipFileName);
     showNotification(`Project exported as ${zipFileName}!`, "success");
     return true;
   } catch (err) {
@@ -11996,7 +14796,129 @@ async function exportAsZip() {
   }
 }
 
+function chooseZipFileWithInput() {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".zip,application/zip,application/x-zip-compressed";
+    input.style.display = "none";
+    let settled = false;
+    const finish = (file = null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener("change", () => finish(input.files?.[0] || null), { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+async function chooseZipFileForUpdate() {
+  if (typeof window.showOpenFilePicker === "function") {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        excludeAcceptAllOption: true,
+        types: [{
+          description: "ZIP archive",
+          accept: { "application/zip": [".zip"] },
+        }],
+      });
+      if (!handle) return null;
+      return { file: await handle.getFile(), handle };
+    } catch (error) {
+      if (error?.name === "AbortError") return null;
+    }
+  }
+  const file = await chooseZipFileWithInput();
+  return file ? { file, handle: null } : null;
+}
+
+async function updateExistingZipFile() {
+  const instruction = await showAppConfirmHtml(
+    "UPDATE ZIP FILE",
+    "Your file picker will open. Select the existing <strong>.zip</strong> archive you want to update.<br><br>Files with matching paths will be replaced by the current project, new project files will be added, and other archive entries will remain.",
+    "CHOOSE ZIP",
+    "BACK",
+  );
+  if (!instruction?.ok) return false;
+
+  const selection = await chooseZipFileForUpdate();
+  if (!selection?.file) return false;
+  const selectedName = String(selection.file.name || "codx-project.zip");
+  if (!/\.zip$/i.test(selectedName)) {
+    showNotification("Choose a valid ZIP file to update.", "error");
+    return false;
+  }
+
+  let existingZip;
+  try {
+    existingZip = await JSZip.loadAsync(selection.file);
+  } catch (error) {
+    console.error("ZIP update read error:", error);
+    showNotification("That file could not be read as a ZIP archive.", "error");
+    return false;
+  }
+
+  const confirmation = await showAppConfirmHtml(
+    "UPDATE SELECTED ZIP?",
+    `Update <strong>${escapeHtml(selectedName)}</strong> with the current project files?`,
+    "UPDATE ZIP",
+    "CANCEL",
+  );
+  if (!confirmation?.ok) return false;
+
+  try {
+    const content = await createProjectZipBlob(existingZip);
+    if (selection.handle && typeof selection.handle.createWritable === "function") {
+      try {
+        const writable = await selection.handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        showNotification(`${selectedName} was updated successfully.`, "success");
+        return true;
+      } catch (error) {
+        console.warn("Direct ZIP update unavailable; downloading an updated copy instead.", error);
+      }
+    }
+    downloadZipBlob(content, selectedName);
+    showNotification(`Updated ${selectedName} downloaded. Replace the old copy if your browser kept both files.`, "success");
+    return true;
+  } catch (error) {
+    console.error("ZIP update error:", error);
+    showNotification("Error updating ZIP file", "error");
+    return false;
+  }
+}
+
+async function exportAsZip() {
+  if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableExportZip) {
+    showNotification("The host disabled ZIP export for participants.", "error");
+    return false;
+  }
+  const choice = await showZipExportActionPrompt();
+  if (!choice?.ok) return false;
+  return choice.action === "update" ? updateExistingZipFile() : exportNewZipFile();
+}
+
 // PART 10 - ZIP IMPORT
+function getSharedZipRootFolder(paths) {
+  const segmentedPaths = (paths || []).map((path) =>
+    String(path || "").split("/").filter(Boolean),
+  );
+  if (
+    !segmentedPaths.length ||
+    segmentedPaths.some((segments) => segments.length < 2)
+  ) {
+    return "";
+  }
+  const candidate = segmentedPaths[0][0];
+  return segmentedPaths.every((segments) => segments[0] === candidate) ? candidate : "";
+}
+
 async function importProjectFromZipFile(file) {
   if (!file || !/\.zip$/i.test(file.name || "")) {
     showNotification("Please select a valid ZIP file", "error");
@@ -12005,27 +14927,46 @@ async function importProjectFromZipFile(file) {
 
   try {
     const zip = await JSZip.loadAsync(file);
-    const importTasks = [];
-    const foundFiles = [];
+    const archiveFiles = [];
 
     zip.forEach((path, entry) => {
-      const normalizedPath = String(path || "").replace(/\\/g, "/");
-      const safePath = normalizeProjectFileName(normalizedPath);
-      const ext = safePath.split(".").pop().toLowerCase();
-      if (editableTextExtensions.includes(ext) && !entry.dir) {
-        foundFiles.push(safePath);
-        importTasks.push(
-          entry.async("string").then((content) => ({
-            name: safePath,
-            type: ext,
-            content,
-            active: false,
-          })),
-        );
-      }
+      if (entry.dir) return;
+      const normalizedPath = String(path || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "")
+        .replace(/^\.\//, "");
+      if (!normalizedPath || normalizedPath.startsWith("__MACOSX/")) return;
+      const ext = normalizedPath.split(".").pop().toLowerCase();
+      if (editableTextExtensions.includes(ext)) archiveFiles.push({ entry, normalizedPath });
     });
 
-    const importedFiles = await Promise.all(importTasks);
+    const sharedRoot = getSharedZipRootFolder(
+      archiveFiles.map(({ normalizedPath }) => normalizedPath),
+    );
+    const foundFiles = [];
+    const importedFiles = [];
+    for (let index = 0; index < archiveFiles.length; index += ZIP_IMPORT_BATCH_SIZE) {
+      const batch = archiveFiles.slice(index, index + ZIP_IMPORT_BATCH_SIZE);
+      const batchFiles = await Promise.all(batch.map(async ({ entry, normalizedPath }) => {
+        const relativePath = sharedRoot
+          ? normalizedPath.split("/").filter(Boolean).slice(1).join("/")
+          : normalizedPath;
+        const safePath = normalizeProjectFileName(relativePath);
+        const ext = safePath.split(".").pop().toLowerCase();
+        const content = await entry.async("string");
+        return {
+          name: safePath,
+          type: ext,
+          content,
+          active: false,
+        };
+      }));
+      importedFiles.push(...batchFiles);
+      foundFiles.push(...batchFiles.map((entry) => entry.name));
+      if (index + ZIP_IMPORT_BATCH_SIZE < archiveFiles.length) {
+        await yieldToBrowserDuringImport();
+      }
+    }
     if (!importedFiles.length) {
       showNotification("No valid files found in ZIP", "error");
       return false;
@@ -12033,7 +14974,7 @@ async function importProjectFromZipFile(file) {
 
     return loadImportedProjectFiles(
       importedFiles,
-      `Project imported! Files: ${foundFiles.join(", ")}`,
+      buildImportedFileSummary("Project imported", foundFiles),
     );
   } catch (err) {
     console.error("Import error:", err);
@@ -12151,6 +15092,15 @@ function getParticipantByName(name) {
   return collabParticipants.find((p) => String(p.name || "").trim().toLowerCase() === safeName) || null;
 }
 
+function formatCollabDisplayName(name, fallback = "") {
+  const displayName = String(name || fallback || "").trim();
+  const myName = String(myInfo.name || "").trim();
+  if (!displayName || !myName) return displayName;
+  return displayName.toLowerCase() === myName.toLowerCase()
+    ? `${displayName} (you)`
+    : displayName;
+}
+
 function isGroupFeatureRestrictedUser() {
   return Boolean(activeSessionId) && !isHost();
 }
@@ -12252,7 +15202,11 @@ function isCoHost() {
 }
 
 function updateCollabButtonState() {
-  if (!collabBtn) return;
+  if (!collabBtn) {
+    updateFileVisibilityQuickButton();
+    return;
+  }
+  if (!activeSessionId) hideLocalCollabCursor();
   const label = !activeSessionId
     ? "COLLAB WITH FRIENDS"
     : canUseCoHostTools()
@@ -12272,6 +15226,56 @@ function updateCollabButtonState() {
         : "Collaborate with friends";
   collabBtn.setAttribute("aria-label", readableLabel);
   collabBtn.title = readableLabel;
+  updateFileVisibilityQuickButton();
+}
+
+function positionCollabManageTutorial() {
+  if (!collabManageTutorialEl || !collabBtn || !document.body.contains(collabManageTutorialEl)) return;
+  const buttonRect = collabBtn.getBoundingClientRect();
+  const popupWidth = Math.min(360, window.innerWidth - 24);
+  const left = Math.max(
+    12,
+    Math.min(window.innerWidth - popupWidth - 12, buttonRect.left + buttonRect.width / 2 - popupWidth / 2),
+  );
+  const arrowCenter = Math.max(22, Math.min(popupWidth - 22, buttonRect.left + buttonRect.width / 2 - left));
+  collabManageTutorialEl.style.width = `${popupWidth}px`;
+  collabManageTutorialEl.style.left = `${left}px`;
+  collabManageTutorialEl.style.top = `${buttonRect.bottom + 12}px`;
+  collabManageTutorialEl.style.setProperty("--collab-tutorial-arrow-left", `${arrowCenter}px`);
+}
+
+function dismissCollabManageTutorial() {
+  if (!collabManageTutorialEl) return;
+  window.removeEventListener("resize", positionCollabManageTutorial);
+  window.removeEventListener("scroll", positionCollabManageTutorial, true);
+  collabManageTutorialEl.remove();
+  collabManageTutorialEl = null;
+}
+
+function showCollabManageTutorial() {
+  if (!collabBtn || collabManageTutorialEl || safeLocalStorage("get", COLLAB_MANAGE_TUTORIAL_KEY)) return;
+  safeLocalStorage("set", COLLAB_MANAGE_TUTORIAL_KEY, "1");
+  collabManageTutorialEl = document.createElement("aside");
+  collabManageTutorialEl.className = "collab-manage-tutorial";
+  collabManageTutorialEl.setAttribute("role", "dialog");
+  collabManageTutorialEl.setAttribute("aria-modal", "false");
+  collabManageTutorialEl.setAttribute("aria-labelledby", "collabManageTutorialTitle");
+  collabManageTutorialEl.innerHTML = `
+    <button class="collab-manage-tutorial-close" type="button" aria-label="Close session management tip">&times;</button>
+    <span class="collab-manage-tutorial-kicker"><i class="fa-solid fa-circle-check"></i> SESSION CREATED</span>
+    <h3 id="collabManageTutorialTitle">This button now manages your session.</h3>
+    <p>Click <strong>MANAGE SESSION</strong> whenever you want to view participants, copy the invite, open collaboration tools, or change room controls.</p>
+    <button class="run-button collab-manage-tutorial-done" type="button"><strong>GOT IT</strong></button>`;
+  document.body.appendChild(collabManageTutorialEl);
+  collabManageTutorialEl.querySelector(".collab-manage-tutorial-close")?.addEventListener("click", dismissCollabManageTutorial);
+  collabManageTutorialEl.querySelector(".collab-manage-tutorial-done")?.addEventListener("click", dismissCollabManageTutorial);
+  window.addEventListener("resize", positionCollabManageTutorial);
+  window.addEventListener("scroll", positionCollabManageTutorial, true);
+  requestAnimationFrame(() => {
+    positionCollabManageTutorial();
+    collabManageTutorialEl?.classList.add("visible");
+    collabManageTutorialEl?.querySelector(".collab-manage-tutorial-done")?.focus({ preventScroll: true });
+  });
 }
 
 function canUseCoHostTools() {
@@ -12284,6 +15288,19 @@ function canModerateParticipant(participant) {
   if (isHost()) return role !== "host";
   if (isCoHost()) return role === "participant";
   return false;
+}
+
+function isMyCollabParticipant(participant) {
+  return Boolean(
+    participant &&
+      String(participant.name || "").trim().toLowerCase() ===
+        String(myInfo.name || "").trim().toLowerCase(),
+  );
+}
+
+function canRenameParticipant(participant) {
+  if (isMyCollabParticipant(participant)) return !participant.renameDisabled;
+  return canModerateParticipant(participant);
 }
 
 function normalizeCollabPermissions(raw) {
@@ -12309,6 +15326,7 @@ function isReadOnlyParticipant() {
 }
 
 function canCurrentUserEditFile(fileName) {
+  if (isPairNavigatorEditingLocked()) return false;
   if (!activeSessionId || isHost() || isCoHost()) return true;
   const me = getMyParticipant();
   if (me?.frozenEditing) return false;
@@ -12366,8 +15384,11 @@ function enforceCollabPermissionsUI() {
     }
     const editor = document.getElementById("activeEditor");
     if (editor) {
-      editor.readOnly = false;
-      editor.title = "";
+      const mediaSourceReadOnly = developerMediaSourceVisible && Boolean(getProjectMediaKind(activeFile));
+      editor.readOnly = mediaSourceReadOnly;
+      editor.title = mediaSourceReadOnly
+        ? "Read-only media source enabled from Developer Tools."
+        : "";
     }
     if (consoleContainer && showConsoleCheckbox && !showConsoleCheckbox.checked) {
       consoleContainer.classList.remove("show");
@@ -12379,7 +15400,8 @@ function enforceCollabPermissionsUI() {
   const me = getMyParticipant();
   const personalDisabledFeatures = new Set(Array.isArray(me?.disabledFeatures) ? me.disabledFeatures : []);
   const lockPersonalChat = participantRestricted && (collabPermissions.disableAllChat || personalDisabledFeatures.has("chat"));
-  const lockNewFile = participantRestricted && collabPermissions.disableNewFile;
+  const personalFileVisibilityLimited = participantRestricted && Array.isArray(me?.allowedFiles);
+  const lockNewFile = participantRestricted && (collabPermissions.disableNewFile || personalFileVisibilityLimited);
   const lockExport = participantRestricted && collabPermissions.disableExportZip;
   const lockImport = participantRestricted && collabPermissions.disableImportZip;
   const lockSaveProject = participantRestricted && (collabPermissions.disableSaveProject || personalDisabledFeatures.has("saveProject"));
@@ -12389,12 +15411,17 @@ function enforceCollabPermissionsUI() {
   const lockRun = participantRestricted && (collabPermissions.disableRunCode || personalDisabledFeatures.has("runCode"));
   const lockConsole = participantRestricted && (collabPermissions.disableConsoleAccess || personalDisabledFeatures.has("consoleAccess"));
   const globalReadOnly = activeSessionId && (collabPermissions.readOnlyAll || collabPermissions.pauseCollab);
+  const pairNavigatorLocked = isPairNavigatorEditingLocked();
   const lockEditor = globalReadOnly || !canCurrentUserEditFile(activeFile ? activeFile.name : "");
   const frozenEditing = participantRestricted && Boolean(me?.frozenEditing);
 
   if (newFileBtn) {
     newFileBtn.disabled = lockNewFile;
-    newFileBtn.title = lockNewFile ? "The host disabled new file creation." : "";
+    newFileBtn.title = lockNewFile
+      ? personalFileVisibilityLimited
+        ? "New files are unavailable while private file visibility limits are active."
+        : "The host disabled new file creation."
+      : "";
   }
   if (exportZipBtn) {
     exportZipBtn.disabled = lockExport;
@@ -12453,12 +15480,17 @@ function enforceCollabPermissionsUI() {
   }
   const editor = document.getElementById("activeEditor");
   if (editor) {
-    editor.readOnly = lockEditor;
-    editor.title = lockEditor
+    const mediaSourceReadOnly = developerMediaSourceVisible && Boolean(getProjectMediaKind(activeFile));
+    editor.readOnly = lockEditor || mediaSourceReadOnly;
+    editor.title = mediaSourceReadOnly
+      ? "Read-only media source enabled from Developer Tools."
+      : lockEditor
       ? globalReadOnly
         ? collabPermissions.pauseCollab
           ? "The host paused collaboration for the group."
           : "The host set the room to read-only."
+        : pairNavigatorLocked
+        ? "You are the Navigator. Request a role switch or use Live Pair Mode to edit."
         : frozenEditing
         ? "The host temporarily froze your editing access."
         : "The host allowed editing only on selected files."
@@ -12719,6 +15751,59 @@ function approveJoinRequest(socketId, options = {}) {
   });
 }
 
+function getModeratableCollabParticipants() {
+  return collabParticipants.filter((participant) => canModerateParticipant(participant));
+}
+
+function participantCannotSeeFile(participant, fileName) {
+  return Boolean(
+    participant &&
+      Array.isArray(participant.allowedFiles) &&
+      !participant.allowedFiles.includes(fileName),
+  );
+}
+
+function didParticipantFileAccessExpand(previousParticipant, nextParticipant) {
+  if (!previousParticipant || !nextParticipant) return false;
+  const previousRole = String(previousParticipant.role || "participant");
+  const nextRole = String(nextParticipant.role || "participant");
+  if (
+    !["host", "co-host"].includes(previousRole) &&
+    ["host", "co-host"].includes(nextRole)
+  ) {
+    return true;
+  }
+  if (!Array.isArray(previousParticipant.allowedFiles)) return false;
+  if (!Array.isArray(nextParticipant.allowedFiles)) return true;
+  const previousAllowed = new Set(
+    previousParticipant.allowedFiles.map((name) => String(name || "").trim().toLowerCase()),
+  );
+  return nextParticipant.allowedFiles.some(
+    (name) => !previousAllowed.has(String(name || "").trim().toLowerCase()),
+  );
+}
+
+function updateFileVisibilityQuickButton() {
+  if (!collabFileVisibilityBtn) return;
+  const canManageSession = Boolean(activeSessionId && canUseCoHostTools());
+  const canManage = Boolean(canManageSession && activeFile);
+  collabFileVisibilityBtn.hidden = !canManage;
+  collabFileVisibilityBtn.disabled = !canManage;
+  if (!canManageSession) {
+    collabFileVisibilityBtn.classList.remove("has-hidden-users");
+    document.querySelectorAll(".file-visibility-action").forEach((button) => button.remove());
+  }
+  if (!canManage) return;
+  const hiddenCount = getModeratableCollabParticipants().filter((participant) =>
+    participantCannotSeeFile(participant, activeFile.name),
+  ).length;
+  collabFileVisibilityBtn.classList.toggle("has-hidden-users", hiddenCount > 0);
+  collabFileVisibilityBtn.title = hiddenCount
+    ? `${hiddenCount} participant(s) cannot see ${activeFile.name}`
+    : `Everyone can see ${activeFile.name}`;
+  collabFileVisibilityBtn.setAttribute("aria-label", `Manage visibility for ${activeFile.name}`);
+}
+
 function rejectJoinRequest(socketId, options = {}) {
   if (!collabSocket || !activeSessionId || !isHost()) return Promise.resolve({ ok: false, error: "Host access required." });
   return new Promise((resolve) => {
@@ -12828,6 +15913,20 @@ function renderWaitingRoomPopup() {
         : await rejectJoinRequest(socketId);
       if (!result?.ok) card.querySelectorAll("button").forEach((action) => { action.disabled = false; });
     });
+  });
+}
+
+function openWaitingRoomRequestFromNotification(socketId) {
+  if (!activeSessionId || !isHost()) return;
+  renderWaitingRoomPopup();
+  requestAnimationFrame(() => {
+    const requestCard = Array.from(document.querySelectorAll("[data-waiting-socket]"))
+      .find((card) => card.dataset.waitingSocket === String(socketId || ""));
+    if (!requestCard) return;
+    requestCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    requestCard.classList.add("notification-target-flash");
+    setTimeout(() => requestCard.classList.remove("notification-target-flash"), 1800);
+    requestCard.querySelector("[data-waiting-action='accept']")?.focus();
   });
 }
 
@@ -13177,6 +16276,16 @@ function showGroupControls(sessionId) {
         )
         .join("")
     : `<div class="collab-section-note">No banned devices in this session.</div>`;
+  const activePairsHtml = pairOverview.length
+    ? pairOverview.map((pair) => `
+        <div class="collab-pending-row" data-active-pair-id="${escapeHtml(pair.id)}">
+          <div class="collab-participant-text">
+            <div class="collab-participant-name">${escapeHtml((pair.members || []).map((name) => formatCollabDisplayName(name)).join(" + "))}${pair.helpRequested ? `<span class="pair-participant-badge">Needs help</span>` : ""}</div>
+            <div class="collab-participant-meta">${escapeHtml(pair.mode === "live" ? "Live Pair" : `Driver: ${formatCollabDisplayName(pair.driver)}`)} · ${escapeHtml(pair.status || "active")}</div>
+          </div>
+          <button class="run-button end-pair-btn" data-pair-id="${escapeHtml(pair.id)}" style="background:#b42318;"><strong>END PAIR</strong></button>
+        </div>`).join("")
+    : `<div class="collab-section-note">No active pairs.</div>`;
 
   collabModalView = "group-controls";
   setCollabCloseButtonVisible(true);
@@ -13195,6 +16304,10 @@ function showGroupControls(sessionId) {
         </div>
       </div>
     </div>
+    <div class="collab-section-card">
+      <h4 class="collab-section-title">Active Pairs</h4>
+      <div class="collab-participant-list">${activePairsHtml}</div>
+    </div>
     ${hostView ? `<div class="collab-section-card">
       <h4 class="collab-section-title">Room Permissions</h4>
       <div class="collab-control-grid">
@@ -13207,6 +16320,7 @@ function showGroupControls(sessionId) {
         ${renderCollabControlButton({ id: "groupDisablePublishBtn", icon: "fa-solid fa-share-nodes", title: `Publish (${countParticipantsWithDisabledFeature("publishShare")} affected)`, desc: "Pick who cannot publish.", active: collabPermissions.disablePublishShare || countParticipantsWithDisabledFeature("publishShare") > 0 })}
         ${renderCollabControlButton({ id: "groupDisableRunBtn", icon: "fa-solid fa-play", title: `Run (${countParticipantsWithDisabledFeature("runCode")} affected)`, desc: "Pick who cannot run preview.", active: collabPermissions.disableRunCode || countParticipantsWithDisabledFeature("runCode") > 0 })}
         ${renderCollabControlButton({ id: "groupDisableConsoleBtn", icon: "fa-solid fa-terminal", title: `Console (${countParticipantsWithDisabledFeature("consoleAccess")} affected)`, desc: "Pick who cannot use console.", active: collabPermissions.disableConsoleAccess || countParticipantsWithDisabledFeature("consoleAccess") > 0 })}
+        ${renderCollabControlButton({ id: "groupPairingBtn", icon: "fa-solid fa-code-compare", title: collabPermissions.disablePairing ? "Enable Pairing" : "Disable Pairing", desc: collabPermissions.disablePairing ? "Allow new participant pairs." : "End active pairs and block new invitations.", active: collabPermissions.disablePairing, tone: "purple" })}
       </div>
     </div>` : ""}
     <div class="collab-section-card">
@@ -13215,6 +16329,8 @@ function showGroupControls(sessionId) {
         ${renderCollabControlButton({ id: "groupManageMuteBtn", icon: "fa-solid fa-comment-slash", title: `Mute Chat (${countParticipantsWithFlag("mutedChat")} affected)`, desc: "Pick who cannot chat.", active: countParticipantsWithFlag("mutedChat") > 0, tone: "warning" })}
         ${renderCollabControlButton({ id: "groupManageFreezeBtn", icon: "fa-solid fa-snowflake", title: `Freeze Editing (${countParticipantsWithFlag("frozenEditing")} affected)`, desc: "Pick who cannot edit.", active: countParticipantsWithFlag("frozenEditing") > 0, tone: "blue" })}
         ${renderCollabControlButton({ id: "groupManagePriorityBtn", icon: "fa-solid fa-star", title: `Priority (${countParticipantsWithFlag("priority")} marked)`, desc: "Pick priority people.", active: countParticipantsWithFlag("priority") > 0, tone: "purple" })}
+        ${renderCollabControlButton({ id: "groupDisablePairBtn", icon: "fa-solid fa-code-compare", title: `Pair Access (${countParticipantsWithDisabledFeature("pairing")} blocked)`, desc: "Pick who cannot send or accept pair invitations.", active: countParticipantsWithDisabledFeature("pairing") > 0, tone: "purple" })}
+        ${renderCollabControlButton({ id: "groupHideFilesBtn", icon: "fa-solid fa-eye-slash", title: "Hide Files", desc: "Choose who cannot see a file.", active: collabParticipants.some((participant) => Array.isArray(participant.allowedFiles)) })}
       </div>
     </div>
     <div class="collab-section-card">
@@ -13268,9 +16384,17 @@ function showGroupControls(sessionId) {
   bind("groupDisablePublishBtn", () => showGroupFeatureAccessPicker("publishShare"));
   bind("groupDisableRunBtn", () => showGroupFeatureAccessPicker("runCode"));
   bind("groupDisableConsoleBtn", () => showGroupFeatureAccessPicker("consoleAccess"));
+  bind("groupPairingBtn", () =>
+    updateGroupPermission(
+      { disablePairing: !collabPermissions.disablePairing },
+      collabPermissions.disablePairing ? "Pairing enabled." : "Pairing disabled and active pairs ended.",
+    ),
+  );
   bind("groupManageMuteBtn", () => showGroupParticipantFlagPicker("mutedChat"));
   bind("groupManageFreezeBtn", () => showGroupParticipantFlagPicker("frozenEditing"));
   bind("groupManagePriorityBtn", () => showGroupParticipantFlagPicker("priority"));
+  bind("groupDisablePairBtn", () => showGroupFeatureAccessPicker("pairing"));
+  bind("groupHideFilesBtn", () => showFileVisibilityEditor(activeFile ? activeFile.name : "", "group-controls"));
   bind("groupBringToFileBtn", bringEveryoneToFile);
   bind("groupPinFileBtn", async () => {
     const result = await promptForExistingFile("Pin which file for the team? Leave blank to clear.", collabPermissions.pinnedFile || (activeFile ? activeFile.name : ""));
@@ -13346,6 +16470,12 @@ function showGroupControls(sessionId) {
     updateGroupPermission({ quietMode: !collabPermissions.quietMode }, collabPermissions.quietMode ? "Quiet mode disabled." : "Quiet mode enabled."),
   );
   bind("groupDoneBtn", () => showSessionDetails(sessionId));
+  modalBody.querySelectorAll(".end-pair-btn").forEach((button) => {
+    button.onclick = async () => {
+      const response = await emitPairEvent("collab:pair:end", { pairId: button.dataset.pairId });
+      if (!response?.ok) showNotification(response?.error || "Unable to end the pair.", "error");
+    };
+  });
 
   if (hostView) {
     modalBody.querySelectorAll(".approve-join-btn").forEach((btn) => {
@@ -13454,33 +16584,95 @@ function showTransferHostConfirmation(targetName) {
   if (noBtn) noBtn.onclick = () => showParticipantActions(safeName);
 }
 
-function updateParticipantAllowedFiles(targetName, allowedFiles, reset = false) {
-  if (!collabSocket || !activeSessionId || !canUseCoHostTools()) return;
+function emitCollabWithAck(eventName, payload, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (!collabSocket?.connected) {
+      reject(new Error("Collaboration is not connected."));
+      return;
+    }
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const error = new Error("The collaboration server did not respond.");
+      error.code = "ACK_TIMEOUT";
+      reject(error);
+    }, timeoutMs);
+    collabSocket.emit(eventName, payload, (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(response || { ok: false, error: "Empty server response." });
+    });
+  });
+}
+
+async function updateParticipantAllowedFiles(targetName, allowedFiles, reset = false) {
+  if (!collabSocket || !activeSessionId || !canUseCoHostTools()) return false;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) {
     showNotification("You do not have permission to update this file access.", "error");
-    return;
+    return false;
   }
-  collabSocket.emit(
-    "collab:set-participant-files",
-    {
+  try {
+    const res = await emitCollabWithAck("collab:set-participant-files", {
       sessionId: activeSessionId,
       targetName,
       allowedFiles,
       reset,
-    },
-    (res) => {
-      if (!res?.ok) {
-        showNotification((res && res.error) || "Failed to update file access", "error");
-      } else {
-        showNotification(
-          reset ? `${targetName}'s file access was reset.` : `${targetName}'s file access updated.`,
-          "success",
-        );
-        showParticipantActions(targetName);
-      }
-    },
-  );
+    });
+    if (!res?.ok) {
+      showNotification(res?.error || "Failed to update file access", "error");
+      return false;
+    }
+    showNotification(
+      reset ? `${targetName}'s hidden files were cleared.` : `${targetName}'s hidden files updated.`,
+      "success",
+    );
+    renderFileList();
+    showParticipantActions(targetName);
+    return true;
+  } catch (error) {
+    showNotification(error?.message || "Failed to update file access", "error");
+    return false;
+  }
+}
+
+async function saveFileVisibility(fileName, hiddenFor) {
+  const hiddenNames = new Set((hiddenFor || []).map((name) => String(name || "").trim().toLowerCase()));
+  try {
+    const response = await emitCollabWithAck(
+      "collab:set-file-visibility",
+      { sessionId: activeSessionId, fileName, hiddenFor },
+      2800,
+    );
+    if (!response?.ok) throw new Error(response?.error || "Failed to update file visibility.");
+    return true;
+  } catch (error) {
+    if (error?.code !== "ACK_TIMEOUT") throw error;
+  }
+
+  const allFileNames = projectFiles.map((file) => file.name);
+  const updates = getModeratableCollabParticipants().map(async (participant) => {
+    const participantKey = String(participant.name || "").trim().toLowerCase();
+    const shouldHide = hiddenNames.has(participantKey);
+    const currentlyAllowed = Array.isArray(participant.allowedFiles)
+      ? [...participant.allowedFiles]
+      : [...allFileNames];
+    const nextAllowed = shouldHide
+      ? currentlyAllowed.filter((name) => name !== fileName)
+      : Array.from(new Set([...currentlyAllowed, fileName]));
+    const reset = nextAllowed.length === allFileNames.length;
+    const response = await emitCollabWithAck("collab:set-participant-files", {
+      sessionId: activeSessionId,
+      targetName: participant.name,
+      allowedFiles: reset ? [] : nextAllowed,
+      reset,
+    });
+    if (!response?.ok) throw new Error(response?.error || `Failed to update ${participant.name}.`);
+  });
+  await Promise.all(updates);
+  return true;
 }
 
 const groupFeatureControlConfig = [
@@ -13491,6 +16683,7 @@ const groupFeatureControlConfig = [
   { key: "publishShare", buttonId: "groupDisablePublishBtn", label: "DISABLE PUBLISH / SHARE" },
   { key: "runCode", buttonId: "groupDisableRunBtn", label: "DISABLE RUN" },
   { key: "consoleAccess", buttonId: "groupDisableConsoleBtn", label: "DISABLE CONSOLE" },
+  { key: "pairing", buttonId: "groupDisablePairBtn", label: "DISABLE PAIRING" },
 ];
 
 function getFeatureControlLabel(featureKey) {
@@ -13513,11 +16706,10 @@ function showParticipantDetails(targetName) {
   if (!canUseCoHostTools()) return;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) return;
-  const allowedText = Array.isArray(participant.allowedFiles)
-    ? participant.allowedFiles.length
-      ? participant.allowedFiles.join(", ")
-      : "No file access"
-    : "Using session file access";
+  const hiddenFileNames = projectFiles
+    .filter((file) => participantCannotSeeFile(participant, file.name))
+    .map((file) => file.name);
+  const allowedText = hiddenFileNames.length ? hiddenFileNames.join(", ") : "None";
   collabModalView = "participant-actions";
   setCollabCloseButtonVisible(true);
   modalTitle.innerHTML = "<strong>PARTICIPANT DETAILS</strong>";
@@ -13529,8 +16721,9 @@ function showParticipantDetails(targetName) {
       <p><strong>Joined:</strong> ${escapeHtml(formatParticipantJoinedAt(participant.joinedAt))}</p>
       <p><strong>Chat:</strong> ${participant.mutedChat ? "Muted" : "Enabled"}</p>
       <p><strong>Editing:</strong> ${participant.frozenEditing ? "Frozen" : "Enabled"}</p>
+      <p><strong>Self-renaming:</strong> ${participant.renameDisabled ? "Disabled" : "Enabled"}</p>
       <p><strong>Priority:</strong> ${participant.priority ? "Marked" : "Normal"}</p>
-      <p><strong>File access:</strong> ${escapeHtml(allowedText)}</p>
+      <p><strong>Hidden files:</strong> ${escapeHtml(allowedText)}</p>
     </div>
   `;
   setModalActions(`
@@ -13541,16 +16734,112 @@ function showParticipantDetails(targetName) {
   collabModal.style.display = "flex";
 }
 
+function showFileVisibilityEditor(fileName = "", returnView = "group-controls", fixedFile = false) {
+  if (!canUseCoHostTools()) return;
+  const selectedFile = projectFiles.find((file) => file.name === fileName) || activeFile || projectFiles[0];
+  if (!selectedFile) {
+    showNotification("There are no files to manage.", "info");
+    return;
+  }
+  const participants = getModeratableCollabParticipants();
+  const fileOptions = projectFiles
+    .map((file) => `<option value="${escapeHtml(file.name)}" ${file.name === selectedFile.name ? "selected" : ""}>${escapeHtml(file.name)}</option>`)
+    .join("");
+  const participantOptions = participants
+    .map((participant) => `
+      <label class="file-access-option">
+        <span class="file-access-check">
+          <input type="checkbox" value="${escapeHtml(participant.name)}" ${participantCannotSeeFile(participant, selectedFile.name) ? "checked" : ""}>
+          <span class="file-access-box" aria-hidden="true"></span>
+        </span>
+        <span class="file-access-name">
+          <span class="collab-participant-color" style="display:inline-block;background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
+          ${escapeHtml(participant.name)}
+        </span>
+      </label>`)
+    .join("");
+  collabModalView = "file-visibility";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = fixedFile ? "<strong>HIDE FILE</strong>" : "<strong>HIDE FILES</strong>";
+  modalBody.innerHTML = `
+    <div class="collab-section-card file-visibility-card">
+      <span class="collab-meta-label">FILE</span>
+      ${fixedFile
+        ? `<div class="visibility-file-name"><i class="fa-regular fa-file-code" aria-hidden="true"></i><strong>${escapeHtml(selectedFile.name)}</strong></div>`
+        : `<select id="visibilityFileSelect" class="collab-select" aria-label="Choose a file">${fileOptions}</select>`}
+      <p class="collab-section-note">Checked participants cannot see this file in their Files tab. Hosts and co-hosts keep access.</p>
+      <label class="file-access-option file-access-select-all">
+        <span class="file-access-check">
+          <input id="visibilitySelectAll" type="checkbox">
+          <span class="file-access-box" aria-hidden="true"></span>
+        </span>
+        <span class="file-access-name"><strong>SELECT ALL PARTICIPANTS</strong></span>
+      </label>
+      <div id="fileVisibilityParticipantList" class="participant-file-access-list">
+        ${participantOptions || `<div class="collab-section-note">No participants are available to manage.</div>`}
+      </div>
+    </div>`;
+  setModalActions(`
+    <button id="fileVisibilitySaveBtn" class="run-button"><strong>SAVE VISIBILITY</strong></button>
+    <button id="fileVisibilityBackBtn" class="run-button"><strong>BACK</strong></button>
+  `);
+  collabModal.style.display = "flex";
+
+  const select = document.getElementById("visibilityFileSelect");
+  const selectAll = document.getElementById("visibilitySelectAll");
+  const list = document.getElementById("fileVisibilityParticipantList");
+  const boxes = () => Array.from(list?.querySelectorAll("input[type='checkbox']") || []);
+  const syncSelectAll = () => {
+    if (!selectAll) return;
+    const current = boxes();
+    selectAll.checked = current.length > 0 && current.every((input) => input.checked);
+    selectAll.indeterminate = current.some((input) => input.checked) && !selectAll.checked;
+  };
+  boxes().forEach((input) => input.addEventListener("change", syncSelectAll));
+  syncSelectAll();
+  if (selectAll) selectAll.onchange = () => boxes().forEach((input) => { input.checked = selectAll.checked; });
+  if (select) select.onchange = () => showFileVisibilityEditor(select.value, returnView, false);
+  const saveBtn = document.getElementById("fileVisibilitySaveBtn");
+  if (saveBtn) saveBtn.onclick = async () => {
+    const hiddenFor = boxes().filter((input) => input.checked).map((input) => input.value);
+    const label = saveBtn.querySelector("strong");
+    saveBtn.disabled = true;
+    if (label) label.textContent = "SAVING...";
+    try {
+      await saveFileVisibility(selectedFile.name, hiddenFor);
+      showNotification(`${selectedFile.name} visibility updated.`, "success");
+      renderFileList();
+      if (returnView === "group-controls") showGroupControls(activeSessionId);
+      else if (returnView === "session") showSessionDetails(activeSessionId);
+      else closeModal();
+    } catch (error) {
+      saveBtn.disabled = false;
+      if (label) label.textContent = "SAVE VISIBILITY";
+      showNotification(error?.message || "Failed to update file visibility.", "error");
+    }
+  };
+  const backBtn = document.getElementById("fileVisibilityBackBtn");
+  if (backBtn) backBtn.onclick = () => {
+    if (returnView === "group-controls") showGroupControls(activeSessionId);
+    else if (returnView === "session") showSessionDetails(activeSessionId);
+    else closeModal();
+  };
+}
+
 function showParticipantFileAccessEditor(targetName) {
   if (!canUseCoHostTools()) return;
   const participant = getParticipantByName(targetName);
   if (!canModerateParticipant(participant)) return;
-  const currentSet = new Set(Array.isArray(participant.allowedFiles) ? participant.allowedFiles : []);
+  const hiddenSet = new Set(
+    projectFiles
+      .filter((file) => participantCannotSeeFile(participant, file.name))
+      .map((file) => file.name),
+  );
   const options = projectFiles
     .map((file) => `
       <label class="file-access-option">
         <span class="file-access-check">
-          <input type="checkbox" value="${escapeHtml(file.name)}" ${currentSet.has(file.name) ? "checked" : ""}>
+          <input type="checkbox" value="${escapeHtml(file.name)}" ${hiddenSet.has(file.name) ? "checked" : ""}>
           <span class="file-access-box" aria-hidden="true"></span>
         </span>
         <span class="file-access-name">${escapeHtml(file.name)}</span>
@@ -13559,37 +16848,67 @@ function showParticipantFileAccessEditor(targetName) {
     .join("");
   collabModalView = "participant-actions";
   setCollabCloseButtonVisible(true);
-  modalTitle.innerHTML = "<strong>ALLOW FILE ACCESS</strong>";
+  modalTitle.innerHTML = "<strong>HIDE FILE</strong>";
   modalBody.innerHTML = `
     <p style="margin: 8px 0 12px; color: var(--text-primary);">
-      Choose which files <strong>${escapeHtml(participant.name)}</strong> can edit.
+      Checked files will be hidden from <strong>${escapeHtml(participant.name)}</strong>'s Files tab.
     </p>
+    <label class="file-access-option file-access-select-all">
+      <span class="file-access-check">
+        <input id="participantFilesSelectAll" type="checkbox">
+        <span class="file-access-box" aria-hidden="true"></span>
+      </span>
+      <span class="file-access-name"><strong>SELECT ALL FILES</strong></span>
+    </label>
     <div id="participantFileAccessList" class="participant-file-access-list" style="text-align:left;max-height:220px;overflow:auto;border:1px solid var(--border-color);border-radius:8px;padding:10px;background:var(--bg-primary);">
       ${options || `<div style="color:var(--text-muted);">No files available.</div>`}
     </div>
   `;
   setModalActions(`
     <button id="participantFileAccessSaveBtn" class="run-button"><strong>SAVE</strong></button>
-    <button id="participantFileAccessResetBtn" class="run-button"><strong>RESET ACCESS</strong></button>
+    <button id="participantFileAccessResetBtn" class="run-button"><strong>SHOW ALL FILES</strong></button>
     <button id="participantFileAccessBackBtn" class="run-button"><strong>BACK</strong></button>
   `);
   const saveBtn = document.getElementById("participantFileAccessSaveBtn");
   const resetBtn = document.getElementById("participantFileAccessResetBtn");
   const backBtn = document.getElementById("participantFileAccessBackBtn");
+  const selectAll = document.getElementById("participantFilesSelectAll");
+  const fileInputs = () => Array.from(document.querySelectorAll("#participantFileAccessList input[type='checkbox']"));
+  const syncSelectAll = () => {
+    if (!selectAll) return;
+    const inputs = fileInputs();
+    selectAll.checked = inputs.length > 0 && inputs.every((input) => input.checked);
+    selectAll.indeterminate = inputs.some((input) => input.checked) && !selectAll.checked;
+  };
+  fileInputs().forEach((input) => input.addEventListener("change", syncSelectAll));
+  syncSelectAll();
+  if (selectAll) selectAll.onchange = () => fileInputs().forEach((input) => { input.checked = selectAll.checked; });
   if (saveBtn) {
-    saveBtn.onclick = () => {
-      const inputs = Array.from(
-        document.querySelectorAll("#participantFileAccessList input[type='checkbox']:checked"),
-      );
-      updateParticipantAllowedFiles(
+    saveBtn.onclick = async () => {
+      const hiddenFiles = fileInputs().filter((input) => input.checked).map((input) => input.value);
+      const allowedFiles = projectFiles.map((file) => file.name).filter((name) => !hiddenFiles.includes(name));
+      const label = saveBtn.querySelector("strong");
+      saveBtn.disabled = true;
+      if (resetBtn) resetBtn.disabled = true;
+      if (label) label.textContent = "SAVING...";
+      const saved = await updateParticipantAllowedFiles(
         participant.name,
-        inputs.map((input) => input.value),
+        allowedFiles,
         false,
       );
+      if (!saved && document.body.contains(saveBtn)) {
+        saveBtn.disabled = false;
+        if (resetBtn) resetBtn.disabled = false;
+        if (label) label.textContent = "SAVE";
+      }
     };
   }
   if (resetBtn) {
-    resetBtn.onclick = () => updateParticipantAllowedFiles(participant.name, [], true);
+    resetBtn.onclick = async () => {
+      resetBtn.disabled = true;
+      const saved = await updateParticipantAllowedFiles(participant.name, [], true);
+      if (!saved && document.body.contains(resetBtn)) resetBtn.disabled = false;
+    };
   }
   if (backBtn) backBtn.onclick = () => showParticipantActions(targetName);
   collabModal.style.display = "flex";
@@ -13616,16 +16935,22 @@ function syncFollowedParticipantView() {
     return;
   }
   if (!participant.currentFile) return;
+  const pairViewSyncActive = isPairViewSyncActive();
   if (!activeFile || activeFile.name !== participant.currentFile) {
+    if (pairViewSyncActive) pairIgnoreLocalScrollUntil = Date.now() + 700;
     switchFile(participant.currentFile);
-    setTimeout(() => syncFollowedParticipantCursor(), 0);
+    if (!pairViewSyncActive) setTimeout(() => syncFollowedParticipantCursor(), 0);
     return;
   }
+  if (pairViewSyncActive) return;
   syncFollowedParticipantCursor();
 }
 
 function syncFollowedParticipantCursor(cursorOverride = null) {
   if (!followedParticipantName) return;
+  // Pair Sync View follows the partner's exact presence scroll. The general
+  // cursor-centering behavior would otherwise fight that position and flicker.
+  if (isPairViewSyncActive()) return;
   const participant = getParticipantByName(followedParticipantName);
   if (!participant || !participant.currentFile || !activeFile) return;
   if (activeFile.name !== participant.currentFile) return;
@@ -13674,6 +16999,122 @@ function getPrivateChatCandidates() {
   return collabParticipants.filter((p) => p.name !== myInfo.name);
 }
 
+function formatCollabUnreadCount(count) {
+  const value = Math.max(0, Number(count) || 0);
+  return value > 99 ? "99+" : String(value);
+}
+
+function getPrivateUnreadKey(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function getPrivateUnreadCount(name) {
+  return Math.max(0, Number(collabUnreadPrivateMessages[getPrivateUnreadKey(name)]) || 0);
+}
+
+function getTotalPrivateUnreadCount() {
+  return Object.values(collabUnreadPrivateMessages).reduce(
+    (total, count) => total + Math.max(0, Number(count) || 0),
+    0,
+  );
+}
+
+function getTotalCollabUnreadCount() {
+  return Math.max(0, Number(collabUnreadGroupMessages) || 0) + getTotalPrivateUnreadCount();
+}
+
+function isViewingCollabChat(mode, targetName = "") {
+  if (
+    !collabModal ||
+    collabModal.style.display !== "flex" ||
+    collabModalView !== "session" ||
+    !document.getElementById("collabChatMessages")
+  ) {
+    return false;
+  }
+  if (mode === "group") return collabChatMode === "group";
+  return (
+    collabChatMode === "private" &&
+    getPrivateUnreadKey(collabChatTarget) === getPrivateUnreadKey(targetName)
+  );
+}
+
+function updateCollabUnreadBadges() {
+  const totalUnread = getTotalCollabUnreadCount();
+  const label = formatCollabUnreadCount(totalUnread);
+  if (collabMessageBadge) {
+    collabMessageBadge.textContent = label;
+    collabMessageBadge.hidden = totalUnread === 0;
+    collabMessageBadge.setAttribute(
+      "aria-label",
+      `${totalUnread} unread collaboration message${totalUnread === 1 ? "" : "s"}`,
+    );
+  }
+  collabBtn?.classList.toggle("has-unread-messages", totalUnread > 0);
+
+  const dropdownBadge = document.getElementById("collabChatDropdownBadge");
+  if (dropdownBadge) {
+    dropdownBadge.textContent = label;
+    dropdownBadge.hidden = totalUnread === 0;
+    dropdownBadge.setAttribute("aria-label", `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}`);
+  }
+
+  const modeEl = document.getElementById("collabChatMode");
+  if (modeEl) {
+    const groupOption = modeEl.querySelector('option[value="group"]');
+    const privateOption = modeEl.querySelector('option[value="private"]');
+    const groupDisabled = collabPermissions.disableGroupChat || collabPermissions.disableAllChat;
+    if (groupOption) {
+      groupOption.textContent = `Group Chat${collabUnreadGroupMessages ? ` (${formatCollabUnreadCount(collabUnreadGroupMessages)})` : ""}${groupDisabled ? " (disabled)" : ""}`;
+    }
+    const privateUnread = getTotalPrivateUnreadCount();
+    if (privateOption) {
+      privateOption.textContent = `Private Chat${privateUnread ? ` (${formatCollabUnreadCount(privateUnread)})` : ""}`;
+    }
+  }
+
+  const targetEl = document.getElementById("collabChatTarget");
+  if (targetEl) {
+    Array.from(targetEl.options).forEach((option) => {
+      const unread = getPrivateUnreadCount(option.value);
+      option.textContent = `${option.value}${unread ? ` (${formatCollabUnreadCount(unread)})` : ""}`;
+    });
+  }
+}
+
+function markCurrentCollabChatRead() {
+  if (!isViewingCollabChat(collabChatMode, collabChatTarget)) return;
+  if (collabChatMode === "group") {
+    collabUnreadGroupMessages = 0;
+  } else if (collabChatTarget) {
+    delete collabUnreadPrivateMessages[getPrivateUnreadKey(collabChatTarget)];
+  }
+  updateCollabUnreadBadges();
+}
+
+function resetCollabUnreadMessages() {
+  collabUnreadGroupMessages = 0;
+  collabUnreadPrivateMessages = {};
+  updateCollabUnreadBadges();
+}
+
+function openCollabChatFromNotification(mode, targetName = "") {
+  if (!activeSessionId) return;
+  collabChatMode = mode === "private" ? "private" : "group";
+  collabChatTarget = collabChatMode === "private" ? String(targetName || "") : "";
+  if (collabChatMode === "group") {
+    collabUnreadGroupMessages = 0;
+  } else if (collabChatTarget) {
+    delete collabUnreadPrivateMessages[getPrivateUnreadKey(collabChatTarget)];
+  }
+  updateCollabUnreadBadges();
+  showSessionDetails(activeSessionId);
+  requestAnimationFrame(() => {
+    document.getElementById("collabChatMessages")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("collabChatInput")?.focus();
+  });
+}
+
 function getCurrentChatMessages() {
   if (collabChatMode === "private") {
     const target = collabChatTarget;
@@ -13716,7 +17157,7 @@ function renderCollabChatMessages() {
       const senderTheme = m.fromTheme || getParticipantThemeByName(m.from);
       return `<div style="margin-bottom:8px; padding:8px; border:1px solid var(--border-color); border-radius:8px; background:${mine ? "color-mix(in srgb, var(--accent-color) 15%, var(--bg-tertiary))" : "var(--bg-tertiary)"};">
         <div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text-muted);">
-          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeHtml(senderTheme)};margin-right:6px;vertical-align:middle;"></span><strong style="color:${escapeHtml(senderTheme)};">${escapeHtml(m.from)}</strong>${m.to ? ` to <strong>${escapeHtml(m.to)}</strong>` : ""}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeHtml(senderTheme)};margin-right:6px;vertical-align:middle;"></span><strong style="color:${escapeHtml(senderTheme)};">${escapeHtml(formatCollabDisplayName(m.from))}</strong>${m.to ? ` to <strong>${escapeHtml(formatCollabDisplayName(m.to))}</strong>` : ""}</span>
           <span>${escapeHtml(formatChatTime(m.ts || Date.now()))}</span>
         </div>
         <div style="margin-top:4px;color:var(--text-primary);white-space:pre-wrap;word-break:break-word;">${escapeHtml(m.text || "")}</div>
@@ -13752,10 +17193,13 @@ function buildCollabChatPanelHtml() {
     <hr style="border-color:var(--border-color);margin:15px 0;">
     <h4 style="text-align:left;margin:0 0 10px;">Chat</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-      <select id="collabChatMode" style="flex:1;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;">
-        ${groupOption}
-        ${privateOption}
-      </select>
+      <div class="collab-chat-dropdown-wrap">
+        <select id="collabChatMode" style="width:100%;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;">
+          ${groupOption}
+          ${privateOption}
+        </select>
+        <span id="collabChatDropdownBadge" class="collab-chat-dropdown-badge" aria-label="0 unread messages" hidden>0</span>
+      </div>
       <select id="collabChatTarget" style="flex:1;min-width:140px;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;${collabChatMode === "private" ? "" : "display:none;"}">
         ${privateOptions}
       </select>
@@ -13773,7 +17217,11 @@ function bindCollabChatControls() {
   const targetEl = document.getElementById("collabChatTarget");
   const inputEl = document.getElementById("collabChatInput");
   const sendBtn = document.getElementById("collabChatSendBtn");
+  const messagesEl = document.getElementById("collabChatMessages");
   if (!modeEl || !inputEl || !sendBtn) return;
+
+  modeEl.addEventListener("pointerdown", markCurrentCollabChatRead);
+  messagesEl?.addEventListener("pointerdown", markCurrentCollabChatRead);
 
   modeEl.onchange = () => {
     collabChatMode = modeEl.value;
@@ -13785,12 +17233,14 @@ function bindCollabChatControls() {
       collabChatTarget = targetEl.value || collabChatTarget;
     }
     renderCollabChatMessages();
+    markCurrentCollabChatRead();
   };
 
   if (targetEl) {
     targetEl.onchange = () => {
       collabChatTarget = targetEl.value || "";
       renderCollabChatMessages();
+      markCurrentCollabChatRead();
     };
   }
 
@@ -13840,6 +17290,770 @@ function requestCollabChatHistory() {
     collabPrivateMessages = Array.isArray(res.privateMessages) ? res.privateMessages : [];
     renderCollabChatMessages();
   });
+}
+
+function getPairOverviewForName(name) {
+  const key = String(name || "").trim().toLowerCase();
+  return pairOverview.find((pair) =>
+    Array.isArray(pair?.members) && pair.members.some((memberName) => String(memberName || "").trim().toLowerCase() === key),
+  ) || null;
+}
+
+function getPairPartnerName(pair = activePairState) {
+  const myKey = String(myInfo.name || "").trim().toLowerCase();
+  return (pair?.members || []).find((name) => String(name || "").trim().toLowerCase() !== myKey) || "";
+}
+
+function openPairToolsFromNotification(tab = "chat") {
+  if (!activePairState || !activeSessionId) return;
+  const allowedTabs = new Set(["chat", "suggestions", "tasks", "activity"]);
+  pairPanelTab = allowedTabs.has(tab) ? tab : "chat";
+  pairPanelOpen = true;
+  clearPairToolActivity(pairPanelTab);
+  renderPairDock();
+  requestAnimationFrame(() => {
+    const focusTarget = pairPanelTab === "chat"
+      ? document.getElementById("pairChatInput")
+      : pairPanelTab === "tasks"
+        ? document.getElementById("pairTaskInput")
+        : document.querySelector(".pair-panel-body");
+    focusTarget?.focus?.();
+  });
+}
+
+function openPairSuggestionFromNotification() {
+  const editorState = editorTextarea
+    ? {
+        selectionStart: editorTextarea.selectionStart,
+        selectionEnd: editorTextarea.selectionEnd,
+        scrollTop: editorTextarea.scrollTop,
+        scrollLeft: editorTextarea.scrollLeft,
+      }
+    : null;
+  openPairToolsFromNotification("suggestions");
+  requestAnimationFrame(() => {
+    if (!editorTextarea || !editorState) return;
+    editorTextarea.setSelectionRange(editorState.selectionStart, editorState.selectionEnd);
+    editorTextarea.scrollTop = editorState.scrollTop;
+    editorTextarea.scrollLeft = editorState.scrollLeft;
+  });
+}
+
+function openPairTaskFromNotification(taskId) {
+  openPairToolsFromNotification("tasks");
+  requestAnimationFrame(() => {
+    const taskRow = Array.from(document.querySelectorAll("[data-pair-task-id]"))
+      .find((row) => row.dataset.pairTaskId === String(taskId || ""));
+    if (!taskRow) return;
+    taskRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    taskRow.classList.add("notification-target-flash");
+    setTimeout(() => taskRow.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
+function openPairHelpFromNotification(pairId) {
+  if (!activeSessionId || !canUseCoHostTools()) return;
+  showGroupControls(activeSessionId);
+  requestAnimationFrame(() => {
+    const pairRow = Array.from(document.querySelectorAll("[data-active-pair-id]"))
+      .find((row) => row.dataset.activePairId === String(pairId || ""));
+    if (!pairRow) return;
+    pairRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    pairRow.classList.add("notification-target-flash");
+    setTimeout(() => pairRow.classList.remove("notification-target-flash"), 1800);
+  });
+}
+
+function isCurrentPairDriver() {
+  return Boolean(
+    activePairState &&
+    String(activePairState.driver || "").trim().toLowerCase() === String(myInfo.name || "").trim().toLowerCase()
+  );
+}
+
+function isPairNavigatorEditingLocked() {
+  return Boolean(
+    activePairState &&
+    activePairState.status === "active" &&
+    activePairState.mode === "driver" &&
+    !isCurrentPairDriver()
+  );
+}
+
+function isPairViewSyncActive() {
+  return Boolean(
+    activePairState &&
+      pairFollowEnabled &&
+      !pairFollowSuspended &&
+      followedParticipantName &&
+      followedParticipantName.toLowerCase() === getPairPartnerName().toLowerCase(),
+  );
+}
+
+function resetPairToolActivity() {
+  pairToolActivity = { chat: false, suggestions: false, tasks: false };
+}
+
+function hasPairToolActivity() {
+  return Object.values(pairToolActivity).some(Boolean);
+}
+
+function markPairToolActivity(tab) {
+  if (!Object.prototype.hasOwnProperty.call(pairToolActivity, tab)) return;
+  if (pairPanelOpen && pairPanelTab === tab) return;
+  pairToolActivity[tab] = true;
+}
+
+function clearPairToolActivity(tab) {
+  if (Object.prototype.hasOwnProperty.call(pairToolActivity, tab)) {
+    pairToolActivity[tab] = false;
+  }
+}
+
+function getChangedPairToolTabs(previousPair, nextPair) {
+  const changed = new Set();
+  if (!previousPair || !nextPair || previousPair.id !== nextPair.id) return changed;
+
+  const previousSuggestions = new Map(
+    (previousPair.suggestions || []).map((suggestion) => [suggestion.id, suggestion]),
+  );
+  if ((nextPair.suggestions || []).some((suggestion) => {
+    const previous = previousSuggestions.get(suggestion.id);
+    return !previous || previous.status !== suggestion.status;
+  })) {
+    changed.add("suggestions");
+  }
+
+  const previousTasks = new Map(
+    (previousPair.tasks || []).map((task) => [task.id, task]),
+  );
+  if ((nextPair.tasks || []).some((task) => {
+    const previous = previousTasks.get(task.id);
+    return !previous || previous.done !== task.done;
+  })) {
+    changed.add("tasks");
+  }
+  return changed;
+}
+
+function getNewPairActionNotifications(previousPair, nextPair) {
+  if (!previousPair || !nextPair || previousPair.id !== nextPair.id) return [];
+  const notifications = [];
+  const myName = String(myInfo.name || "").trim().toLowerCase();
+  const isMine = (name) => String(name || "").trim().toLowerCase() === myName;
+
+  const previousSuggestionIds = new Set(
+    (previousPair.suggestions || []).map((suggestion) => suggestion.id),
+  );
+  (nextPair.suggestions || []).forEach((suggestion) => {
+    if (!previousSuggestionIds.has(suggestion.id) && !isMine(suggestion.from)) {
+      notifications.push({ kind: "suggestion", item: suggestion });
+    }
+  });
+
+  const previousTaskIds = new Set((previousPair.tasks || []).map((task) => task.id));
+  (nextPair.tasks || []).forEach((task) => {
+    if (!previousTaskIds.has(task.id) && !isMine(task.createdBy)) {
+      notifications.push({ kind: "task", item: task });
+    }
+  });
+  return notifications;
+}
+
+function renderPairPanelHtml() {
+  if (!activePairState || !pairPanelOpen) return "";
+  const tabs = [
+    ["chat", "Chat"],
+    ["suggestions", "Suggestions"],
+    ["tasks", "Tasks"],
+    ["activity", "Activity"],
+  ];
+  let body = "";
+  if (pairPanelTab === "chat") {
+    const messages = activePairState.chat || [];
+    body = `
+      <div class="pair-chat-list">
+        ${messages.length ? messages.map((message) => `
+          <div class="pair-chat-message ${message.from === myInfo.name ? "mine" : ""}">
+            <small>${escapeHtml(formatCollabDisplayName(message.from))} · ${escapeHtml(formatChatTime(message.ts))}</small>
+            ${escapeHtml(message.text)}
+          </div>`).join("") : `<div class="pair-empty">No pair messages yet.</div>`}
+      </div>
+      <div class="pair-compose">
+        <input id="pairChatInput" maxlength="1000" placeholder="Message your partner...">
+        <button id="pairChatSendBtn" type="button">SEND</button>
+      </div>`;
+  } else if (pairPanelTab === "suggestions") {
+    const suggestions = [...(activePairState.suggestions || [])].reverse();
+    body = `
+      <div class="pair-panel-tools"><button id="pairAddSuggestionBtn" type="button"><i class="fa-solid fa-lightbulb"></i> SUGGEST FROM SELECTION</button></div>
+      <div class="pair-list">
+        ${suggestions.length ? suggestions.map((suggestion) => `
+          <div class="pair-list-card ${suggestion.status !== "open" ? "is-done" : ""}">
+            <small>${escapeHtml(formatCollabDisplayName(suggestion.from))} · ${escapeHtml(suggestion.fileName)} · ${escapeHtml(suggestion.status)}</small>
+            ${suggestion.comment ? `<p>${escapeHtml(suggestion.comment)}</p>` : ""}
+            <p><strong>Replace:</strong> ${escapeHtml(suggestion.original || "(cursor position)")}</p>
+            <p><strong>With:</strong> ${escapeHtml(suggestion.replacement || "(remove)")}</p>
+            <div class="pair-panel-tools">
+              <button type="button" class="pair-view-suggestion" data-id="${escapeHtml(suggestion.id)}">VIEW</button>
+              ${suggestion.status === "open" ? `<button type="button" class="pair-apply-suggestion" data-id="${escapeHtml(suggestion.id)}">APPLY</button><button type="button" class="pair-resolve-suggestion" data-id="${escapeHtml(suggestion.id)}">RESOLVE</button><button type="button" class="pair-reject-suggestion" data-id="${escapeHtml(suggestion.id)}">REJECT</button>` : ""}
+            </div>
+          </div>`).join("") : `<div class="pair-empty">Select code and create a suggestion for your partner.</div>`}
+      </div>`;
+  } else if (pairPanelTab === "tasks") {
+    const tasks = activePairState.tasks || [];
+    body = `
+      <div class="pair-compose">
+        <input id="pairTaskInput" maxlength="300" placeholder="Add a pair task...">
+        <button id="pairTaskAddBtn" type="button">ADD</button>
+      </div>
+      <div class="pair-list" style="margin-top:10px;">
+        ${tasks.length ? tasks.map((task) => `
+          <label class="pair-list-card pair-task-row ${task.done ? "is-done" : ""}" data-pair-task-id="${escapeHtml(task.id)}">
+            <input class="pair-task-toggle" type="checkbox" data-id="${escapeHtml(task.id)}" ${task.done ? "checked" : ""}>
+            <span><small>${escapeHtml(formatCollabDisplayName(task.createdBy, "Pair"))}</small>${escapeHtml(task.text)}</span>
+          </label>`).join("") : `<div class="pair-empty">No tasks yet.</div>`}
+      </div>`;
+  } else {
+    const activity = [...(activePairState.activity || [])].reverse();
+    body = `<div class="pair-list">
+      ${activity.length ? activity.map((entry) => `<div class="pair-list-card"><small>${escapeHtml(formatParticipantJoinedAt(entry.ts))}</small>${escapeHtml(entry.text)}</div>`).join("") : `<div class="pair-empty">No pair activity yet.</div>`}
+    </div>`;
+  }
+  return `
+    <div class="pair-panel">
+      <div class="pair-panel-tabs">
+        ${tabs.map(([key, label]) => {
+          const hasActivity = Boolean(pairToolActivity[key]);
+          return `<button type="button" class="pair-tab-btn pair-activity-target ${hasActivity ? "has-activity" : ""} ${pairPanelTab === key ? "active" : ""}" data-tab="${key}" aria-label="${label}${hasActivity ? ", new activity" : ""}">${label}${hasActivity ? '<span class="pair-activity-dot" aria-hidden="true"></span>' : ""}</button>`;
+        }).join("")}
+      </div>
+      <div class="pair-panel-body">
+        <div class="pair-panel-tools">
+          <select id="pairModeSelect" aria-label="Pair mode">
+            <option value="driver" ${activePairState.mode === "driver" ? "selected" : ""}>Driver Mode</option>
+            <option value="live" ${activePairState.mode === "live" ? "selected" : ""}>Live Pair Mode</option>
+          </select>
+          <button id="pairHelpBtn" type="button" class="${activePairState.helpRequested ? "active" : ""}"><i class="fa-solid fa-hand"></i> ${activePairState.helpRequested ? "HELP REQUESTED" : "ASK HOST"}</button>
+          <button id="pairSnapshotBtn" type="button"><i class="fa-solid fa-download"></i> SNAPSHOT</button>
+        </div>
+        ${body}
+      </div>
+    </div>`;
+}
+
+function renderPairDock() {
+  if (!pairDock || !pairDockContent) return;
+  if (!activePairState || !activeSessionId) {
+    pairDock.hidden = true;
+    pairDockContent.innerHTML = "";
+    return;
+  }
+  const partnerName = getPairPartnerName();
+  const role = isCurrentPairDriver() ? "Driver" : "Navigator";
+  const status = activePairState.status || "active";
+  const voiceActive = ["calling", "connecting", "connected"].includes(pairVoiceStatus);
+  const hasToolActivity = hasPairToolActivity();
+  pairDock.hidden = false;
+  pairDockContent.innerHTML = `
+    <div class="pair-dock-header">
+      <span class="pair-role-badge ${role === "Navigator" ? "navigator" : ""}">${role}</span>
+      <div class="pair-dock-identity">
+        <strong>Pairing with ${escapeHtml(partnerName)}</strong>
+        <span>${activePairState.mode === "live" ? "Live Pair Mode" : "Driver Mode"}</span>
+      </div>
+      <span class="pair-status-badge ${escapeHtml(status)}">${escapeHtml(status)}</span>
+    </div>
+    <div class="pair-dock-actions">
+      <button id="pairSyncViewBtn" type="button" class="${pairFollowEnabled && !pairFollowSuspended ? "active" : ""}" aria-pressed="${pairFollowEnabled && !pairFollowSuspended ? "true" : "false"}" title="Match your partner's current file and scroll position"><i class="fa-solid fa-arrows-to-eye"></i> SYNC VIEW</button>
+      <button id="pairSwitchBtn" type="button" ${status !== "active" ? "disabled" : ""}><i class="fa-solid fa-right-left"></i> SWITCH</button>
+      <button id="pairVoiceBtn" type="button" class="${voiceActive ? "active" : ""}"><i class="fa-solid fa-microphone${voiceActive ? "-slash" : ""}"></i> ${voiceActive ? "END VOICE" : "VOICE"}</button>
+      <button id="pairPanelBtn" type="button" class="pair-activity-target ${hasToolActivity ? "has-activity" : ""} ${pairPanelOpen ? "active" : ""}" aria-label="Pair tools${hasToolActivity ? ", new activity" : ""}"><i class="fa-solid fa-code-compare"></i> TOOLS${hasToolActivity ? '<span class="pair-activity-dot" aria-hidden="true"></span>' : ""}</button>
+      <button id="pairLeaveBtn" type="button" class="danger"><i class="fa-solid fa-xmark"></i> LEAVE</button>
+    </div>
+    ${renderPairPanelHtml()}
+  `;
+  bindPairDockControls();
+}
+
+async function emitPairEvent(eventName, payload = {}, timeout = 5000) {
+  try {
+    return await emitCollabWithAck(eventName, { sessionId: activeSessionId, ...payload }, timeout);
+  } catch (error) {
+    return { ok: false, error: error?.message || "The pair request timed out." };
+  }
+}
+
+function bindPairDockControls() {
+  const bind = (id, handler) => {
+    const element = document.getElementById(id);
+    if (element) element.onclick = handler;
+  };
+  bind("pairSyncViewBtn", () => {
+    const syncIsActive = pairFollowEnabled && !pairFollowSuspended;
+    pairFollowEnabled = !syncIsActive;
+    pairFollowSuspended = false;
+    followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+    if (pairFollowEnabled) {
+      syncFollowedParticipantView();
+      if (pairPartnerPresence) applyPairPartnerPresence(pairPartnerPresence);
+      requestPairPartnerPresence();
+      showNotification(`Sync View is on for ${followedParticipantName}.`, "success");
+    } else {
+      stopPairFollowAnimation();
+      showNotification("Sync View is off.", "info");
+    }
+    renderPairDock();
+  });
+  bind("pairSwitchBtn", async () => {
+    const response = await emitPairEvent("collab:pair:switch-request");
+    showNotification(response?.ok ? "Role switch requested." : response?.error || "Unable to request a role switch.", response?.ok ? "success" : "error");
+  });
+  bind("pairVoiceBtn", () => {
+    if (["calling", "connecting", "connected"].includes(pairVoiceStatus)) stopPairVoice(true);
+    else requestPairVoiceCall();
+  });
+  bind("pairPanelBtn", () => {
+    pairPanelOpen = !pairPanelOpen;
+    if (pairPanelOpen) clearPairToolActivity(pairPanelTab);
+    renderPairDock();
+  });
+  bind("pairLeaveBtn", async () => {
+    const confirmed = await showAppConfirm("LEAVE PAIR", "Leave your current pair? Pair chat, tasks, and unresolved suggestion pins will close.", "LEAVE", "STAY");
+    if (!confirmed?.ok) return;
+    const response = await emitPairEvent("collab:pair:leave");
+    if (!response?.ok) showNotification(response?.error || "Unable to leave the pair.", "error");
+  });
+  document.querySelectorAll(".pair-tab-btn").forEach((button) => {
+    button.onclick = () => {
+      pairPanelTab = button.dataset.tab || "chat";
+      clearPairToolActivity(pairPanelTab);
+      renderPairDock();
+    };
+  });
+  const modeSelect = document.getElementById("pairModeSelect");
+  if (modeSelect) modeSelect.onchange = async () => {
+    const response = await emitPairEvent("collab:pair:set-mode", { mode: modeSelect.value });
+    if (!response?.ok) showNotification(response?.error || "Unable to change pair mode.", "error");
+  };
+  bind("pairHelpBtn", async () => {
+    const response = await emitPairEvent("collab:pair:help", { requested: !activePairState?.helpRequested });
+    if (!response?.ok) showNotification(response?.error || "Unable to update the help request.", "error");
+  });
+  bind("pairSnapshotBtn", savePairSnapshot);
+  bindPairChatControls();
+  bindPairSuggestionControls();
+  bindPairTaskControls();
+}
+
+function bindPairChatControls() {
+  const input = document.getElementById("pairChatInput");
+  const button = document.getElementById("pairChatSendBtn");
+  if (!input || !button) return;
+  const send = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    const response = await emitPairEvent("collab:pair:chat", { text });
+    if (response?.ok) input.value = "";
+    else showNotification(response?.error || "Pair message failed.", "error");
+  };
+  button.onclick = send;
+  input.onkeydown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      send();
+    }
+  };
+}
+
+async function addPairSuggestionFromSelection() {
+  if (!activeFile || !editorTextarea) return;
+  const start = editorTextarea.selectionStart;
+  const end = editorTextarea.selectionEnd;
+  const original = editorTextarea.value.slice(start, end);
+  const replacementResult = await showAppPrompt(
+    "PAIR SUGGESTION",
+    original ? "Enter the replacement for the selected code." : "Enter code to insert at the cursor.",
+    original,
+    "Suggested code",
+  );
+  if (!replacementResult?.ok) return;
+  const commentResult = await showAppPrompt(
+    "SUGGESTION NOTE",
+    "Add a short explanation for your partner (optional).",
+    "",
+    "Why this change?",
+  );
+  if (!commentResult?.ok) return;
+  const response = await emitPairEvent("collab:pair:suggestion:add", {
+    fileName: activeFile.name,
+    start,
+    end,
+    original,
+    replacement: String(replacementResult.value || ""),
+    comment: String(commentResult.value || ""),
+  });
+  showNotification(response?.ok ? "Suggestion sent to your partner." : response?.error || "Suggestion failed.", response?.ok ? "success" : "error");
+}
+
+function getActivePairSuggestion(id) {
+  return (activePairState?.suggestions || []).find((suggestion) => suggestion.id === id) || null;
+}
+
+function viewPairSuggestion(suggestion) {
+  if (!suggestion) return;
+  const file = projectFiles.find((entry) => entry.name === suggestion.fileName);
+  if (!file) return showNotification("That suggestion file is unavailable.", "error");
+  switchFile(file.name);
+  const start = Math.min(Number(suggestion.start || 0), editorTextarea.value.length);
+  const end = Math.min(Math.max(start, Number(suggestion.end || start)), editorTextarea.value.length);
+  editorTextarea.focus();
+  editorTextarea.setSelectionRange(start, end);
+}
+
+async function applyPairSuggestion(suggestion) {
+  if (!suggestion) return;
+  viewPairSuggestion(suggestion);
+  if (editorTextarea.readOnly || !canCurrentUserEditFile(suggestion.fileName)) {
+    showNotification("You do not currently have permission to apply this suggestion.", "error");
+    return;
+  }
+  const start = Math.min(Number(suggestion.start || 0), editorTextarea.value.length);
+  const end = Math.min(Math.max(start, Number(suggestion.end || start)), editorTextarea.value.length);
+  const current = editorTextarea.value.slice(start, end);
+  if (current !== String(suggestion.original || "")) {
+    const confirm = await showAppConfirm(
+      "CODE CHANGED",
+      "The selected code changed after this suggestion was created. Apply it at the original position anyway?",
+      "APPLY",
+      "CANCEL",
+    );
+    if (!confirm?.ok) return;
+  }
+  beginEditorHistoryCapture(editorTextarea);
+  editorTextarea.value = `${editorTextarea.value.slice(0, start)}${suggestion.replacement || ""}${editorTextarea.value.slice(end)}`;
+  editorTextarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText" }));
+  const caret = start + String(suggestion.replacement || "").length;
+  editorTextarea.setSelectionRange(caret, caret);
+  await emitPairEvent("collab:pair:suggestion:update", { suggestionId: suggestion.id, status: "applied" });
+}
+
+function bindPairSuggestionControls() {
+  const addButton = document.getElementById("pairAddSuggestionBtn");
+  if (addButton) addButton.onclick = addPairSuggestionFromSelection;
+  document.querySelectorAll(".pair-view-suggestion").forEach((button) => {
+    button.onclick = () => viewPairSuggestion(getActivePairSuggestion(button.dataset.id));
+  });
+  document.querySelectorAll(".pair-apply-suggestion").forEach((button) => {
+    button.onclick = () => applyPairSuggestion(getActivePairSuggestion(button.dataset.id));
+  });
+  document.querySelectorAll(".pair-reject-suggestion").forEach((button) => {
+    button.onclick = () => emitPairEvent("collab:pair:suggestion:update", { suggestionId: button.dataset.id, status: "rejected" });
+  });
+  document.querySelectorAll(".pair-resolve-suggestion").forEach((button) => {
+    button.onclick = () => emitPairEvent("collab:pair:suggestion:update", { suggestionId: button.dataset.id, status: "resolved" });
+  });
+}
+
+function bindPairTaskControls() {
+  const input = document.getElementById("pairTaskInput");
+  const addButton = document.getElementById("pairTaskAddBtn");
+  const add = async () => {
+    const text = String(input?.value || "").trim();
+    if (!text) return;
+    const response = await emitPairEvent("collab:pair:task:add", { text });
+    if (response?.ok && input) input.value = "";
+    else if (!response?.ok) showNotification(response?.error || "Unable to add the task.", "error");
+  };
+  if (addButton) addButton.onclick = add;
+  if (input) input.onkeydown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      add();
+    }
+  };
+  document.querySelectorAll(".pair-task-toggle").forEach((checkbox) => {
+    checkbox.onchange = () => emitPairEvent("collab:pair:task:toggle", { taskId: checkbox.dataset.id, done: checkbox.checked });
+  });
+}
+
+async function savePairSnapshot() {
+  const response = await emitPairEvent("collab:pair:snapshot", {}, 8000);
+  if (!response?.ok || !response.snapshot) {
+    showNotification(response?.error || "Unable to save the pair snapshot.", "error");
+    return;
+  }
+  const blob = new Blob([JSON.stringify(response.snapshot, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `codx-pair-${activePairState?.id || "snapshot"}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  showNotification("Pair snapshot saved.", "success");
+}
+
+function showPairModeDialog(targetName) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    appDialogTitle.textContent = "START PAIR";
+    appDialogMessage.innerHTML = `Choose how you want to pair with <strong>${escapeHtml(targetName)}</strong>. Driver Mode lets one person edit; Live Pair lets both edit.`;
+    appDialogInput.style.display = "none";
+    appDialogActions.innerHTML = `
+      <button id="pairInviteCancelBtn" class="run-button" type="button" style="background:#6b7280;"><strong>CANCEL</strong></button>
+      <button id="pairInviteLiveBtn" class="run-button" type="button" style="background:#2563eb;"><strong>LIVE PAIR</strong></button>
+      <button id="pairInviteDriverBtn" class="run-button" type="button"><strong>DRIVER MODE</strong></button>`;
+    appDialog.style.display = "flex";
+    document.getElementById("pairInviteCancelBtn").onclick = () => closeAppDialog({ ok: false });
+    document.getElementById("pairInviteLiveBtn").onclick = () => closeAppDialog({ ok: true, value: "live" });
+    document.getElementById("pairInviteDriverBtn").onclick = () => closeAppDialog({ ok: true, value: "driver" });
+  });
+}
+
+async function inviteParticipantToPair(targetName) {
+  if (collabPermissions.disablePairing) return showNotification("The host disabled pairing.", "error");
+  const modeResult = await showPairModeDialog(targetName);
+  if (!modeResult?.ok) return;
+  const response = await emitPairEvent("collab:pair:invite", {
+    targetName,
+    mode: modeResult.value,
+  });
+  showNotification(
+    response?.ok ? `Pair invitation sent to ${targetName}.` : response?.error || "Pair invitation failed.",
+    response?.ok ? "success" : "error",
+  );
+}
+
+async function handlePairInvitation(invite) {
+  const modeLabel = invite?.mode === "live" ? "Live Pair Mode (both can edit)" : "Driver Mode (inviter starts as Driver)";
+  const result = await showAppConfirmHtml(
+    "PAIR INVITATION",
+    `<strong>${escapeHtml(invite?.from || "A participant")}</strong> wants to pair with you.<br><br><strong>Mode:</strong> ${escapeHtml(modeLabel)}`,
+    "ACCEPT",
+    "DECLINE",
+  );
+  const response = await emitPairEvent("collab:pair:respond", { inviteId: invite?.id, accept: Boolean(result?.ok) });
+  if (!response?.ok) showNotification(response?.error || "Unable to answer the pair invitation.", "error");
+}
+
+function emitPairPresenceSoon(force = false) {
+  if (!activePairState || !activeSessionId || !collabSocket?.connected || !activeFile || document.hidden) return;
+  const elapsed = Date.now() - pairLastPresenceEmitAt;
+  if (!force && elapsed < 55) {
+    clearTimeout(pairPresenceTimeout);
+    pairPresenceTimeout = setTimeout(() => emitPairPresenceSoon(true), 55 - elapsed);
+    return;
+  }
+  pairLastPresenceEmitAt = Date.now();
+  collabSocket.emit("collab:pair:presence", {
+    sessionId: activeSessionId,
+    fileName: activeFile.name,
+    selectionStart: editorTextarea.selectionStart,
+    selectionEnd: editorTextarea.selectionEnd,
+    scrollTop: editorTextarea.scrollTop,
+    scrollLeft: editorTextarea.scrollLeft,
+  });
+}
+
+function requestPairPartnerPresence() {
+  if (!activePairState || !activeSessionId || !collabSocket?.connected) return;
+  // This is an optional optimization. Older or briefly busy servers may not
+  // implement it, so it must never be treated as a connection failure.
+  collabSocket.emit("collab:pair:presence-request", { sessionId: activeSessionId });
+}
+
+function renderPairPartnerSelection(payload) {
+  if (!pairSelectionHighlight || !editorTextarea || activeFile?.name !== payload?.fileName) return;
+  const start = Math.max(0, Math.min(editorTextarea.value.length, Number(payload.selectionStart || 0)));
+  const end = Math.max(start, Math.min(editorTextarea.value.length, Number(payload.selectionEnd || 0)));
+  if (end <= start) {
+    pairSelectionHighlight.hidden = true;
+    return;
+  }
+  const startCoords = getCaretCoordinates(editorTextarea, start);
+  const endCoords = getCaretCoordinates(editorTextarea, end);
+  pairSelectionHighlight.style.top = `${Math.max(0, startCoords.top)}px`;
+  pairSelectionHighlight.style.height = `${Math.max(startCoords.lineHeight, endCoords.top - startCoords.top + endCoords.lineHeight)}px`;
+  pairSelectionHighlight.querySelector("span").textContent = `${payload.from} highlighted`;
+  pairSelectionHighlight.hidden = false;
+}
+
+function stopPairFollowAnimation() {
+  if (pairFollowAnimationFrame) cancelAnimationFrame(pairFollowAnimationFrame);
+  pairFollowAnimationFrame = 0;
+  pairFollowScrollTarget = null;
+}
+
+function runPairFollowAnimation() {
+  pairFollowAnimationFrame = 0;
+  if (!pairFollowScrollTarget || !editorTextarea || !pairFollowEnabled || pairFollowSuspended) {
+    pairFollowScrollTarget = null;
+    return;
+  }
+  const topDelta = pairFollowScrollTarget.top - editorTextarea.scrollTop;
+  const leftDelta = pairFollowScrollTarget.left - editorTextarea.scrollLeft;
+  pairIgnoreLocalScrollUntil = Date.now() + 180;
+  if (Math.abs(topDelta) < 0.75 && Math.abs(leftDelta) < 0.75) {
+    editorTextarea.scrollTop = pairFollowScrollTarget.top;
+    editorTextarea.scrollLeft = pairFollowScrollTarget.left;
+    pairFollowScrollTarget = null;
+    return;
+  }
+  editorTextarea.scrollTop += topDelta * 0.38;
+  editorTextarea.scrollLeft += leftDelta * 0.38;
+  pairFollowAnimationFrame = requestAnimationFrame(runPairFollowAnimation);
+}
+
+function schedulePairFollowScroll(top, left) {
+  pairFollowScrollTarget = {
+    top: Math.max(0, Number(top || 0)),
+    left: Math.max(0, Number(left || 0)),
+  };
+  if (!pairFollowAnimationFrame) pairFollowAnimationFrame = requestAnimationFrame(runPairFollowAnimation);
+}
+
+function applyPairPartnerPresence(payload) {
+  if (!activePairState) return;
+  if (String(payload?.from || "").trim().toLowerCase() !== getPairPartnerName().toLowerCase()) return;
+  pairPartnerPresence = { ...payload };
+  const fileName = String(payload?.fileName || "").trim();
+  if (activeFile?.name === fileName) renderPairPartnerSelection(payload);
+  if (!pairFollowEnabled || pairFollowSuspended) return;
+  if (fileName && activeFile?.name !== fileName && projectFiles.some((file) => file.name === fileName)) {
+    pairIgnoreLocalScrollUntil = Date.now() + 650;
+    switchFile(fileName);
+  }
+  schedulePairFollowScroll(payload?.scrollTop, payload?.scrollLeft);
+  setTimeout(() => renderPairPartnerSelection(payload), 120);
+}
+
+function sendPairVoiceSignal(kind, data = null) {
+  if (!activeSessionId || !collabSocket) return Promise.resolve({ ok: false });
+  return emitPairEvent("collab:pair:voice", { kind, data }, 6000);
+}
+
+async function ensurePairVoiceMedia() {
+  if (pairVoiceStream) return pairVoiceStream;
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access is unavailable in this browser.");
+  pairVoiceStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    video: false,
+  });
+  return pairVoiceStream;
+}
+
+async function ensurePairVoiceConnection(initiator = false) {
+  if (pairVoiceConnection) return pairVoiceConnection;
+  pairVoiceInitiator = Boolean(initiator);
+  const stream = await ensurePairVoiceMedia();
+  pairVoiceConnection = new RTCPeerConnection({ iceServers: [] });
+  stream.getTracks().forEach((track) => pairVoiceConnection.addTrack(track, stream));
+  pairVoiceConnection.onicecandidate = (event) => {
+    if (event.candidate) sendPairVoiceSignal("ice", event.candidate.toJSON());
+  };
+  pairVoiceConnection.ontrack = (event) => {
+    if (pairVoiceAudio) pairVoiceAudio.srcObject = event.streams[0];
+  };
+  pairVoiceConnection.onconnectionstatechange = () => {
+    const state = pairVoiceConnection?.connectionState;
+    if (state === "connected") pairVoiceStatus = "connected";
+    if (["failed", "closed", "disconnected"].includes(state)) stopPairVoice(false);
+    renderPairDock();
+  };
+  return pairVoiceConnection;
+}
+
+async function requestPairVoiceCall() {
+  pairVoiceStatus = "calling";
+  renderPairDock();
+  const response = await sendPairVoiceSignal("invite");
+  if (!response?.ok) {
+    pairVoiceStatus = "idle";
+    renderPairDock();
+    showNotification(response?.error || "Unable to call your partner.", "error");
+  } else showNotification("Voice invitation sent. Microphone access is requested only if they accept.", "info");
+}
+
+async function handlePairVoiceSignal(payload) {
+  const kind = String(payload?.kind || "");
+  if (kind === "invite") {
+    if (pairVoiceStatus !== "idle") {
+      await sendPairVoiceSignal("response", { accepted: false });
+      return;
+    }
+    const result = await showAppConfirm("PAIR VOICE", `${payload.from} wants to start a private peer-to-peer voice call. Allow microphone access?`, "ACCEPT", "DECLINE");
+    pairVoiceStatus = result?.ok ? "connecting" : "idle";
+    renderPairDock();
+    await sendPairVoiceSignal("response", { accepted: Boolean(result?.ok) });
+    return;
+  }
+  if (kind === "response") {
+    if (pairVoiceStatus !== "calling") {
+      if (payload.data?.accepted) await sendPairVoiceSignal("hangup");
+      return;
+    }
+    if (!payload.data?.accepted) {
+      pairVoiceStatus = "idle";
+      renderPairDock();
+      showNotification("Your partner declined the voice call.", "info");
+      return;
+    }
+    try {
+      pairVoiceStatus = "connecting";
+      const connection = await ensurePairVoiceConnection(true);
+      const offer = await connection.createOffer();
+      await connection.setLocalDescription(offer);
+      await sendPairVoiceSignal("offer", connection.localDescription.toJSON());
+      renderPairDock();
+    } catch (error) {
+      stopPairVoice(true);
+      showNotification(error.message || "Microphone access failed.", "error");
+    }
+    return;
+  }
+  if (kind === "offer") {
+    try {
+      pairVoiceStatus = "connecting";
+      const connection = await ensurePairVoiceConnection(false);
+      await connection.setRemoteDescription(payload.data);
+      for (const candidate of pairVoicePendingCandidates.splice(0)) await connection.addIceCandidate(candidate);
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      await sendPairVoiceSignal("answer", connection.localDescription.toJSON());
+      renderPairDock();
+    } catch (error) {
+      stopPairVoice(true);
+      showNotification(error.message || "Voice connection failed.", "error");
+    }
+    return;
+  }
+  if (kind === "answer" && pairVoiceConnection) {
+    await pairVoiceConnection.setRemoteDescription(payload.data);
+    for (const candidate of pairVoicePendingCandidates.splice(0)) await pairVoiceConnection.addIceCandidate(candidate);
+    return;
+  }
+  if (kind === "ice" && payload.data) {
+    if (pairVoiceConnection?.remoteDescription) await pairVoiceConnection.addIceCandidate(payload.data);
+    else pairVoicePendingCandidates.push(payload.data);
+    return;
+  }
+  if (kind === "hangup") {
+    stopPairVoice(false);
+    showNotification("Pair voice call ended.", "info");
+  }
+}
+
+function stopPairVoice(notifyPartner = true) {
+  if (notifyPartner && activePairState && collabSocket?.connected) sendPairVoiceSignal("hangup");
+  pairVoiceConnection?.close();
+  pairVoiceConnection = null;
+  pairVoiceStream?.getTracks().forEach((track) => track.stop());
+  pairVoiceStream = null;
+  pairVoiceStatus = "idle";
+  pairVoicePendingCandidates = [];
+  pairVoiceInitiator = false;
+  if (pairVoiceAudio) pairVoiceAudio.srcObject = null;
+  renderPairDock();
 }
 
 // background timers now managed in startBackgroundTimers()
@@ -13984,6 +18198,55 @@ function openPrivateChatWithParticipant(targetName) {
   }, 0);
 }
 
+async function requestParticipantRename(targetName) {
+  if (!collabSocket || !activeSessionId) return;
+  const participant = getParticipantByName(targetName);
+  if (!participant || !canRenameParticipant(participant)) {
+    showNotification("You do not have permission to rename this participant.", "error");
+    return;
+  }
+
+  const currentName = String(participant.name || "").trim();
+  const dialog = await showAppPrompt(
+    "RENAME USER",
+    isMyCollabParticipant(participant)
+      ? "Choose the name everyone will see for you in this collaboration session."
+      : `Choose a new name for ${currentName}.`,
+    currentName,
+    "Participant name",
+  );
+  if (!dialog?.ok) return;
+
+  const nextName = String(dialog.value || "").trim().replace(/\s+/g, " ");
+  const validation = validateUsername(nextName);
+  if (!validation.valid) {
+    showNotification(validation.error, "error");
+    return;
+  }
+
+  try {
+    const res = await emitCollabWithAck(
+      "collab:rename-participant",
+      { sessionId: activeSessionId, targetName: currentName, newName: nextName },
+      6000,
+    );
+    if (!res?.ok) {
+      showNotification(res?.error || "Failed to rename participant.", "error");
+      return;
+    }
+    if (res.unchanged) {
+      showNotification("The participant name is already up to date.", "info");
+    }
+  } catch (error) {
+    showNotification(
+      error?.code === "ACK_TIMEOUT"
+        ? "Rename timed out. Restart the collaboration server and try again."
+        : error?.message || "Failed to rename participant.",
+      "error",
+    );
+  }
+}
+
 function showParticipantActions(targetName) {
   if (!canUseCoHostTools()) return;
   const safeName = String(targetName || "").trim();
@@ -14010,6 +18273,8 @@ function showParticipantActions(targetName) {
           return collabPermissions.disableRunCode;
         case "consoleAccess":
           return collabPermissions.disableConsoleAccess;
+        case "pairing":
+          return collabPermissions.disablePairing;
         default:
           return false;
       }
@@ -14060,10 +18325,12 @@ function showParticipantActions(targetName) {
       <div class="collab-control-grid">
         ${hostView ? renderCollabControlButton({ id: "participantRoleBtn", icon: "fa-solid fa-user-shield", title: participant.role === "co-host" ? "Remove Co-Host" : "Make Co-Host", desc: "Change helper permissions.", active: participant.role === "co-host", tone: "purple" }) : ""}
         ${hostView ? renderCollabControlButton({ id: "participantTransferHostBtn", icon: "fa-solid fa-crown", title: "Transfer Host", desc: "Give this user room ownership.", tone: "warning" }) : ""}
+        ${renderCollabControlButton({ id: "participantRenameBtn", icon: "fa-solid fa-pen", title: "Rename", desc: "Change this participant's display name." })}
+        ${renderCollabControlButton({ id: "participantSelfRenameBtn", icon: "fa-solid fa-user-pen", title: participant.renameDisabled ? "Allow Self-Rename" : "Disable Self-Rename", desc: participant.renameDisabled ? "This user cannot rename themselves." : "Prevent this user from renaming themselves.", active: participant.renameDisabled, tone: "warning" })}
         ${renderCollabControlButton({ id: "participantMessageBtn", icon: "fa-solid fa-message", title: "Message", desc: "Open private chat." })}
         ${renderCollabControlButton({ id: "participantMuteChatBtn", icon: "fa-solid fa-comment-slash", title: participant.mutedChat ? "Unmute Chat" : "Mute Chat", desc: participant.mutedChat ? "Chat is currently muted." : "Stop this user from chatting.", active: participant.mutedChat, tone: "warning" })}
         ${renderCollabControlButton({ id: "participantFreezeBtn", icon: "fa-solid fa-snowflake", title: participant.frozenEditing ? "Unfreeze Editing" : "Freeze Editing", desc: participant.frozenEditing ? "Editing is currently frozen." : "Stop this user from editing.", active: participant.frozenEditing, tone: "blue" })}
-        ${renderCollabControlButton({ id: "participantFileAccessBtn", icon: "fa-solid fa-folder-tree", title: "File Access", desc: Array.isArray(participant.allowedFiles) ? `${participant.allowedFiles.length} allowed file(s).` : "Using room file access.", active: Array.isArray(participant.allowedFiles) })}
+        ${renderCollabControlButton({ id: "participantFileAccessBtn", icon: "fa-solid fa-eye-slash", title: "Hide File", desc: Array.isArray(participant.allowedFiles) ? `${projectFiles.filter((file) => participantCannotSeeFile(participant, file.name)).length} hidden file(s).` : "All files are visible.", active: Array.isArray(participant.allowedFiles) })}
         ${renderCollabControlButton({ id: "participantResetAccessBtn", icon: "fa-solid fa-unlock", title: "Reset Access", desc: "Remove private file limits." })}
         ${renderCollabControlButton({ id: "participantFollowBtn", icon: "fa-solid fa-location-arrow", title: participant.name === followedParticipantName ? "Stop Following" : "Follow User", desc: participant.currentFile || "No active file yet.", active: participant.name === followedParticipantName })}
         ${renderCollabControlButton({ id: "participantViewDetailsBtn", icon: "fa-solid fa-circle-info", title: "View Details", desc: "See role, access, and status." })}
@@ -14082,6 +18349,8 @@ function showParticipantActions(targetName) {
 
   const roleBtn = document.getElementById("participantRoleBtn");
   const transferHostBtn = document.getElementById("participantTransferHostBtn");
+  const renameBtn = document.getElementById("participantRenameBtn");
+  const selfRenameBtn = document.getElementById("participantSelfRenameBtn");
   const messageBtn = document.getElementById("participantMessageBtn");
   const muteChatBtn = document.getElementById("participantMuteChatBtn");
   const freezeBtn = document.getElementById("participantFreezeBtn");
@@ -14102,6 +18371,19 @@ function showParticipantActions(targetName) {
   }
   if (hostView && transferHostBtn) {
     transferHostBtn.onclick = () => showTransferHostConfirmation(safeName);
+  }
+  if (renameBtn) {
+    renameBtn.onclick = () => requestParticipantRename(safeName);
+  }
+  if (selfRenameBtn) {
+    selfRenameBtn.onclick = () =>
+      updateParticipantFlags(
+        safeName,
+        { renameDisabled: !participant.renameDisabled },
+        participant.renameDisabled
+          ? `${safeName} can rename themselves again.`
+          : `${safeName} can no longer rename themselves.`,
+      );
   }
   if (messageBtn) {
     messageBtn.onclick = () => openPrivateChatWithParticipant(safeName);
@@ -14208,6 +18490,7 @@ function showKickConfirmation(targetName) {
 function showKickedOutModal() {
   resetTransientCollabUiState();
   activeSessionId = null;
+  collabPendingLocalSync = false;
   removeWaitingRoomPopup();
   collabParticipants = [];
   collabPendingJoins = [];
@@ -14236,25 +18519,115 @@ function showKickedOutModal() {
   }
 }
 
-function resumeCollabSession(successMessage) {
-  if (!collabSocket || !collabSocket.connected || !activeSessionId || !myInfo.name) return;
-  collabSocket.emit(
-    "collab:resume",
-    {
+function clearCollabResumeRetry() {
+  clearTimeout(collabResumeRetryTimer);
+  collabResumeRetryTimer = null;
+}
+
+function scheduleCollabResume(delayMs) {
+  if (!activeSessionId || !myInfo.name || collabResumeRetryTimer) return;
+  const fallbackDelay = Math.min(15000, 1000 * Math.max(1, 2 ** Math.min(4, collabResumeFailureCount)));
+  collabResumeRetryTimer = setTimeout(() => {
+    collabResumeRetryTimer = null;
+    if (!activeSessionId) return;
+    if (!collabSocket?.connected) {
+      ensureCollabSocket();
+      return;
+    }
+    resumeCollabSession();
+  }, Math.max(250, Number(delayMs) || fallbackDelay));
+}
+
+function recoverHostedCollabSession() {
+  if (collabHostRecoveryInFlight || !collabSocket?.connected || !activeSessionId || !isHost()) {
+    return Promise.resolve(false);
+  }
+  collabHostRecoveryInFlight = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      collabHostRecoveryInFlight = false;
+      if (!response?.ok) {
+        resolve(false);
+        return;
+      }
+      collabParticipants = response.participants || [{ ...myInfo, role: "host" }];
+      collabHostName = response.hostName || myInfo.name;
+      collabPermissions = normalizeCollabPermissions(response.permissions || collabPermissions);
+      collabShareLink = response.shareLink || collabShareLink;
+      collabSessionPin = response.sessionPin || collabSessionPin;
+      collabPendingLocalSync = false;
+      enforceCollabPermissionsUI();
+      updateCollabButtonState();
+      startCollabHeartbeat();
+      showNotification("Collaboration session restored after the server restarted.", "success");
+      resolve(true);
+    };
+    const timeout = setTimeout(() => finish(null), 10000);
+    collabSocket.emit("collab:create", {
       sessionId: activeSessionId,
       name: myInfo.name,
       theme: myInfo.theme || "#4CAF50",
       cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
       deviceId: getOrCreateDeviceId(),
-    },
-    (res) => {
+      files: projectFiles,
+      activeFileName: activeFile ? activeFile.name : null,
+      permissions: collabPermissions,
+      baseUrl: window.location.origin,
+    }, finish);
+  });
+}
+
+function resumeCollabSession(successMessage) {
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name || collabResumeInFlight) {
+    return Promise.resolve(false);
+  }
+  collabResumeInFlight = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = async (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       if (!res?.ok) {
-        showNotification(
-          (res && res.error) || "Collaboration reconnected, but session resume failed.",
-          "error",
-        );
+        collabResumeInFlight = false;
+        collabResumeFailureCount += 1;
+        const resumeError = String(res?.error || "");
+        const normalizedResumeError = resumeError.toLowerCase();
+        if (normalizedResumeError.includes("session was ended")) {
+          clearCollabResumeRetry();
+          collabResumeFailureCount = 0;
+          activeSessionId = null;
+          collabPendingLocalSync = false;
+          resetTransientCollabUiState();
+          collabParticipants = [];
+          collabPendingJoins = [];
+          collabShareLink = "";
+          collabSessionPin = "";
+          collabPermissions = { ...defaultCollabPermissions };
+          updateCollabButtonState();
+          resetCollabUrlToFreshState();
+          showNotification(resumeError || "This collaboration session was ended.", "warn");
+          resolve(false);
+          return;
+        }
+        const missingSession = normalizedResumeError.includes("session not found");
+        if (missingSession && await recoverHostedCollabSession()) {
+          clearCollabResumeRetry();
+          collabResumeFailureCount = 0;
+          resolve(true);
+          return;
+        }
+        maybeShowCollabOfflineNotice();
+        scheduleCollabResume();
+        resolve(false);
         return;
       }
+      clearCollabResumeRetry();
+      collabResumeFailureCount = 0;
       updateTimelineFromParticipants(res.participants || []);
       collabParticipants = res.participants || [];
       collabHostName =
@@ -14262,17 +18635,60 @@ function resumeCollabSession(successMessage) {
         res.hostName ||
         collabHostName;
       collabPermissions = normalizeCollabPermissions(res.permissions);
-      applyRemoteSessionState(res.files, res.activeFileName, true);
+      const restoreLocalChanges = collabPendingLocalSync;
+      if (!restoreLocalChanges) applyRemoteSessionState(res.files, res.activeFileName, true);
       enforceCollabPermissionsUI();
+      updateCollabButtonState();
       if (collabModal.style.display === "flex" && collabModalView === "session") {
         showSessionDetails(activeSessionId);
       }
       requestCollabChatHistory();
-      if (successMessage) {
-        showNotification(successMessage, "success");
+      collabResumeInFlight = false;
+      if (restoreLocalChanges) {
+        collabPendingLocalSync = false;
+        emitSessionUpdate();
       }
-    },
-  );
+      if (successMessage) showNotification(successMessage, "success");
+      resolve(true);
+    };
+    const timeout = setTimeout(() => finish({ ok: false, error: "Session resume timed out." }), 10000);
+    collabSocket.emit("collab:resume", {
+      sessionId: activeSessionId,
+      name: myInfo.name,
+      theme: myInfo.theme || "#4CAF50",
+      cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
+      deviceId: getOrCreateDeviceId(),
+    }, finish);
+  });
+}
+
+function stopCollabHeartbeat() {
+  clearInterval(collabHeartbeatInterval);
+  clearTimeout(collabHeartbeatAckTimer);
+  collabHeartbeatInterval = null;
+  collabHeartbeatAckTimer = null;
+}
+
+function sendCollabHeartbeat() {
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name || collabHeartbeatAckTimer) return;
+  collabHeartbeatAckTimer = setTimeout(() => {
+    // A late application acknowledgement is not proof that the transport died.
+    // Socket.IO owns transport liveness and reconnection; never force-close it here.
+    collabHeartbeatAckTimer = null;
+  }, 15000);
+  collabSocket.emit("collab:heartbeat", { sessionId: activeSessionId }, (res) => {
+    clearTimeout(collabHeartbeatAckTimer);
+    collabHeartbeatAckTimer = null;
+    if (res?.ok) return;
+    resumeCollabSession();
+  });
+}
+
+function startCollabHeartbeat() {
+  stopCollabHeartbeat();
+  if (!activeSessionId || !collabSocket?.connected) return;
+  collabHeartbeatInterval = setInterval(sendCollabHeartbeat, 30000);
+  sendCollabHeartbeat();
 }
 
 function resetCollabOfflineNoticeState() {
@@ -14285,7 +18701,7 @@ function maybeShowCollabOfflineNotice() {
   if (collabOfflineNoticeActive && now - collabOfflineNoticeLastAt < 60000) return;
   collabOfflineNoticeActive = true;
   collabOfflineNoticeLastAt = now;
-  showNotification("Unable to connect to collaboration server", "error");
+  showNotification("Collaboration is reconnecting automatically…", "warn");
 }
 
 function ensureCollabSocket() {
@@ -14295,9 +18711,33 @@ function ensureCollabSocket() {
     return false;
   }
 
-  collabSocket = io();
+  if (collabSocket) {
+    collabSocket.connect();
+    return true;
+  }
+
+  collabSocket = io({
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.3,
+    timeout: 20000,
+    transports: ["polling", "websocket"],
+    upgrade: true,
+  });
   collabSocket.on("connect", () => {
+    const isReconnect = collabHasConnectedOnce;
+    collabHasConnectedOnce = true;
     resetCollabOfflineNoticeState();
+    if (activeSessionId && myInfo.name) {
+      setTimeout(async () => {
+        await resumeCollabSession(isReconnect ? "Collaboration reconnected." : "");
+        startCollabHeartbeat();
+      }, 0);
+    } else {
+      startCollabHeartbeat();
+    }
   });
   collabSocket.on("connect_error", () => {
     maybeShowCollabOfflineNotice();
@@ -14305,14 +18745,12 @@ function ensureCollabSocket() {
   collabSocket.on("disconnect", () => {
     clearOwnSessionCursorBroadcast();
     resetTransientCollabUiState();
-    resetCollabOfflineNoticeState();
     if (activeSessionId) {
-      showNotification("Collaboration connection lost.", "warn");
+      maybeShowCollabOfflineNotice();
     }
   });
-  collabSocket.on("reconnect", () => {
-    resetCollabOfflineNoticeState();
-    resumeCollabSession("Collaboration reconnected.");
+  collabSocket.io.on("reconnect_attempt", () => {
+    if (activeSessionId) maybeShowCollabOfflineNotice();
   });
 
   collabSocket.on("collab:state", (payload) => {
@@ -14332,8 +18770,64 @@ function ensureCollabSocket() {
     updateTypingIndicatorUI(indicator);
   });
 
+  collabSocket.on("collab:participant-renamed", (payload) => {
+    const oldName = String(payload?.oldName || "").trim();
+    const newName = String(payload?.newName || "").trim();
+    if (!oldName || !newName) return;
+    const oldKey = oldName.toLowerCase();
+    const matchesOldName = (value) => String(value || "").trim().toLowerCase() === oldKey;
+    const renamedMe = matchesOldName(myInfo.name);
+
+    if (renamedMe) myInfo.name = newName;
+    if (matchesOldName(collabHostName)) collabHostName = newName;
+    if (matchesOldName(collabChatTarget)) collabChatTarget = newName;
+    if (matchesOldName(followedParticipantName)) followedParticipantName = newName;
+    if (matchesOldName(activeParticipantActionName)) activeParticipantActionName = newName;
+
+    collabParticipants = collabParticipants.map((participant) =>
+      matchesOldName(participant?.name) ? { ...participant, name: newName } : participant,
+    );
+    [...collabGroupMessages, ...collabPrivateMessages].forEach((message) => {
+      if (matchesOldName(message?.from)) message.from = newName;
+      if (matchesOldName(message?.to)) message.to = newName;
+    });
+
+    const migrateLiveState = (state) => {
+      const previousKey = Object.keys(state).find((key) => matchesOldName(key));
+      if (!previousKey) return;
+      const previousValue = state[previousKey];
+      delete state[previousKey];
+      state[newName] = { ...previousValue, name: newName };
+    };
+    migrateLiveState(remoteCursorState);
+    migrateLiveState(remoteTypingState);
+    if (currentTypingIndicator && matchesOldName(currentTypingIndicator.name)) {
+      currentTypingIndicator = { ...currentTypingIndicator, name: newName };
+    }
+
+    const previousSnapshot = lastParticipantsSnapshot.get(oldKey);
+    if (previousSnapshot) {
+      lastParticipantsSnapshot.delete(oldKey);
+      lastParticipantsSnapshot.set(newName.toLowerCase(), { ...previousSnapshot, name: newName });
+    }
+    addTimelineEntry(`${oldName} was renamed to ${newName}.`);
+    showNotification(
+      renamedMe ? `Your collaboration name is now ${newName}.` : `${oldName} is now ${newName}.`,
+      "success",
+    );
+  });
+
   collabSocket.on("collab:participants", (participants) => {
     const nextParticipants = Array.isArray(participants) ? participants : [];
+    const previousMeBeforeAccessUpdate = getMyParticipant();
+    const myNameKey = String(myInfo.name || "").trim().toLowerCase();
+    const nextMeAfterAccessUpdate = nextParticipants.find(
+      (participant) => String(participant?.name || "").trim().toLowerCase() === myNameKey,
+    );
+    const personalFileAccessExpanded = didParticipantFileAccessExpand(
+      previousMeBeforeAccessUpdate,
+      nextMeAfterAccessUpdate,
+    );
     updateTimelineFromParticipants(nextParticipants);
 
     // Detect new joiners and show notification
@@ -14349,6 +18843,23 @@ function ensureCollabSocket() {
     }
     previousParticipantCount = nextParticipants.length;
     collabParticipants = nextParticipants;
+    const meAfterParticipantUpdate = getMyParticipant();
+    if (
+      activeSessionId &&
+      meAfterParticipantUpdate &&
+      !["host", "co-host"].includes(String(meAfterParticipantUpdate.role || "participant")) &&
+      Array.isArray(meAfterParticipantUpdate.allowedFiles)
+    ) {
+      const allowed = new Set(
+        meAfterParticipantUpdate.allowedFiles.map((name) => String(name || "").trim().toLowerCase()),
+      );
+      const hasNewlyHiddenFile = projectFiles.some(
+        (file) => !allowed.has(String(file?.name || "").trim().toLowerCase()),
+      );
+      if (hasNewlyHiddenFile) {
+        applyRemoteSessionState(projectFiles, activeFile?.name || "", false);
+      }
+    }
     const hostFromParticipants = collabParticipants.find((p) => p.role === "host")?.name;
     if (hostFromParticipants) {
       collabHostName = hostFromParticipants;
@@ -14363,6 +18874,9 @@ function ensureCollabSocket() {
     renderRemoteCursors();
     enforceCollabPermissionsUI();
     syncFollowedParticipantView();
+    if (personalFileAccessExpanded) {
+      setTimeout(() => resumeCollabSession(), 0);
+    }
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);
@@ -14380,9 +18894,16 @@ function ensureCollabSocket() {
   collabSocket.on("collab:meta", (meta) => {
     if (!meta) return;
     const previousAnnouncement = String(collabPermissions.announcementBar || "").trim();
+    const previousPendingJoinIds = new Set(
+      collabPendingJoins.map((entry) => String(entry?.socketId || "")),
+    );
+    const nextPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
+    const newPendingJoinRequests = nextPendingJoins.filter(
+      (entry) => !previousPendingJoinIds.has(String(entry?.socketId || "")),
+    );
     collabHostName = meta.hostName || collabHostName;
     collabPermissions = normalizeCollabPermissions(meta.permissions);
-    collabPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
+    collabPendingJoins = nextPendingJoins;
     collabBans = Array.isArray(meta.bans) ? meta.bans : [];
     collabShareLink = meta.shareLink || collabShareLink;
     collabSessionPin = meta.sessionPin || collabSessionPin;
@@ -14398,6 +18919,15 @@ function ensureCollabSocket() {
     }
     enforceCollabPermissionsUI();
     renderWaitingRoomPopup();
+    if (isHost()) {
+      newPendingJoinRequests.forEach((entry) => {
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(entry?.name || "A participant")}</strong> is waiting to join the session.`,
+          () => openWaitingRoomRequestFromNotification(entry?.socketId),
+          "warn",
+        );
+      });
+    }
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);
@@ -14416,6 +18946,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:banned", () => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    collabPendingLocalSync = false;
     removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
@@ -14453,6 +18984,154 @@ function ensureCollabSocket() {
     }
   });
 
+  collabSocket.on("collab:pair:overview", (overview) => {
+    pairOverview = Array.isArray(overview) ? overview : [];
+    if (collabModal?.style.display === "flex" && activeSessionId) {
+      if (collabModalView === "session") showSessionDetails(activeSessionId);
+      else if (collabModalView === "group-controls" && canUseCoHostTools()) showGroupControls(activeSessionId);
+    }
+  });
+
+  collabSocket.on("collab:pair:state", (pair) => {
+    const previousPair = activePairState;
+    const previousPairId = activePairState?.id || "";
+    const previousPartner = getPairPartnerName(activePairState);
+    const wasDriver = isCurrentPairDriver();
+    const changedToolTabs = getChangedPairToolTabs(previousPair, pair);
+    const actionNotifications = getNewPairActionNotifications(previousPair, pair);
+    activePairState = pair || null;
+    if (!activePairState) {
+      if (followedParticipantName === previousPartner) followedParticipantName = "";
+      pairPanelOpen = false;
+      resetPairToolActivity();
+      pairFollowEnabled = false;
+      pairFollowSuspended = false;
+      pairPartnerPresence = null;
+      stopPairFollowAnimation();
+      stopPairVoice(false);
+      enforceCollabPermissionsUI();
+      renderPairDock();
+      return;
+    }
+    if (activePairState.id !== previousPairId) {
+      pairPanelOpen = false;
+      pairPanelTab = "chat";
+      resetPairToolActivity();
+      pairFollowEnabled = !isCurrentPairDriver();
+      pairFollowSuspended = false;
+      pairPartnerPresence = null;
+      followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+      showActionNotificationHtml(
+        `Pair started with <strong>${escapeHtml(getPairPartnerName())}</strong>.`,
+        () => openPairToolsFromNotification("chat"),
+        "success",
+      );
+      setTimeout(() => {
+        emitPairPresenceSoon(true);
+        if (pairFollowEnabled) {
+          syncFollowedParticipantView();
+          requestPairPartnerPresence();
+        }
+      }, 0);
+    } else if (wasDriver !== isCurrentPairDriver()) {
+      pairFollowEnabled = !isCurrentPairDriver();
+      pairFollowSuspended = false;
+      followedParticipantName = pairFollowEnabled ? getPairPartnerName() : "";
+      stopPairFollowAnimation();
+      setTimeout(() => {
+        emitPairPresenceSoon(true);
+        if (pairFollowEnabled) {
+          syncFollowedParticipantView();
+          requestPairPartnerPresence();
+        }
+      }, 0);
+    }
+    changedToolTabs.forEach(markPairToolActivity);
+    if (pairFollowEnabled && !pairFollowSuspended) followedParticipantName = getPairPartnerName();
+    enforceCollabPermissionsUI();
+    renderPairDock();
+    actionNotifications.forEach(({ kind, item }) => {
+      if (kind === "suggestion") {
+        if (pairPanelOpen && pairPanelTab === "suggestions") return;
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(item.from || getPairPartnerName())}</strong> sent a code suggestion for ${escapeHtml(item.fileName || "the editor")}.`,
+          openPairSuggestionFromNotification,
+          "info",
+        );
+      } else if (kind === "task") {
+        if (pairPanelOpen && pairPanelTab === "tasks") return;
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(item.createdBy || getPairPartnerName())}</strong> added a Pair task: ${escapeHtml(item.text || "Untitled task")}`,
+          () => openPairTaskFromNotification(item.id),
+          "info",
+        );
+      }
+    });
+  });
+
+  collabSocket.on("collab:pair:invitation", handlePairInvitation);
+  collabSocket.on("collab:pair:invitation-response", (payload) => {
+    showNotification(
+      payload?.accepted ? `${payload.by} accepted your pair invitation.` : `${payload?.by || "That participant"} declined your pair invitation.`,
+      payload?.accepted ? "success" : "info",
+    );
+  });
+  collabSocket.on("collab:pair:ended", (payload) => {
+    const partner = getPairPartnerName();
+    activePairState = null;
+    pairPanelOpen = false;
+    resetPairToolActivity();
+    pairFollowEnabled = false;
+    pairFollowSuspended = false;
+    pairPartnerPresence = null;
+    stopPairFollowAnimation();
+    if (followedParticipantName === partner) followedParticipantName = "";
+    stopPairVoice(false);
+    enforceCollabPermissionsUI();
+    renderPairDock();
+    showNotification(payload?.reason || "Pair ended.", "info");
+  });
+  collabSocket.on("collab:pair:switch-request", async (payload) => {
+    const result = await showAppConfirm(
+      "SWITCH PAIR ROLES",
+      `${payload?.from || "Your partner"} wants to switch Driver and Navigator roles.`,
+      "SWITCH",
+      "NOT NOW",
+    );
+    const response = await emitPairEvent("collab:pair:switch-response", { accept: Boolean(result?.ok) });
+    if (!response?.ok) showNotification(response?.error || "Unable to answer the role switch.", "error");
+  });
+  collabSocket.on("collab:pair:chat", (message) => {
+    if (!activePairState || !message) return;
+    const messages = activePairState.chat || (activePairState.chat = []);
+    if (!messages.some((entry) => entry.id === message.id)) messages.push(message);
+    markPairToolActivity("chat");
+    renderPairDock();
+    if (message.from !== myInfo.name) {
+      showActionNotificationHtml(
+        `<strong>${escapeHtml(message.from)}</strong> sent a pair message.`,
+        () => openPairToolsFromNotification("chat"),
+        "info",
+      );
+    }
+  });
+  collabSocket.on("collab:pair:presence", applyPairPartnerPresence);
+  collabSocket.on("collab:pair:presence-request", () => emitPairPresenceSoon(true));
+  collabSocket.on("collab:pair:help-request", (payload) => {
+    showActionNotificationHtml(
+      `<strong>${escapeHtml(payload?.from || "A pair")}</strong> asked the host for Pair help.`,
+      () => openPairHelpFromNotification(payload?.pair?.id),
+      "warn",
+    );
+    addTimelineEntry(`${payload?.from || "A pair"} requested pair help.`, "pair");
+  });
+  collabSocket.on("collab:pair:voice", (payload) => {
+    handlePairVoiceSignal(payload).catch((error) => {
+      stopPairVoice(false);
+      showNotification(error?.message || "Pair voice connection failed.", "error");
+    });
+  });
+
   collabSocket.on("collab:cursor", (payload) => {
     const cursor = payload && payload.cursor ? payload.cursor : null;
     if (!cursor || !cursor.name) {
@@ -14479,9 +19158,15 @@ function ensureCollabSocket() {
     if (senderName) {
       addTimelineEntry(`${senderName} sent a group message.`, "chat");
       if (senderName !== String(myInfo.name)) {
-        if (!collabModal || collabModal.style.display !== "flex" || collabModalView !== "session") {
-          showNotificationHtml(
+        const viewingGroupChat = isViewingCollabChat("group");
+        if (!viewingGroupChat) {
+          collabUnreadGroupMessages += 1;
+        }
+        updateCollabUnreadBadges();
+        if (!viewingGroupChat) {
+          showActionNotificationHtml(
             `<strong>${escapeHtml(senderName)}</strong> has sent a message publicly.`,
+            () => openCollabChatFromNotification("group"),
             "info",
           );
         }
@@ -14502,17 +19187,28 @@ function ensureCollabSocket() {
       message.from &&
       message.from !== myInfo.name
     ) {
-      showNotificationHtml(
-        `<strong>${escapeHtml(message.from)}</strong> has sent a message to you privately.`,
-        "info",
-      );
+      const viewingPrivateChat = isViewingCollabChat("private", message.from);
+      if (!viewingPrivateChat) {
+        const privateKey = getPrivateUnreadKey(message.from);
+        collabUnreadPrivateMessages[privateKey] = getPrivateUnreadCount(message.from) + 1;
+      }
+      updateCollabUnreadBadges();
+      if (!viewingPrivateChat) {
+        showActionNotificationHtml(
+          `<strong>${escapeHtml(message.from)}</strong> has sent a message to you privately.`,
+          () => openCollabChatFromNotification("private", message.from),
+          "info",
+        );
+      }
     }
   });
 
   collabSocket.on("collab:chat:cleared", (payload) => {
     if (payload?.mode === "group") {
       collabGroupMessages = [];
+      collabUnreadGroupMessages = 0;
       renderCollabChatMessages();
+      updateCollabUnreadBadges();
       showNotification("Group chat was cleared.", "info");
       addTimelineEntry("Group chat was cleared.", "moderation");
     }
@@ -14575,6 +19271,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:session-ended", (payload) => {
     resetTransientCollabUiState();
     activeSessionId = null;
+    collabPendingLocalSync = false;
     removeWaitingRoomPopup();
     collabParticipants = [];
     collabPendingJoins = [];
@@ -14601,14 +19298,62 @@ function ensureCollabSocket() {
   return true;
 }
 
+window.addEventListener("online", async () => {
+  if (!activeSessionId) return;
+  ensureCollabSocket();
+  if (collabSocket?.connected) {
+    await resumeCollabSession("Collaboration reconnected.");
+    startCollabHeartbeat();
+  }
+});
+
+window.addEventListener("offline", () => {
+  if (activeSessionId) maybeShowCollabOfflineNotice();
+});
+
 function applyRemoteSessionState(files, activeFileName, preferRemoteActive = false) {
-  if (!Array.isArray(files) || !files.length) return;
+  if (!Array.isArray(files)) return;
   isApplyingRemoteState = true;
   try {
+    const me = getMyParticipant();
+    const shouldFilterPersonalFiles = Boolean(
+      activeSessionId &&
+        me &&
+        !["host", "co-host"].includes(String(me.role || "participant")) &&
+        Array.isArray(me.allowedFiles),
+    );
+    const allowedFileNames = shouldFilterPersonalFiles
+      ? new Set(me.allowedFiles.map((name) => String(name || "").trim().toLowerCase()))
+      : null;
+    const visibleFiles = allowedFileNames
+      ? files.filter((file) => allowedFileNames.has(String(file?.name || "").trim().toLowerCase()))
+      : files;
     const requestedActiveName = normalizeProjectFileName(activeFileName || "");
     const currentActiveName = activeFile ? normalizeProjectFileName(activeFile.name) : null;
-    projectFiles = files;
+    releaseProjectMediaObjectUrls(projectFiles);
+    projectFiles = normalizeProjectMediaMetadata(visibleFiles);
     normalizeProjectFileNamesInPlace(projectFiles);
+    if (!projectFiles.length) {
+      activeFile = null;
+      displayActiveFileInEditor();
+      const emptyEditor = document.getElementById("activeEditor");
+      if (emptyEditor) {
+        emptyEditor.value = "";
+        emptyEditor.readOnly = true;
+        emptyEditor.title = "No collaboration files are visible to you.";
+        updateLineNumbers(emptyEditor);
+        resetAllEditorHistory(emptyEditor);
+      }
+      if (highlightLayer) highlightLayer.innerHTML = " ";
+      if (iframe) {
+        iframe.removeAttribute("src");
+        iframe.srcdoc = `<!doctype html><html><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f8fa;color:#57606a;font:14px system-ui,sans-serif;"><p>No collaboration files are visible to you.</p></body></html>`;
+      }
+      renderFileList();
+      enforceCollabPermissionsUI();
+      renderRemoteCursors();
+      return;
+    }
     const nextActive =
       (preferRemoteActive ? projectFiles.find((f) => f.name === requestedActiveName) : null) ||
       projectFiles.find((f) => f.name === currentActiveName) ||
@@ -14621,14 +19366,10 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
       currentPreviewTarget = { mode: "html", fileName: activeFile.name };
     }
 
-    const ed = document.getElementById("activeEditor");
-    const currentPos = ed.selectionStart;
-    ed.value = activeFile.content;
-    ed.selectionStart = ed.selectionEnd = Math.min(currentPos, ed.value.length);
-    updateLineNumbers(ed);
-    resetAllEditorHistory(ed);
+    displayActiveFileInEditor({ preserveCaret: true, resetAllHistory: true });
     renderFileList();
     enforceCollabPermissionsUI();
+    hydrateStoredProjectMedia(projectFiles);
     renderRemoteCursors();
     if (autoRunCheckbox.checked) updatePreview();
   } finally {
@@ -14637,19 +19378,57 @@ function applyRemoteSessionState(files, activeFileName, preferRemoteActive = fal
 }
 
 function emitSessionUpdate() {
-  if (!collabSocket || !activeSessionId || !myInfo.name) return;
-  collabSocket.emit("collab:update", {
-    sessionId: activeSessionId,
-    files: projectFiles,
-    activeFileName: activeFile ? activeFile.name : null,
-    user: myInfo,
-  });
+  if (!activeSessionId || !myInfo.name) return;
+  collabPendingLocalSync = true;
+  if (!collabSocket) return;
+  if (!collabSocket.connected || collabResumeInFlight) {
+    return;
+  }
+  const syncRevision = collabLocalSyncRevision;
+  collabSocket.timeout(8000).emit(
+    "collab:update",
+    {
+      sessionId: activeSessionId,
+      files: projectFiles,
+      activeFileName: activeFile ? activeFile.name : null,
+      user: myInfo,
+    },
+    (error, response) => {
+      if (error) return;
+      if (!response?.ok) {
+        if (response?.needsResume) resumeCollabSession();
+        else if (syncRevision === collabLocalSyncRevision) collabPendingLocalSync = false;
+        return;
+      }
+      if (syncRevision === collabLocalSyncRevision) collabPendingLocalSync = false;
+    },
+  );
+}
+
+function getCollabDocumentRevision(content) {
+  const value = String(content || "");
+  if (value === collabRevisionCacheContent) return collabRevisionCacheValue;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  collabRevisionCacheContent = value;
+  collabRevisionCacheValue = `${value.length.toString(36)}-${(hash >>> 0).toString(36)}`;
+  return collabRevisionCacheValue;
 }
 
 function announceTyping(activeEditorId) {
-  if (!collabSocket || !activeSessionId || !myInfo.name) return;
+  if (!collabSocket?.connected || !activeSessionId || !myInfo.name) return;
   clearTimeout(typingTimer);
   const editor = document.getElementById("activeEditor");
+  const localCaretColor = /^#[0-9a-f]{6}$/i.test(String(myInfo.theme || ""))
+    ? myInfo.theme
+    : "var(--accent-color)";
+  if (editor) {
+    editor.style.setProperty("--local-collab-caret-color", localCaretColor);
+    editor.classList.add("collab-live-typing-caret");
+  }
   collabSocket.emit("collab:typing", {
     sessionId: activeSessionId,
     indicator: {
@@ -14658,10 +19437,12 @@ function announceTyping(activeEditorId) {
       editor: activeEditorId,
       fileName: activeFile ? activeFile.name : null,
       caretPos: editor ? editor.selectionStart : 0,
+      documentRevision: getCollabDocumentRevision(editor ? editor.value : ""),
     },
   });
 
   typingTimer = setTimeout(() => {
+    editor?.classList.remove("collab-live-typing-caret");
     if (!collabSocket || !activeSessionId) return;
     collabSocket.emit("collab:typing", {
       sessionId: activeSessionId,
@@ -14712,7 +19493,7 @@ function getVisibleCursorParticipants() {
   );
 }
 
-function getVisibleTypingParticipants() {
+function getActiveTypingParticipants() {
   return Object.values(remoteTypingState).filter(
     (entry) =>
       entry &&
@@ -14721,6 +19502,87 @@ function getVisibleTypingParticipants() {
       entry.fileName === (activeFile ? activeFile.name : "") &&
       Date.now() - Number(entry.ts || 0) < 1800,
   );
+}
+
+function getVisibleTypingParticipants(entries = getActiveTypingParticipants()) {
+  const activeRevision = getCollabDocumentRevision(activeFile ? activeFile.content : "");
+  return entries.filter(
+    (entry) => !entry.documentRevision || entry.documentRevision === activeRevision,
+  );
+}
+
+function ensureRemotePresenceLayer(className) {
+  let layer = Array.from(remoteCursorLayer.children).find(
+    (child) => child.classList && child.classList.contains(className),
+  );
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = className;
+    remoteCursorLayer.appendChild(layer);
+  }
+  return layer;
+}
+
+function renderRemoteTypingCarets(layer, editor, entries, retainedNames = new Set()) {
+  const existingCarets = new Map(
+    Array.from(layer.children).map((caret) => [caret.dataset.participantName || "", caret]),
+  );
+  const visibleNames = new Set();
+
+  entries.forEach((entry) => {
+    const name = String(entry.name || "User");
+    visibleNames.add(name);
+    let caret = existingCarets.get(name);
+    let isNew = false;
+    if (!caret) {
+      isNew = true;
+      caret = document.createElement("div");
+      caret.className = "remote-typing-caret";
+      caret.dataset.participantName = name;
+
+      const line = document.createElement("span");
+      line.className = "remote-typing-caret-line";
+      const label = document.createElement("span");
+      label.className = "remote-typing-label";
+      caret.append(line, label);
+      layer.appendChild(caret);
+    }
+
+    const caretPos = Math.max(0, Math.min(Number(entry.caretPos || 0), editor.value.length));
+    const coords = getCaretCoordinates(editor, caretPos);
+    const left = Number.isFinite(coords.left) ? coords.left : 0;
+    const top = Number.isFinite(coords.top) ? coords.top : 0;
+    const lineHeight = Math.max(16, Number(coords.lineHeight || 20));
+    const isOffscreen =
+      left < -4 ||
+      top < -lineHeight ||
+      left > editor.clientWidth ||
+      top > editor.clientHeight;
+
+    caret.hidden = isOffscreen;
+    caret.style.height = `${lineHeight}px`;
+    caret.style.setProperty("--typing-color", String(entry.theme || "#4CAF50"));
+    caret.classList.toggle("is-near-top", top < 24);
+    caret.classList.toggle("is-near-right", left > editor.clientWidth - 118);
+    const label = caret.querySelector(".remote-typing-label");
+    if (label) label.textContent = `${name} typing`;
+
+    if (isNew) caret.style.transition = "none";
+    caret.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    if (isNew) {
+      requestAnimationFrame(() => {
+        if (!caret.isConnected) return;
+        caret.style.removeProperty("transition");
+        caret.classList.add("is-ready");
+      });
+    } else {
+      caret.classList.add("is-ready");
+    }
+  });
+
+  existingCarets.forEach((caret, name) => {
+    if (!visibleNames.has(name) && !retainedNames.has(name)) caret.remove();
+  });
 }
 
 function renderRemoteCursors() {
@@ -14767,28 +19629,14 @@ function renderRemoteCursors() {
       }
     }
   }
-  const typingHtml = editor
-    ? getVisibleTypingParticipants()
-        .map((entry) => {
-          const caretPos = Math.max(0, Math.min(Number(entry.caretPos || 0), editor.value.length));
-          const coords = getCaretCoordinates(editor, caretPos);
-          const nextPos = Math.min(editor.value.length, caretPos + 1);
-          const nextCoords = getCaretCoordinates(editor, nextPos);
-          const left = Math.max(0, coords.left);
-          const top = Math.max(0, coords.top);
-          const charWidth =
-            nextCoords && nextCoords.top === coords.top
-              ? Math.max(8, Math.min(26, Math.round(nextCoords.left - coords.left)))
-              : Math.max(8, Math.round((coords.lineHeight || 20) * 0.6));
-          const widthPx = charWidth;
-          const heightPx = Math.max(16, Math.round((coords.lineHeight || 20) * 0.9));
-          return `<div class="remote-typing-highlight" style="left:${left}px;top:${top}px;width:${widthPx}px;height:${heightPx}px;--typing-color:${escapeHtml(entry.theme || "#4CAF50")};">
-            <span class="remote-typing-label">${escapeHtml(entry.name || "User")} typing</span>
-          </div>`;
-        })
-        .join("")
-    : "";
+  const activeTypingEntries = editor ? getActiveTypingParticipants() : [];
+  const typingEntries = editor ? getVisibleTypingParticipants(activeTypingEntries) : [];
+  const typingNames = new Set(activeTypingEntries.map((entry) => String(entry.name || "")));
+  const typingLayer = ensureRemotePresenceLayer("remote-typing-layer");
+  const pointerLayer = ensureRemotePresenceLayer("remote-pointer-layer");
+  renderRemoteTypingCarets(typingLayer, editor, typingEntries, typingNames);
   const cursorHtml = getVisibleCursorParticipants()
+    .filter((entry) => !typingNames.has(String(entry.name || "")))
     .map((entry) => {
       const scrollLeft = editor ? editor.scrollLeft : 0;
       const scrollTop = editor ? editor.scrollTop : 0;
@@ -14812,7 +19660,7 @@ function renderRemoteCursors() {
       </div>`;
     })
     .join("");
-  remoteCursorLayer.innerHTML = typingHtml + cursorHtml;
+  pointerLayer.innerHTML = cursorHtml;
 }
 
 function pruneRemoteCursors() {
@@ -14838,6 +19686,9 @@ function startBackgroundTimers() {
   cursorPruneInterval = setInterval(pruneRemoteCursors, 1000);
   roomIndicatorInterval = setInterval(() => {
     applyRoomIndicators();
+    if (activePairState && activeSessionId && collabSocket?.connected && !document.hidden) {
+      emitPairPresenceSoon();
+    }
     if (
       activeSessionId &&
       collabModal.style.display === "flex" &&
@@ -14912,7 +19763,48 @@ function emitCursorFromClientCoords(clientX, clientY) {
 function announceCursorPosition(event) {
   lastPointerClientX = event.clientX;
   lastPointerClientY = event.clientY;
+  updateLocalCollabCursor(event);
   emitCursorFromClientCoords(event.clientX, event.clientY);
+}
+
+function hideLocalCollabCursor() {
+  if (localCollabCursor) localCollabCursor.hidden = true;
+  document.getElementById("activeEditor")?.classList.remove("collab-custom-cursor-active");
+}
+
+function updateLocalCollabCursor(event) {
+  const editor = document.getElementById("activeEditor");
+  const wrapper = editor?.closest(".editor-wrapper");
+  if (
+    !localCollabCursor ||
+    !localCollabCursorIcon ||
+    !editor ||
+    !wrapper ||
+    !activeSessionId ||
+    !myInfo.name ||
+    (event.pointerType && !["mouse", "pen"].includes(event.pointerType))
+  ) {
+    hideLocalCollabCursor();
+    return;
+  }
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const left = Math.max(0, Math.min(wrapperRect.width - 24, event.clientX - wrapperRect.left));
+  const top = Math.max(0, Math.min(wrapperRect.height - 26, event.clientY - wrapperRect.top));
+  const cursorColor = /^#[0-9a-f]{6}$/i.test(String(myInfo.theme || ""))
+    ? myInfo.theme
+    : "#4CAF50";
+  const cursorStyle = normalizeCollabCursorStyle(myInfo.cursorStyle);
+
+  localCollabCursor.style.left = `${left}px`;
+  localCollabCursor.style.top = `${top}px`;
+  localCollabCursor.style.setProperty("--cursor-color", cursorColor);
+  localCollabCursor.dataset.cursorStyle = cursorStyle;
+  localCollabCursor.classList.toggle("is-near-top", top < 30);
+  localCollabCursor.classList.toggle("is-near-right", left > wrapperRect.width - 92);
+  localCollabCursorIcon.className = `local-collab-cursor-icon ${getCollabCursorIconClass(cursorStyle)}`;
+  localCollabCursor.hidden = false;
+  editor.classList.add("collab-custom-cursor-active");
 }
 
 window.addEventListener(
@@ -15245,6 +20137,7 @@ function renderJoinPinStep({ name = "", theme = "#2196F3", cursorStyle = "pointe
 }
 
 function startCollaboration() {
+  dismissCollabManageTutorial();
   if (!ensureCollabSocket()) return;
   if (activeSessionId && myInfo.name) {
     showSessionDetails(activeSessionId);
@@ -15602,16 +20495,38 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
   );
 }
 
+function sortSessionParticipants(participants, mode = collabParticipantSortMode) {
+  const entries = (Array.isArray(participants) ? participants : []).map((participant, index) => ({
+    participant,
+    index,
+  }));
+  entries.sort((left, right) => {
+    if (mode === "alphabetical") {
+      const nameOrder = String(left.participant?.name || "").localeCompare(
+        String(right.participant?.name || ""),
+        undefined,
+        { sensitivity: "base", numeric: true },
+      );
+      return nameOrder || left.index - right.index;
+    }
+    const leftJoinedAt = Number(left.participant?.joinedAt);
+    const rightJoinedAt = Number(right.participant?.joinedAt);
+    if (Number.isFinite(leftJoinedAt) && Number.isFinite(rightJoinedAt) && leftJoinedAt !== rightJoinedAt) {
+      return leftJoinedAt - rightJoinedAt;
+    }
+    if (Number.isFinite(leftJoinedAt) !== Number.isFinite(rightJoinedAt)) {
+      return Number.isFinite(leftJoinedAt) ? -1 : 1;
+    }
+    return left.index - right.index;
+  });
+  return entries.map((entry) => entry.participant);
+}
+
 function showSessionDetails(sid) {
   collabModalView = "session";
   setCollabCloseButtonVisible(true);
   const link = collabShareLink || `${window.location.origin}/frontend.html/${sid}`;
-  const orderedParticipants = [...collabParticipants].sort((a, b) => {
-    if ((a.role || "") === "host") return -1;
-    if ((b.role || "") === "host") return 1;
-    if (Boolean(a.priority) !== Boolean(b.priority)) return a.priority ? -1 : 1;
-    return String(a.name || "").localeCompare(String(b.name || ""));
-  });
+  const orderedParticipants = sortSessionParticipants(collabParticipants);
   const listItems = orderedParticipants
     .map((p) => {
       const roleLabel =
@@ -15620,21 +20535,39 @@ function showSessionDetails(sid) {
       const moreButton = canManage
         ? `<button class="run-button participant-more-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><strong>MORE</strong></button>`
         : "";
+      const renameButton = canRenameParticipant(p)
+        ? `<button class="run-button participant-rename-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px; font-size:11px;"><i class="fa-solid fa-pen" aria-hidden="true"></i><strong>RENAME</strong></button>`
+        : "";
+      const targetPair = getPairOverviewForName(p.name);
+      const myPair = getPairOverviewForName(myInfo.name);
+      const isMe = String(p.name || "").trim().toLowerCase() === String(myInfo.name || "").trim().toLowerCase();
+      const pairingBlocked =
+        collabPermissions.disablePairing ||
+        participantHasDisabledFeature(p, "pairing") ||
+        participantHasDisabledFeature(getMyParticipant(), "pairing") ||
+        Boolean(getMyParticipant()?.mutedChat);
+      const pairButton = !isMe && !pairingBlocked
+        ? `<button class="run-button participant-pair-btn" data-name="${escapeHtml(p.name)}" style="padding:4px 10px;font-size:11px;" ${targetPair || myPair ? "disabled" : ""}><i class="fa-solid fa-code-compare"></i><strong>${targetPair ? "PAIRED" : "PAIR"}</strong></button>`
+        : "";
+      const rowActions = moreButton || renameButton || pairButton
+        ? `<div class="collab-participant-row-actions">${pairButton}${renameButton}${moreButton}</div>`
+        : "";
       const statusParts = [
         p.currentFile || "No active file",
         p.mutedChat ? "muted" : "",
         p.frozenEditing ? "frozen" : "",
+        p.renameDisabled ? "self-rename disabled" : "",
         p.priority ? "priority" : "",
       ].filter(Boolean);
       return `<div class="collab-participant-row">
         <div class="collab-participant-main">
           <span class="collab-participant-color" style="background:${escapeHtml(p.theme)};"></span>
           <div class="collab-participant-text">
-            <div class="collab-participant-name">${escapeHtml(p.name)}${roleLabel}</div>
+            <div class="collab-participant-name">${escapeHtml(formatCollabDisplayName(p.name))}${roleLabel}${targetPair ? `<span class="pair-participant-badge">${escapeHtml(targetPair.driver === p.name ? "Driver" : "Navigator")}</span>` : ""}</div>
             <div class="collab-participant-meta">${escapeHtml(statusParts.join(" · "))}</div>
           </div>
         </div>
-        ${moreButton}
+        ${rowActions}
       </div>`;
     })
     .join("");
@@ -15657,7 +20590,7 @@ function showSessionDetails(sid) {
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Host</span>
-          <span class="collab-meta-value">${escapeHtml(getCurrentHostName() || "Unknown")}</span>
+          <span class="collab-meta-value">${escapeHtml(formatCollabDisplayName(getCurrentHostName(), "Unknown"))}</span>
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Announcement</span>
@@ -15674,7 +20607,16 @@ function showSessionDetails(sid) {
       </div>
     </div>
     <div class="collab-section-card">
-      <h4 class="collab-section-title">Participants <span style="font-weight:normal;color:var(--text-muted);font-size:13px;">(${orderedParticipants.length})</span></h4>
+      <div class="collab-participant-list-heading">
+        <h4 class="collab-section-title">Participants <span style="font-weight:normal;color:var(--text-muted);font-size:13px;">(${orderedParticipants.length})</span></h4>
+        <label class="collab-participant-sort-label" for="collabParticipantSortSelect">
+          <span>Sort by</span>
+          <select id="collabParticipantSortSelect" class="collab-participant-sort-select" aria-label="Sort participants">
+            <option value="joined" ${collabParticipantSortMode === "joined" ? "selected" : ""}>Joined first</option>
+            <option value="alphabetical" ${collabParticipantSortMode === "alphabetical" ? "selected" : ""}>Alphabetical</option>
+          </select>
+        </label>
+      </div>
       <div class="collab-participant-list">${listItems}</div>
     </div>
     <div class="collab-section-card">
@@ -15697,6 +20639,18 @@ function showSessionDetails(sid) {
   if (sessionCopyLinkBtn) {
     sessionCopyLinkBtn.onclick = () => copyLink();
   }
+  const participantSortSelect = document.getElementById("collabParticipantSortSelect");
+  if (participantSortSelect) {
+    participantSortSelect.addEventListener("change", () => {
+      collabParticipantSortMode = participantSortSelect.value === "alphabetical"
+        ? "alphabetical"
+        : "joined";
+      const previousScrollTop = modalBody.scrollTop;
+      showSessionDetails(sid);
+      modalBody.scrollTop = previousScrollTop;
+      document.getElementById("collabParticipantSortSelect")?.focus();
+    });
+  }
   if (canUseCoHostTools()) {
     const moreButtons = modalBody.querySelectorAll(".participant-more-btn");
     moreButtons.forEach((btn) => {
@@ -15706,6 +20660,15 @@ function showSessionDetails(sid) {
       });
     });
   }
+  modalBody.querySelectorAll(".participant-rename-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetName = btn.getAttribute("data-name") || "";
+      requestParticipantRename(targetName);
+    });
+  });
+  modalBody.querySelectorAll(".participant-pair-btn").forEach((btn) => {
+    btn.addEventListener("click", () => inviteParticipantToPair(btn.getAttribute("data-name") || ""));
+  });
   bindCollabChatControls();
   requestCollabChatHistory();
 }
@@ -15738,11 +20701,17 @@ function copyLink() {
 }
 
 function closeModal() {
+  const shouldShowManageTutorial =
+    collabModalView === "created-pin" &&
+    Boolean(activeSessionId) &&
+    isHost() &&
+    !safeLocalStorage("get", COLLAB_MANAGE_TUTORIAL_KEY);
   collabModalView = "idle";
   activeParticipantActionName = "";
   collabModal.style.display = "none";
   setCollabCloseButtonVisible(true);
   setModalActions(`<button id="modalDoneBtn" class="run-button"><strong>DONE</strong></button>`);
+  if (shouldShowManageTutorial) setTimeout(showCollabManageTutorial, 180);
 }
 
 function isReloadNavigation() {
@@ -15864,6 +20833,7 @@ function syncProjectWithSession() {
 }
 
 function startSyncing() {
+  startCollabHeartbeat();
   emitSessionUpdate();
 }
 // PART 13 - MEDIA FILE HANDLER
@@ -15883,7 +20853,7 @@ addMediaBtn.addEventListener("click", () => {
   mediaInput.click();
 });
 
-mediaInput.addEventListener("change", (e) => {
+mediaInput.addEventListener("change", async (e) => {
   if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableNewFile) {
     showNotification("The host disabled creating new files for participants.", "error");
     mediaInput.value = "";
@@ -15892,39 +20862,69 @@ mediaInput.addEventListener("change", (e) => {
   const files = Array.from(e.target.files);
   if (!files.length) return;
 
-  files.forEach((file) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result;
-      const name = normalizeProjectFileName(file.name);
-      const ext = name.split(".").pop().toLowerCase();
-      const type = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext)
-        ? "img"
-        : ext === "mp4"
-          ? "video"
-          : "audio";
+  let addedCount = 0;
+  let storageWarningShown = false;
+  for (const file of files) {
+    const name = normalizeProjectFileName(file.name);
+    const mimeKind = String(file.type || "").split("/")[0].toLowerCase();
+    const mediaType = ["image", "video", "audio"].includes(mimeKind)
+      ? mimeKind
+      : getProjectMediaKind({ name, type: "media" });
 
-      const newFile = {
-        name,
-        type: "media",
-        mediaType: type,
-        content: base64,
-        active: false,
-      };
+    if (!mediaType) {
+      showNotification(`${name} is not a supported media file`, "warn");
+      continue;
+    }
+    if (projectFiles.some((entry) => String(entry.name || "").trim().toLowerCase() === name.toLowerCase())) {
+      showNotification(`${name} already exists`, "warn");
+      continue;
+    }
 
-      if (!projectFiles.some((f) => String(f.name || "").trim().toLowerCase() === name.toLowerCase())) {
-        projectFiles.push(newFile);
-        showNotification(`Added: ${name}`, "success");
-      } else {
-        showNotification(`${name} already exists`, "warn");
-      }
-      renderFileList();
-      syncProjectWithSession();
+    const newFile = {
+      name,
+      type: "media",
+      mediaType,
+      mediaStorageId: createMediaStorageId(),
+      mediaSize: Number(file.size || 0),
+      mediaMimeType: String(file.type || "application/octet-stream"),
+      content: "",
+      active: false,
     };
-    reader.readAsDataURL(file);
-  });
+    attachRuntimeMediaBlob(newFile, file);
+    projectFiles.push(newFile);
+    addedCount += 1;
+
+    try {
+      await persistMediaBlob(newFile, file);
+    } catch (error) {
+      console.warn("Media persistence unavailable:", error);
+      newFile.mediaStorageId = "";
+      if (!storageWarningShown) {
+        storageWarningShown = true;
+        showNotification("Media is available in this tab, but browser storage could not save it for reload.", "warn");
+      }
+    }
+    if (file.size <= MAX_LIVE_MEDIA_TRANSFER_BYTES) {
+      try {
+        newFile.content = await readMediaBlobAsDataUrl(file);
+      } catch (_error) {}
+    } else if (activeSessionId) {
+      showNotification(`${name} is too large for live collaboration transfer, so it stays local to this browser.`, "warn");
+    }
+    showNotification(`Added: ${name} (${formatMediaByteSize(file.size)})`, "success");
+  }
+
   mediaInput.value = "";
+  if (!addedCount) return;
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
+  renderFileList();
+  scheduleProjectAutosave();
+  if (autoRunCheckbox.checked) debouncedUpdatePreview();
+  syncProjectWithSession();
 });
+
+window.addEventListener("unload", () => releaseProjectMediaObjectUrls(projectFiles));
 
 // PART 14 - SEAMLESS & FULL-RANGE DIVIDER DRAG
 let isDragging = false;
@@ -16287,7 +21287,13 @@ window.addEventListener("beforeunload", function (e) {
   }
 });
 
-newFileBtn.addEventListener("click", createNewFile);
+newFileBtn.addEventListener("click", handleCreateNewFileRequest);
+if (collabFileVisibilityBtn) {
+  collabFileVisibilityBtn.addEventListener("click", () => {
+    if (!activeSessionId || !canUseCoHostTools() || !activeFile) return;
+    showFileVisibilityEditor(activeFile.name, "quick");
+  });
+}
 if (newProjectBtn) {
   newProjectBtn.addEventListener("click", handleNewProject);
 }
@@ -16889,7 +21895,7 @@ const tutorialSteps = [
     target: "#newFileBtn",
     icon: "fa-solid fa-plus",
     title: "New File",
-    description: "Create new HTML, CSS, JS, or .env files for your project.",
+    description: "Create new HTML, CSS, JS, TXT, or .env files for your project.",
     position: "bottom-right",
   },
   {
@@ -16960,6 +21966,8 @@ const tutorialSteps = [
 let currentStep = 0;
 let tutorialActive = false;
 let tutorialOpenedMoreMenu = false;
+let tutorialDemoCompleteTimer = null;
+let tutorialDemoReplayTimer = null;
 
 // Create tutorial modal HTML
 const tutorialModalHTML = `
@@ -17008,6 +22016,18 @@ const tutorialModalHTML = `
         margin-bottom: 20px;
         white-space: pre-line;
       "></p>
+      <div id="tutorialLiveDemo" class="tutorial-live-demo" role="group" aria-labelledby="tutorialDemoTitle">
+        <div class="tutorial-demo-label">
+          <span class="tutorial-live-dot"></span>
+          <strong id="tutorialDemoTitle">LIVE PREVIEW</strong>
+          <button id="tutorialReplayDemoBtn" class="tutorial-demo-replay" type="button" aria-label="Replay this demonstration" title="Replay animation">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="tutorialDemoStage" class="tutorial-demo-stage" aria-hidden="true"></div>
+        <div class="tutorial-demo-result" aria-hidden="true"><i class="fa-solid fa-circle-check"></i><span>Demonstration complete</span></div>
+        <div class="tutorial-demo-timeline"><i></i></div>
+      </div>
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span id="tutorialProgress" style="color: var(--text-muted); font-size: 13px;"></span>
         <div style="display: flex; gap: 10px;">
@@ -17031,7 +22051,9 @@ const tutorialModalHTML = `
     "></div>
     <div id="tutorialToolPointer" class="tutorial-tool-pointer" aria-hidden="true">
       <i id="tutorialToolPointerIcon" class="fa-solid fa-arrow-pointer"></i>
-      <span></span>
+      <span class="tutorial-pointer-ring"></span>
+      <b class="tutorial-pointer-click"></b>
+      <small id="tutorialToolPointerAction">Click</small>
     </div>
   </div>
 `;
@@ -17067,8 +22089,13 @@ const tutorialCard = document.getElementById("tutorialCard");
 const tutorialIcon = document.getElementById("tutorialIcon");
 const tutorialTitle = document.getElementById("tutorialTitle");
 const tutorialDescription = document.getElementById("tutorialDescription");
+const tutorialLiveDemo = document.getElementById("tutorialLiveDemo");
+const tutorialDemoTitle = document.getElementById("tutorialDemoTitle");
+const tutorialDemoStage = document.getElementById("tutorialDemoStage");
+const tutorialReplayDemoBtn = document.getElementById("tutorialReplayDemoBtn");
 const tutorialToolPointer = document.getElementById("tutorialToolPointer");
 const tutorialToolPointerIcon = document.getElementById("tutorialToolPointerIcon");
+const tutorialToolPointerAction = document.getElementById("tutorialToolPointerAction");
 const tutorialProgress = document.getElementById("tutorialProgress");
 const tutorialHighlight = document.getElementById("tutorialHighlight");
 const tutorialNextBtn = document.getElementById("tutorialNextBtn");
@@ -17096,18 +22123,179 @@ function startTutorial() {
   }
 }
 
+function getTutorialDemo(step) {
+  const target = String(step?.target || "");
+  if (target.includes("Toggle auto-run")) {
+    return {
+      type: "toggle",
+      label: "AUTO-RUN FLOW",
+      markup: '<div class="tutorial-demo-toggle"><span>AUTO-RUN</span><i></i><b>ON</b></div>',
+    };
+  }
+  if (target.includes("Show/hide console")) {
+    return {
+      type: "terminal",
+      label: "CONSOLE OUTPUT",
+      markup: '<div class="tutorial-demo-terminal"><b>$</b><span>npm run dev</span><b>›</b><em>Ready on :3000</em><i></i></div>',
+    };
+  }
+  if (target === "#collabBtn") {
+    return {
+      type: "collab",
+      label: "LIVE COLLABORATION",
+      markup: '<div class="tutorial-demo-collab"><div class="demo-connection-line"></div><span class="demo-avatar one">U1</span><span class="demo-avatar two">U2</span><i class="demo-cursor one"></i><i class="demo-cursor two"></i><b>2 online</b></div>',
+    };
+  }
+  if (target === "#previewFullscreenBtn") {
+    return {
+      type: "fullscreen",
+      label: "FULLSCREEN PREVIEW",
+      markup: '<div class="tutorial-demo-frame"><span class="demo-frame-bar"><i></i><i></i><i></i></span><main><b></b><em></em><em></em></main><i class="fa-solid fa-expand"></i></div>',
+    };
+  }
+  if (target === "#settingsBtn") {
+    return {
+      type: "settings",
+      label: "EDITOR SETTINGS",
+      markup: '<div class="tutorial-demo-settings"><i class="fa-solid fa-gear"></i><label>FONT SIZE</label><span><b></b></span><label>EDITOR COLOR</label><span><b></b></span></div>',
+    };
+  }
+  if (target === "#addMediaBtn") {
+    return {
+      type: "media",
+      label: "MEDIA UPLOAD",
+      markup: '<div class="tutorial-demo-media"><i class="fa-regular fa-image"></i><em class="fa-solid fa-arrow-down"></em><span><b></b><i></i><i></i></span><small>hero-image.png</small></div>',
+    };
+  }
+  if (target === "#helpPageBtn") {
+    return {
+      type: "help",
+      label: "HELP GUIDE",
+      markup: '<div class="tutorial-demo-help"><i class="fa-solid fa-circle-question"></i><strong>Quick guide</strong><span></span><span></span><span></span></div>',
+    };
+  }
+  if (target === "#headerMoreBtn") {
+    return {
+      type: "menu",
+      label: "MORE TOOLS",
+      markup: '<div class="tutorial-demo-menu"><span><i class="fa-solid fa-layer-group"></i> Templates</span><span><i class="fa-solid fa-cloud-arrow-up"></i> Publish</span><span><i class="fa-solid fa-icons"></i> Get Icons</span></div>',
+    };
+  }
+  if (target === "#newFileBtn") {
+    return {
+      type: "file",
+      label: "CREATE A FILE",
+      markup: '<div class="tutorial-demo-file"><i class="fa-brands fa-html5"></i><span>landing-page.html</span><b><i class="fa-solid fa-check"></i></b></div>',
+    };
+  }
+  if (target === "#fileList") {
+    return {
+      type: "explorer",
+      label: "FILE EXPLORER",
+      markup: '<div class="tutorial-demo-explorer"><span><i class="fa-brands fa-html5"></i> index.html</span><span><i class="fa-brands fa-css3-alt"></i> style.css</span><span><i class="fa-brands fa-js"></i> script.js</span></div>',
+    };
+  }
+  if (target === "#activeEditor") {
+    return {
+      type: "code",
+      label: "SMART CODE EDITOR",
+      markup: '<div class="tutorial-demo-code"><span><b>&lt;main</b> <em>class</em>=<q>"app"</q><b>&gt;</b></span><span>&nbsp;&nbsp;<b>&lt;h1&gt;</b>Hello CodX<b>&lt;/h1&gt;</b></span><span><b>&lt;/main&gt;</b><i></i></span></div>',
+    };
+  }
+  if (target === "#undoEditorBtn" || target === "#redoEditorBtn") {
+    const isRedo = target === "#redoEditorBtn";
+    return {
+      type: isRedo ? "redo" : "undo",
+      label: isRedo ? "RESTORE CHANGE" : "UNDO CHANGE",
+      markup: `<div class="tutorial-demo-history${isRedo ? " redo" : ""}"><i class="fa-solid fa-rotate-${isRedo ? "right" : "left"}"></i><span class="removed">color: tomato;</span><span class="restored">color: #22c55e;</span></div>`,
+    };
+  }
+  if (target === "#runPreviewBtn") {
+    return {
+      type: "run",
+      label: "BUILD PREVIEW",
+      markup: '<div class="tutorial-demo-run"><i class="fa-solid fa-play"></i><div><span></span><b><i class="fa-solid fa-circle-check"></i> Preview ready</b></div></div>',
+    };
+  }
+  if (target.includes("Export project as ZIP") || target.includes("Import ZIP file")) {
+    const isImport = target.includes("Import ZIP file");
+    return {
+      type: isImport ? "import" : "export",
+      label: isImport ? "IMPORT PROJECT" : "EXPORT PROJECT",
+      markup: `<div class="tutorial-demo-transfer${isImport ? " import" : ""}"><i class="fa-solid fa-file-zipper"></i><span><i class="fa-solid fa-arrow-${isImport ? "up" : "down"}"></i></span><div><b>codx-project.zip</b><small>${isImport ? "Files restored" : "Download ready"}</small></div></div>`,
+    };
+  }
+  if (target === "#output") {
+    return {
+      type: "preview",
+      label: "LIVE WEBSITE PREVIEW",
+      markup: '<div class="tutorial-demo-preview"><header><i></i><i></i><i></i><small>localhost</small></header><main><b></b><span></span><span></span><em></em></main></div>',
+    };
+  }
+  return {
+    type: "generic",
+    label: "LIVE TOOL PREVIEW",
+    markup: `<div class="tutorial-demo-generic"><i class="${step?.icon || "fa-solid fa-wand-magic-sparkles"}"></i><strong>${escapeHtml(step?.title || "CodX Editor")}</strong></div>`,
+  };
+  updateCollabUnreadBadges();
+}
+
+function clearTutorialDemoTimers() {
+  clearTimeout(tutorialDemoCompleteTimer);
+  clearTimeout(tutorialDemoReplayTimer);
+  tutorialDemoCompleteTimer = null;
+  tutorialDemoReplayTimer = null;
+}
+
+function runTutorialDemoCycle() {
+  if (!tutorialLiveDemo || !tutorialActive) return;
+  clearTutorialDemoTimers();
+  tutorialLiveDemo.classList.remove("is-playing", "is-complete");
+  void tutorialLiveDemo.offsetWidth;
+  tutorialLiveDemo.classList.add("is-playing");
+
+  tutorialDemoCompleteTimer = setTimeout(() => {
+    if (tutorialActive) tutorialLiveDemo.classList.add("is-complete");
+  }, 2500);
+  tutorialDemoReplayTimer = setTimeout(() => {
+    if (tutorialActive) runTutorialDemoCycle();
+  }, 5200);
+}
+
+function playTutorialLiveDemo(step) {
+  if (!tutorialLiveDemo || !tutorialDemoStage) return;
+  const demo = getTutorialDemo(step);
+  tutorialLiveDemo.dataset.demo = demo.type;
+  if (tutorialDemoTitle) tutorialDemoTitle.textContent = demo.label;
+  tutorialDemoStage.innerHTML = demo.markup;
+  runTutorialDemoCycle();
+}
+
+tutorialReplayDemoBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  runTutorialDemoCycle();
+});
+
 function playTutorialToolPointer(target, step) {
   if (!tutorialToolPointer || !target) return;
   const rect = target.getBoundingClientRect();
-  const endX = Math.max(8, Math.min(window.innerWidth - 34, rect.left + rect.width * 0.58));
-  const endY = Math.max(8, Math.min(window.innerHeight - 40, rect.top + rect.height * 0.52));
+  const isEditorTarget = step?.target === "#activeEditor";
+  const isPreviewTarget = step?.target === "#output";
+  const isClickableTarget = Boolean(target.matches?.("button, [role='button'], input, select, a"));
+  const endX = Math.max(10, Math.min(window.innerWidth - 46, rect.left + rect.width * (isEditorTarget ? 0.34 : 0.58)));
+  const endY = Math.max(10, Math.min(window.innerHeight - 48, rect.top + rect.height * (isEditorTarget ? 0.38 : 0.52)));
   const startsFromRight = String(step?.position || "").includes("left");
-  const startX = endX + (startsFromRight ? 76 : -76);
-  const startY = Math.max(8, Math.min(window.innerHeight - 40, endY + 54));
-  const pointerKind = step?.target === "#activeEditor"
+  const startX = Math.max(10, Math.min(window.innerWidth - 46, endX + (startsFromRight ? 112 : -112)));
+  const startY = Math.max(10, Math.min(window.innerHeight - 48, endY + 72));
+  const midX = Math.max(10, Math.min(window.innerWidth - 46, (startX + endX) / 2 + (startsFromRight ? -18 : 18)));
+  const midY = Math.max(10, Math.min(window.innerHeight - 48, Math.min(startY, endY) - 28));
+  const pointerKind = isEditorTarget
     ? "text"
-    : step?.target === "#output"
+    : isPreviewTarget
       ? "inspect"
+      : isClickableTarget
+        ? "hand"
       : "pointer";
 
   tutorialToolPointer.dataset.kind = pointerKind;
@@ -17116,15 +22304,30 @@ function playTutorialToolPointer(target, step) {
       ? "fa-solid fa-i-cursor"
       : pointerKind === "inspect"
         ? "fa-solid fa-crosshairs"
-        : "fa-solid fa-arrow-pointer";
+        : pointerKind === "hand"
+          ? "fa-solid fa-hand-pointer"
+          : "fa-solid fa-arrow-pointer";
+  }
+  if (tutorialToolPointerAction) {
+    tutorialToolPointerAction.textContent = pointerKind === "text"
+      ? "Type here"
+      : pointerKind === "inspect"
+        ? "Preview"
+        : pointerKind === "hand"
+          ? "Click"
+          : "Explore";
   }
   tutorialToolPointer.style.setProperty("--tutorial-pointer-start-x", `${startX}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-start-y", `${startY}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-mid-x", `${midX}px`);
+  tutorialToolPointer.style.setProperty("--tutorial-pointer-mid-y", `${midY}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-end-x", `${endX}px`);
   tutorialToolPointer.style.setProperty("--tutorial-pointer-end-y", `${endY}px`);
   tutorialToolPointer.classList.remove("is-playing");
+  tutorialHighlight?.classList.remove("is-pointer-playing");
   void tutorialToolPointer.offsetWidth;
   tutorialToolPointer.classList.add("is-playing");
+  tutorialHighlight?.classList.add("is-pointer-playing");
 }
 
 function prepareTutorialTarget(step, targetElement) {
@@ -17162,6 +22365,7 @@ function showTutorialStep(stepIndex) {
   tutorialIcon.className = step.icon;
   tutorialTitle.textContent = step.title;
   tutorialDescription.textContent = step.description;
+  playTutorialLiveDemo(step);
   tutorialProgress.textContent = `Step ${stepIndex + 1} of ${
     tutorialSteps.length
   }`;
@@ -17170,7 +22374,7 @@ function showTutorialStep(stepIndex) {
     targetElement.scrollIntoView({
       block: "nearest",
       inline: "nearest",
-      behavior: "smooth",
+      behavior: "auto",
     });
   }
 
@@ -17327,8 +22531,11 @@ closeTutorialBtn.addEventListener("click", async () => {
 // Complete tutorial
 function completeTutorial() {
   tutorialActive = false;
+  clearTutorialDemoTimers();
   tutorialModal.style.display = "none";
   tutorialToolPointer?.classList.remove("is-playing");
+  tutorialLiveDemo?.classList.remove("is-playing", "is-complete");
+  tutorialHighlight?.classList.remove("is-pointer-playing");
   if (tutorialOpenedMoreMenu) {
     setHeaderMoreMenuOpen(false);
     tutorialOpenedMoreMenu = false;

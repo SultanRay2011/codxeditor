@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
   <head>
@@ -32,7 +31,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="theme.css" />
-    <link rel="stylesheet" href="site-enhancements.css?v=20260712" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260713-home-hero3" />
     <title>Free Online HTML, CSS & JavaScript Editor | CodX Editor</title>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"WebApplication","name":"CodX Editor","url":"https://codxeditor.up.railway.app/","applicationCategory":"DeveloperApplication","operatingSystem":"Any modern web browser","description":"A browser-based workspace for creating, previewing, debugging, saving, sharing, and collaborating on HTML, CSS, JavaScript, JSON, environment, and Node.js projects.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["HTML, CSS and JavaScript editing","Live preview and console","Multi-file projects","Real-time collaboration","GitHub repository workflow","Node.js browser runtime"]}
@@ -808,6 +807,19 @@
         /* each header specifies its own width/height inline */
       }
 
+      .col-logo-wrap img.codx-comparison-logo {
+        width: 116px;
+        height: 60px;
+        display: block;
+        max-width: none;
+        object-fit: cover;
+        object-position: center;
+        filter: brightness(0) invert(1);
+      }
+
+      .comparison-product-logo { width: 42px; height: 38px; }
+      .comparison-product-logo.logo-codepen { width: 82px; }
+
       .col-label {
         font-weight: 800;
         font-size: 0.95em;
@@ -872,6 +884,24 @@
       .partial-text { color: #f57c00; font-size: 0.82em; font-weight: 700; }
       .speed-val { font-weight: 700; }
       .codx-speed { color: #2e7d32; font-size: 1.08em; }
+
+      .feature-value {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        max-width: 150px;
+        color: #4c5960;
+        font-size: 0.78em;
+        font-weight: 750;
+        line-height: 1.3;
+        text-wrap: balance;
+      }
+
+      .feature-value i { flex: 0 0 auto; }
+      .feature-value.yes { color: #25833a; }
+      .feature-value.limited { color: #a45a08; }
+      .feature-value.neutral { color: #58636a; }
 
       @media (max-width: 900px) {
         .feature-showcase,
@@ -1150,123 +1180,159 @@
       <div class="particle"></div>
     </div>
 
+    <section class="home-showcase" aria-labelledby="homeShowcaseTitle">
+      <div class="home-showcase-shell home-showcase-grid">
+        <div>
+          <span class="home-showcase-eyebrow"><i class="fa-solid fa-window-restore"></i> Browser-based project workspace</span>
+          <h1 id="homeShowcaseTitle">Code, preview, run, and collaborate in <span>one place.</span></h1>
+          <p class="home-showcase-copy">
+            CodX Editor is a multi-file development workspace for building web projects without first installing a desktop IDE. It brings editing, live results, Node.js, GitHub, and controlled teamwork into the browser.
+          </p>
+          <div class="home-showcase-actions">
+            <a class="home-showcase-button primary" href="welcome.html"><i class="fa-solid fa-play"></i> Open CodX Editor</a>
+            <a class="home-showcase-button secondary" href="#majorFeaturesTitle"><i class="fa-solid fa-arrow-down"></i> See how it works</a>
+          </div>
+          <div class="home-showcase-proof" aria-label="Key benefits">
+            <span><i class="fa-solid fa-circle-check"></i> No editor installation</span>
+            <span><i class="fa-solid fa-circle-check"></i> Real project files</span>
+            <span><i class="fa-solid fa-circle-check"></i> Permission-aware collaboration</span>
+          </div>
+        </div>
+
+        <div class="home-workspace-visual" aria-label="Illustration of the CodX Editor workspace">
+          <div class="home-workspace-window">
+            <div class="home-workspace-topbar">
+              <span class="home-window-dots"><i></i><i></i><i></i></span>
+              <span class="home-workspace-address">codxeditor / landing-page</span>
+              <span class="home-workspace-status"><i class="fa-solid fa-circle"></i></span>
+            </div>
+            <div class="home-workspace-tabs">
+              <span class="home-workspace-tab active"><i class="fa-brands fa-html5"></i>index.html</span>
+              <span class="home-workspace-tab"><i class="fa-brands fa-css3-alt"></i>style.css</span>
+              <span class="home-workspace-tab"><i class="fa-brands fa-js"></i>script.js</span>
+            </div>
+            <div class="home-workspace-grid">
+              <div class="home-code-pane" aria-hidden="true">
+                <span class="home-code-line"><span class="home-tok-tag">&lt;main</span> <span class="home-tok-attr">class</span>=<span class="home-tok-string">"hero"</span><span class="home-tok-tag">&gt;</span></span>
+                <span class="home-code-line">  <span class="home-tok-tag">&lt;span&gt;</span><span class="home-tok-text">Build together</span><span class="home-tok-tag">&lt;/span&gt;</span></span>
+                <span class="home-code-line">  <span class="home-tok-tag">&lt;h1&gt;</span><span class="home-tok-text">Ideas become</span></span>
+                <span class="home-code-line">    <span class="home-tok-text">working pages.</span><span class="home-tok-tag">&lt;/h1&gt;</span></span>
+                <span class="home-code-line">  <span class="home-tok-tag">&lt;button</span> <span class="home-tok-attr">id</span>=<span class="home-tok-string">"start"</span><span class="home-tok-tag">&gt;</span></span>
+                <span class="home-code-line">    <span class="home-tok-text">Start building</span></span>
+                <span class="home-code-line">  <span class="home-tok-tag">&lt;/button&gt;</span></span>
+                <span class="home-code-line"><span class="home-tok-tag">&lt;/main&gt;</span></span>
+                <span class="home-code-line"><span class="home-tok-comment">// live preview ready</span></span>
+              </div>
+              <div class="home-preview-pane">
+                <div class="home-preview-head"><span>PREVIEW</span><span class="home-preview-icons"><i class="fa-solid fa-code"></i><i class="fa-solid fa-rotate-right"></i><i class="fa-solid fa-magnifying-glass"></i></span></div>
+                <div class="home-preview-page">
+                  <span class="home-preview-badge">BUILD TOGETHER</span>
+                  <h3>Ideas become working pages.</h3>
+                  <p>Edit the project, inspect the result, and share the next step with your team.</p>
+                  <span class="home-preview-cta">START BUILDING</span>
+                  <div class="home-preview-cards"><span class="home-preview-card"><i class="fa-solid fa-bolt"></i><b>Live result</b></span><span class="home-preview-card"><i class="fa-solid fa-users"></i><b>Shared work</b></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span class="home-collab-cursor home-cursor-one"><i class="fa-solid fa-arrow-pointer"></i><span><b>Ada</b></span></span>
+          <span class="home-collab-cursor home-cursor-two"><i class="fa-solid fa-crosshairs"></i><span><b>Sam</b></span></span>
+          <span class="home-visual-float node"><i class="fa-brands fa-node-js"></i> Node.js ready</span>
+          <span class="home-visual-float github"><i class="fa-brands fa-github"></i> Repository connected</span>
+        </div>
+      </div>
+    </section>
+
     <div class="container">
       <div class="ad-container">
-        <div class="logo-badge">100% FREE & OPEN SOURCE</div>
-
-        <h1>Code Instantly In Your Browser<br />No Installation Needed</h1>
-
-        <svg class="page-illustration" viewBox="0 0 620 330" role="img" aria-labelledby="homeIllustrationTitle homeIllustrationDesc">
-          <title id="homeIllustrationTitle">CodX Editor browser workspace illustration</title>
-          <desc id="homeIllustrationDesc">A browser window showing project files, colorful source code, a live preview, and two collaborator cursors.</desc>
-          <rect class="ill-surface" x="18" y="18" width="584" height="292" rx="25" stroke-width="3"/>
-          <path class="ill-soft" d="M18 70h584v215a25 25 0 0 1-25 25H43a25 25 0 0 1-25-25z"/>
-          <circle cx="50" cy="44" r="8" fill="#fb7185"/><circle cx="76" cy="44" r="8" fill="#fbbf24"/><circle cx="102" cy="44" r="8" fill="#4ade80"/>
-          <rect x="132" y="32" width="300" height="24" rx="12" fill="#edf5ef"/><rect class="ill-accent" x="449" y="32" width="126" height="24" rx="12"/>
-          <rect x="34" y="88" width="126" height="202" rx="13" fill="#13241a"/>
-          <rect x="174" y="88" width="218" height="202" rx="13" fill="#0b1510"/>
-          <rect x="406" y="88" width="178" height="202" rx="13" fill="#fff" stroke="#dbe8de"/>
-          <g fill="#9fb1a5"><rect x="52" y="108" width="78" height="8" rx="4"/><rect x="52" y="132" width="90" height="8" rx="4"/><rect x="52" y="156" width="68" height="8" rx="4"/></g>
-          <g stroke-linecap="round" stroke-width="7"><path d="M194 117h58" stroke="#7dd3fc"/><path d="M262 117h87" stroke="#c4b5fd"/><path d="M210 143h118" stroke="#86efac"/><path d="M210 169h74" stroke="#fda4af"/><path d="M194 195h145" stroke="#fde68a"/><path d="M210 221h104" stroke="#93c5fd"/><path d="M194 247h126" stroke="#86efac"/></g>
-          <rect x="424" y="108" width="142" height="54" rx="11" fill="#e9f8ed"/><rect class="ill-accent" x="438" y="122" width="84" height="10" rx="5"/><rect x="438" y="141" width="112" height="7" rx="3" fill="#9bc7a7"/>
-          <rect x="424" y="177" width="66" height="88" rx="10" fill="#f2f8f4"/><rect x="500" y="177" width="66" height="88" rx="10" fill="#f2f8f4"/>
-          <path d="M366 104l14 34 8-14 15-6z" fill="#38bdf8" stroke="#fff" stroke-width="2"/><path d="M543 203l14 34 8-14 15-6z" fill="#f97316" stroke="#fff" stroke-width="2"/>
-        </svg>
-
-        <p class="subtext">
-          Stop wasting time with heavy editors. Start coding instantly in your
-          browser.
-        </p>
-
-        <p class="description">
-          <span class="highlight"
-            ><span class="cod">Cod</span><span class="x">X</span>
-            <span class="editor">Editor</span></span
-          >
-          is a powerful, browser-based code editor that lets you instantly
-          write, run, and debug <span class="highlight">HTML</span>,
-          <span class="highlight">CSS</span>, and
-          <span class="highlight">JavaScript</span>
-          without any installation. No setup, no hassle — just pure coding,
-          anytime, anywhere!
-        </p>
-
-        <ul class="features">
-          <li>
-            <div>
-              <strong>Instant Preview</strong>
-              <span>Run and review changes in the same workspace.</span>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Smart Coding Tools</strong>
-              <span>Suggestions, highlighting, and faster HTML workflows.</span>
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Multi-File Projects</strong>
-              <span
-                >Work across HTML, CSS, JS, media, ZIP, and `.env` files.</span
-              >
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Built-In Debugging</strong>
-              <span
-                >Jump to errors and see problem lines highlighted in red.</span
-              >
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Real-Time Collaboration</strong>
-              <span
-                >Share sessions with chat, live cursors, and host
-                controls.</span
-              >
-            </div>
-          </li>
-          <li>
-            <div>
-              <strong>Focused Experience</strong>
-              <span>Zen Mode, custom fonts, and editor personalization.</span>
-            </div>
-          </li>
-        </ul>
-
-        <div class="feature-summary">
-          <div class="feature-summary-copy">
-            CodX Editor goes beyond the basics with collaboration, chat, live
-            preview, ZIP workflows, media support, smart suggestions, custom
-            fonts, debug tooling, shortcuts, and more.
+        <section class="major-features-section" aria-labelledby="majorFeaturesTitle">
+          <div class="major-features-heading">
+            <span class="section-kicker"><i class="fa-solid fa-wand-magic-sparkles"></i> Major features</span>
+            <h2 id="majorFeaturesTitle">A practical workspace for the complete web-project loop</h2>
+            <p>Move from an idea to working browser code, understand errors, collaborate safely, and keep a portable copy. Each major feature solves a specific part of that workflow.</p>
           </div>
-          <div class="feature-count">
-            <i class="fa-solid fa-layer-group"></i>
-            <span>20+ built-in features</span>
+          <div class="major-feature-list">
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 01 · Write</span>
+                <h3>Smart editing that stays close to the web platform</h3>
+                <p>Syntax colors, project-aware suggestions, Emmet-style HTML expansion, filename completion, and line-aware diagnostics help without hiding the HTML, CSS, and JavaScript you are learning.</p>
+                <ul><li>HTML, CSS, JavaScript, JSON, environment, and backend files</li><li>Suggestions learn project classes, IDs, variables, and filenames</li><li>Diagnostics identify the relevant file, line, column, and token</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="Syntax-colored code and an error helper">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div class="visual-code"><span style="width:62%"></span><span></span><span></span><span></span><span style="width:68%"></span><span></span></div>
+                <div class="visual-floating-card"><strong><i class="fa-solid fa-circle-check" style="color:#16a34a"></i> Line 12 checked</strong><small>Suggestions and diagnostics stay connected to the active file.</small></div>
+              </div>
+            </article>
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 02 · Organize</span>
+                <h3>Real project files, not one disposable snippet</h3>
+                <p>Create linked pages, stylesheets, scripts, JSON, media, and environment files. Import an archive, save in the browser, and export a ZIP when you need a backup you control.</p>
+                <ul><li>Multi-file explorer with project-safe filenames</li><li>Media, starter templates, saves, and unsaved-work recovery</li><li>Portable ZIP import and export</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="A multi-file web project">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div class="visual-terminal"><span class="prompt">project/</span><br>├── index.html<br>├── about.html<br>├── styles/main.css<br>├── scripts/app.js<br>└── assets/hero.webp<br><br><span class="muted">6 files · ready to export</span></div>
+              </div>
+            </article>
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 03 · See and debug</span>
+                <h3>Preview, inspect, refresh, and understand the result</h3>
+                <p>The preview connects source to output. Refresh deliberately, inspect rendered HTML with syntax highlighting, adjust zoom, follow project links, and use the console to trace JavaScript.</p>
+                <ul><li>Live or manual preview updates with refresh</li><li>Element inspection with matching highlighted markup</li><li>Console output and clickable diagnostic locations</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="Source code beside a rendered webpage">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;min-height:195px"><div class="visual-code"><span></span><span></span><span></span><span></span></div><div style="margin:17px;padding:17px;border-radius:13px;background:#fff"><div style="height:42px;border-radius:10px;background:#dcfce7;margin-bottom:12px"></div><div style="height:8px;width:80%;border-radius:8px;background:#94a3b8;margin-bottom:8px"></div><div style="height:8px;width:58%;border-radius:8px;background:#cbd5e1"></div></div></div>
+              </div>
+            </article>
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 04 · Collaborate</span>
+                <h3>Live teamwork with visible roles and host controls</h3>
+                <p>Sessions include chat, unread badges, waiting-room approval, roles, custom cursors, file visibility, and controls that help the host manage access.</p>
+                <ul><li>Host, co-host, and participant permissions</li><li>Hidden files disappear from affected participants' tabs</li><li>Group and private chat with unread counts capped at 99+</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="Three people collaborating on a project">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div style="padding:25px"><div class="visual-avatar-row"><span class="visual-avatar">YO</span><span class="visual-avatar">AM</span><span class="visual-avatar">LI</span></div><div class="visual-code" style="padding:10px 0"><span style="width:84%"></span><span></span><span style="width:66%"></span><span></span></div></div>
+                <div class="visual-floating-card"><strong><i class="fa-solid fa-shield-halved" style="color:#2563eb"></i> Host controls</strong><small>Waiting room on · 3 participants · 1 hidden file</small></div>
+              </div>
+            </article>
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 05 · Save and share</span>
+                <h3>Choose local saves, GitHub commits, or public publishing</h3>
+                <p>Keep a browser copy, export a ZIP, connect GitHub through OAuth for repository work, or create a public view-only link after reviewing every included file.</p>
+                <ul><li>Repository browsing, file creation, uploads, edits, and commits</li><li>Optional commit messages and repository refresh</li><li>Public links kept separate from editable collaboration sessions</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="A project moving to a repository and public link">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div style="display:grid;place-items:center;min-height:190px;color:#fff;text-align:center"><div><i class="fa-solid fa-folder-tree" style="font-size:38px;color:#86efac"></i><div style="margin:15px 0;color:#94a3b8">ZIP &nbsp;→&nbsp; <i class="fa-brands fa-github"></i> &nbsp;→&nbsp; PUBLIC LINK</div><strong>Choose the destination that fits the work</strong></div></div>
+              </div>
+            </article>
+            <article class="major-feature">
+              <div class="major-feature-copy">
+                <span class="major-feature-number">Feature 06 · Extend</span>
+                <h3>Optional Node.js, fonts, icons, and focused layouts</h3>
+                <p>Run packages or a server in the browser-isolated Node.js mode. Browse fonts and icons, customize Google Font weight and spacing, or reduce distractions with Zen Mode and the phone editor layout.</p>
+                <ul><li>Terminal commands, dependencies, server detection, and localhost bridging</li><li>Fontsource, Google Fonts, and Font Awesome helpers</li><li>Theme, sizing, Zen, and mobile-focused controls</li></ul>
+              </div>
+              <div class="feature-visual" aria-label="A Node.js terminal starting a local server">
+                <div class="feature-visual-bar"><i></i><i></i><i></i></div>
+                <div class="visual-terminal"><span class="prompt">$</span> npm install<br><span class="muted">added project dependencies</span><br><span class="prompt">$</span> npm start<br><span style="color:#93c5fd">Server ready on localhost:8000</span><br><br><span class="muted">Open the detected port in a browser tab</span></div>
+              </div>
+            </article>
           </div>
-        </div>
+        </section>
 
-        <div class="strong-cta">
-          <h2>Build Faster With CodX Editor</h2>
-          <p>
-            Start writing code in seconds, collaborate in real-time, and preview
-            instantly on any device.
-          </p>
-          <div class="cta-actions">
-            <a href="welcome.html" class="mini-btn primary"
-              >Open CodX Editor Now</a
-            >
-          </div>
-        </div>
-
-        <!-- ── Comparison Table ── -->
         <div class="comparison-section">
           <h3 class="section-title">How CodX Editor Compares</h3>
           <p style="color:#555;font-size:0.93em;margin-bottom:18px;text-align:left;">
-            See how CodX Editor stacks up against the most popular online code editors.
+            A practical comparison of documented project workflows, runtime options, collaboration, and project portability.
           </p>
           <div class="comparison-wrapper">
             <table class="comparison-table">
@@ -1277,7 +1343,7 @@
                   <!-- CodX Editor — highlighted -->
                   <th class="col-codx">
                     <div class="col-logo-wrap">
-                      <img src="cx.png" alt="CodX Editor" width="44" height="44" style="filter:brightness(0) invert(1);" />
+                      <img class="codx-comparison-logo" src="cx.png" alt="CodX Editor logo" />
                       <span class="col-label">CodX Editor</span>
                       <a href="welcome.html" class="col-codx-btn">Open Editor</a>
                     </div>
@@ -1286,10 +1352,7 @@
                   <!-- CodePen -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://cpwebassets.codepen.io/assets/favicon/favicon-aec34940fbc1a6e787974dcd360f2c6b63348d4dccd4e6e2c4a1468d073fc2 87.png"
-                           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-                           alt="CodePen" width="36" height="36" style="border-radius:8px;" />
-                      <span style="display:none;width:36px;height:36px;background:#1e1f26;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:1em;">CP</span>
+                      <img class="comparison-product-logo logo-codepen" src="assets/comparison-logos/codepen.svg" alt="CodePen logo" />
                       <span class="col-label">CodePen</span>
                     </div>
                   </th>
@@ -1297,9 +1360,7 @@
                   <!-- JSFiddle -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://jsfiddle.net/img/favicon.png"
-                           onerror="this.style.display='none';"
-                           alt="JSFiddle" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/jsfiddle.png" alt="JSFiddle logo" />
                       <span class="col-label">JSFiddle</span>
                     </div>
                   </th>
@@ -1307,9 +1368,7 @@
                   <!-- StackBlitz -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://c.staticblitz.com/assets/favicon_sb-861fe1b85c0dc928750c62de15fed96fc75e57ee366bd937bad9a76f2cf1c4f.png"
-                           onerror="this.style.display='none';"
-                           alt="StackBlitz" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/stackblitz.svg" alt="StackBlitz logo" />
                       <span class="col-label">StackBlitz</span>
                     </div>
                   </th>
@@ -1317,9 +1376,7 @@
                   <!-- Replit -->
                   <th>
                     <div class="col-logo-wrap">
-                      <img src="https://replit.com/public/icons/favicon-196.png"
-                           onerror="this.style.display='none';"
-                           alt="Replit" width="36" height="36" style="border-radius:8px;" />
+                      <img class="comparison-product-logo" src="assets/comparison-logos/replit.svg" alt="Replit logo" />
                       <span class="col-label">Replit</span>
                     </div>
                   </th>
@@ -1327,90 +1384,65 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>Instant live preview</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td>Web preview</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Live or manual</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Integrated preview</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Run / Result panel</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Integrated preview</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> Live preview</span></td>
                 </tr>
                 <tr>
-                  <td>100% Free</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Free tier</span></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Free tier</span></td>
-                  <td><span class="partial-text">Free tier</span></td>
+                  <td>Multi-file projects</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Included</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-half-stroke"></i> Plan-limited; 3 files on Free</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-table-columns"></i> 3 fixed code panels</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> File tree</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-check"></i> File tree</span></td>
                 </tr>
                 <tr>
-                  <td>No account needed</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>Node.js development</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-brands fa-node-js"></i> Optional browser runtime</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-globe"></i> Front-end packages; no Node runtime</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-globe"></i> Browser code only</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-node-js"></i> WebContainers runtime</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-terminal"></i> Cloud runtime and shell</span></td>
                 </tr>
                 <tr>
                   <td>Real-time collaboration</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Pro only</span></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-check"></i> Included sessions</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-lock"></i> Owner needs PRO</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-info"></i> Listed; limits unclear</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-circle-info"></i> Team editing; live presence not documented</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-users"></i> Core / Pro seats</span></td>
                 </tr>
                 <tr>
-                  <td>Built-in chat</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>Collaboration controls &amp; communication</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-comments"></i> Roles, host controls, group + private chat</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-user-pen"></i> Viewer / editor roles</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-question"></i> Not detailed in docs</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-user-shield"></i> Team roles and access</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-arrow-pointer"></i> Cursor presence; external team chat</span></td>
                 </tr>
                 <tr>
-                  <td>Live collaborator cursors</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>ZIP project transfer</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-solid fa-file-zipper"></i> Import + export</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-download"></i> Export; sign-in required</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-question"></i> Not documented</span></td>
+                  <td><span class="feature-value limited"><i class="fa-solid fa-download"></i> Download in non-Codeflow projects</span></td>
+                  <td><span class="feature-value yes"><i class="fa-solid fa-file-zipper"></i> Import + export</span></td>
                 </tr>
                 <tr>
-                  <td>Error jump &amp; highlights</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><span class="partial-text">Partial</span></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>ZIP import / export</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><span class="partial-text">Export only</span></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-check check-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>Zen / focus mode</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                </tr>
-                <tr>
-                  <td>Custom fonts tool</td>
-                  <td class="col-codx"><i class="fa-solid fa-check check-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
-                  <td><i class="fa-solid fa-xmark cross-icon"></i></td>
+                  <td>GitHub workflow</td>
+                  <td class="col-codx"><span class="feature-value yes"><i class="fa-brands fa-github"></i> Browse, edit, upload + commit</span></td>
+                  <td><span class="feature-value neutral"><i class="fa-solid fa-circle-info"></i> No repo editing in current docs</span></td>
+                  <td><span class="feature-value limited"><i class="fa-brands fa-github"></i> Display from repo / Gist</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-github"></i> Connect + commit</span></td>
+                  <td><span class="feature-value yes"><i class="fa-brands fa-github"></i> Import, sync + push</span></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-        <p class="page-footer-note">Third-party products and plan features change over time. Verify a competitor's current documentation before choosing a tool for a specific requirement.</p>
         <!-- ── /Comparison Table ── -->
 
         <h3 class="section-title">Why CodX Editor Feels Better</h3>
@@ -1596,6 +1628,7 @@
           <a href="index.html">Home</a>
           <a href="welcome.html">Launch Editor</a>
           <a href="about.html">About</a>
+          <a href="help.html">Help</a>
           <a href="contact.html">Contact</a>
         </div>
 
@@ -1607,7 +1640,7 @@
 
         <div class="footer-section">
           <h3>Features</h3>
-          <p><i class="fa-solid fa-check"></i> 100% Free & Open Source</p>
+          <p><i class="fa-solid fa-check"></i> Browser-Based, No Installation</p>
           <p><i class="fa-solid fa-check"></i> No Installation Required</p>
           <p><i class="fa-solid fa-check"></i> Real-time Preview</p>
           <p>

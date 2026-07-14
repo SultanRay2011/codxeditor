@@ -11,10 +11,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
+  // Keep active collaboration transports visible to short-idle proxies.
+  pingInterval: 5000,
+  pingTimeout: 120000,
+  connectTimeout: 45000,
 });
 
 const PORT = process.env.PORT || 3000;
+const ENDED_SESSION_TOMBSTONE_MS = 24 * 60 * 60 * 1000;
 const sessions = new Map();
+const endedSessions = new Map();
 const socketMeta = new Map();
 const editorPresenceSockets = new Set();
 const adminActivity = [];
@@ -79,6 +85,7 @@ const DEFAULT_PERMISSIONS = {
   disableNewFile: false,
   disableRunCode: false,
   disableConsoleAccess: false,
+  disablePairing: false,
   readOnlyAll: false,
   roomLocked: false,
   pauseCollab: false,
@@ -334,11 +341,40 @@ app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
   next();
 });
+const PRIVATE_STATIC_PATHS = new Set([
+  "/package.json",
+  "/package-lock.json",
+  "/published-projects.json",
+  "/README.md",
+  "/server.js",
+]);
+app.use((req, res, next) => {
+  let requestPath = "";
+  try {
+    requestPath = decodeURIComponent(String(req.path || ""));
+  } catch {
+    return res.status(400).type("text/plain").send("Invalid request path.");
+  }
+  if (
+    PRIVATE_STATIC_PATHS.has(requestPath) ||
+    requestPath === "/node_modules" ||
+    requestPath.startsWith("/node_modules/")
+  ) {
+    return res.status(404).type("text/plain").send("Not found.");
+  }
+  next();
+});
 app.use(
   "/vendor/webcontainer",
   express.static(path.join(__dirname, "node_modules", "@webcontainer", "api", "dist")),
 );
-app.use(express.static(path.join(__dirname)));
+app.get("/404.html", (_req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "404.html"));
+});
+app.get("/404-for-preview.html", (_req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "404-for-preview.html"));
+});
+app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
 
 app.get("/api/localization/profile", async (req, res) => {
@@ -737,10 +773,6 @@ app.post("/api/github/repos/:owner/:repo/commit", async (req, res) => {
   }
 });
 
-app.get("/404-for-preview.html", (_req, res) => {
-  res.status(404).sendFile(path.join(__dirname, "404-for-preview.html"));
-});
-
 app.get(/^\/frontend\.html\/([A-Za-z0-9-]+)$/, (req, res) => {
   const sessionId = normalizeSessionId(req.params[0]);
   if (!isValidSessionId(sessionId)) {
@@ -895,6 +927,7 @@ app.post("/admin/api/session/:sessionId/regenerate-link", (req, res) => {
     shareLink,
   });
   emitSessionMeta(nextSessionId);
+  emitPairingState(nextSessionId);
   logAdminEvent(
     "Invite link regenerated",
     `Session ${oldSessionId} was moved to new session id ${nextSessionId}.`,
@@ -1015,7 +1048,6 @@ app.get("/published/:id", (req, res) => {
   res.send(buildPublishedHtml(project, requestedFile, sentTitle));
 });
 
-// Fallback: unknown GET routes go to custom 404 page.
 // Fallback: unknown GET routes go to custom 404 page.
 app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, "404.html"));
@@ -1277,6 +1309,17 @@ function parseCookies(req) {
 
 function normalizeSessionId(value) {
   return String(value || "").trim().toUpperCase();
+}
+
+function isRecentlyEndedSession(sessionId) {
+  const normalized = normalizeSessionId(sessionId);
+  const expiresAt = Number(endedSessions.get(normalized) || 0);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    endedSessions.delete(normalized);
+    return false;
+  }
+  return true;
 }
 
 function isValidSessionId(value) {
@@ -1638,6 +1681,7 @@ function sanitizeParticipant(p) {
     role: p.role || "participant",
     mutedChat: Boolean(p.mutedChat),
     frozenEditing: Boolean(p.frozenEditing),
+    renameDisabled: Boolean(p.renameDisabled),
     priority: Boolean(p.priority),
     currentFile: p.currentFile || null,
     joinedAt: p.joinedAt || Date.now(),
@@ -1669,6 +1713,7 @@ function normalizeDisabledFeatures(features) {
     "publishShare",
     "runCode",
     "consoleAccess",
+    "pairing",
   ]);
   if (!Array.isArray(features)) return [];
   return [...new Set(features
@@ -1678,6 +1723,214 @@ function normalizeDisabledFeatures(features) {
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function ensurePairingState(session) {
+  if (!session.pairing) session.pairing = { invites: [], pairs: [], inviteCooldowns: {} };
+  if (!Array.isArray(session.pairing.invites)) session.pairing.invites = [];
+  if (!Array.isArray(session.pairing.pairs)) session.pairing.pairs = [];
+  if (!session.pairing.inviteCooldowns) session.pairing.inviteCooldowns = {};
+  session.pairing.invites = session.pairing.invites.filter(
+    (invite) => Number(invite?.expiresAt || 0) > Date.now(),
+  );
+  return session.pairing;
+}
+
+function findPairForName(session, name) {
+  const key = normalizeName(name);
+  return ensurePairingState(session).pairs.find(
+    (pair) => Array.isArray(pair.members) && pair.members.some((memberName) => normalizeName(memberName) === key),
+  ) || null;
+}
+
+function findPairPartnerName(pair, name) {
+  const key = normalizeName(name);
+  return (pair?.members || []).find((memberName) => normalizeName(memberName) !== key) || "";
+}
+
+function getPairAccess(sessionId, socketId, pairId = "") {
+  const access = canUseSession(sessionId, socketId);
+  if (!access) return null;
+  const pair = pairId
+    ? ensurePairingState(access.session).pairs.find((entry) => entry.id === String(pairId))
+    : findPairForName(access.session, access.member.name);
+  if (!pair || !(pair.members || []).some((name) => normalizeName(name) === normalizeName(access.member.name))) {
+    return null;
+  }
+  return { ...access, pair };
+}
+
+function recordPairActivity(pair, text, type = "activity") {
+  if (!pair) return;
+  if (!Array.isArray(pair.activity)) pair.activity = [];
+  pair.activity.push({
+    id: crypto.randomBytes(6).toString("hex"),
+    text: String(text || "").slice(0, 300),
+    type: String(type || "activity").slice(0, 40),
+    ts: Date.now(),
+  });
+  if (pair.activity.length > 120) pair.activity.splice(0, pair.activity.length - 120);
+}
+
+function sanitizePairOverview(session, pair) {
+  const connectedNames = new Set((session.participants || []).map((participant) => normalizeName(participant.name)));
+  return {
+    id: pair.id,
+    members: [...(pair.members || [])],
+    driver: pair.driver,
+    navigator: pair.navigator,
+    mode: pair.mode || "driver",
+    status: pair.connectionPaused ? "reconnecting" : pair.status || "active",
+    helpRequested: Boolean(pair.helpRequested),
+    createdAt: Number(pair.createdAt || Date.now()),
+    connected: Object.fromEntries(
+      (pair.members || []).map((name) => [name, connectedNames.has(normalizeName(name))]),
+    ),
+  };
+}
+
+function sanitizePairForMembers(session, pair) {
+  return {
+    ...sanitizePairOverview(session, pair),
+    chat: Array.isArray(pair.chat) ? pair.chat.slice(-200) : [],
+    suggestions: Array.isArray(pair.suggestions) ? pair.suggestions.slice(-100) : [],
+    tasks: Array.isArray(pair.tasks) ? pair.tasks.slice(-100) : [],
+    activity: Array.isArray(pair.activity) ? pair.activity.slice(-120) : [],
+    pendingSwitch: pair.pendingSwitch
+      ? { from: pair.pendingSwitch.from, to: pair.pendingSwitch.to, ts: pair.pendingSwitch.ts }
+      : null,
+  };
+}
+
+function emitPairingState(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  const pairing = ensurePairingState(session);
+  io.to(sessionId).emit(
+    "collab:pair:overview",
+    pairing.pairs.map((pair) => sanitizePairOverview(session, pair)),
+  );
+  (session.participants || []).forEach((participant) => {
+    const pair = findPairForName(session, participant.name);
+    io.to(participant.socketId).emit(
+      "collab:pair:state",
+      pair ? sanitizePairForMembers(session, pair) : null,
+    );
+  });
+}
+
+function clearPairTimers(pair) {
+  Object.values(pair?._disconnectTimers || {}).forEach((timer) => clearTimeout(timer));
+  if (pair) pair._disconnectTimers = {};
+}
+
+function endPairInternal(sessionId, pair, reason = "Pair ended.", endedBy = "System") {
+  const session = sessions.get(sessionId);
+  if (!session || !pair) return false;
+  clearPairTimers(pair);
+  (pair.members || []).forEach((name) => {
+    const participant = session.participants.find((entry) => normalizeName(entry.name) === normalizeName(name));
+    if (participant) {
+      io.to(participant.socketId).emit("collab:pair:ended", { reason, endedBy });
+    }
+  });
+  const pairing = ensurePairingState(session);
+  pairing.pairs = pairing.pairs.filter((entry) => entry.id !== pair.id);
+  pairing.invites = pairing.invites.filter(
+    (invite) => !(pair.members || []).some((name) =>
+      [invite.from, invite.to].some((inviteName) => normalizeName(inviteName) === normalizeName(name))),
+  );
+  emitPairingState(sessionId);
+  return true;
+}
+
+function endPairsForParticipant(sessionId, participantName, reason, endedBy = "System") {
+  const session = sessions.get(sessionId);
+  const pair = session ? findPairForName(session, participantName) : null;
+  if (pair) endPairInternal(sessionId, pair, reason, endedBy);
+}
+
+function normalizeParticipantDisplayName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function validateParticipantDisplayName(value) {
+  const name = normalizeParticipantDisplayName(value);
+  if (name.length < 2) return { ok: false, error: "Name must be at least 2 characters." };
+  if (name.length > 20) return { ok: false, error: "Name cannot be longer than 20 characters." };
+  if (!/^[a-zA-Z0-9\s_-]+$/.test(name)) {
+    return { ok: false, error: "Use only letters, numbers, spaces, dashes, or underscores." };
+  }
+  return { ok: true, name };
+}
+
+function migrateParticipantNameState(session, participant, oldName, newName) {
+  const oldKey = normalizeName(oldName);
+  const newKey = normalizeName(newName);
+
+  participant.name = newName;
+  if (participant.socketId === session.hostSocketId) {
+    session.hostName = newName;
+  }
+
+  if (session.fileAccessByName && Object.prototype.hasOwnProperty.call(session.fileAccessByName, oldKey)) {
+    session.fileAccessByName[newKey] = session.fileAccessByName[oldKey];
+    if (newKey !== oldKey) delete session.fileAccessByName[oldKey];
+  }
+
+  if (session.chat) {
+    (session.chat.group || []).forEach((message) => {
+      if (normalizeName(message?.from) === oldKey) message.from = newName;
+    });
+
+    const nextPrivateThreads = {};
+    Object.entries(session.chat.private || {}).forEach(([threadKey, messages]) => {
+      const nextMessages = Array.isArray(messages) ? messages : [];
+      nextMessages.forEach((message) => {
+        if (normalizeName(message?.from) === oldKey) message.from = newName;
+        if (normalizeName(message?.to) === oldKey) message.to = newName;
+      });
+      const nextThreadKey = threadKey
+        .split("::")
+        .map((key) => (key === oldKey ? newKey : key))
+        .sort()
+        .join("::");
+      if (!nextPrivateThreads[nextThreadKey]) nextPrivateThreads[nextThreadKey] = [];
+      nextPrivateThreads[nextThreadKey].push(...nextMessages);
+    });
+    Object.values(nextPrivateThreads).forEach((messages) => {
+      messages.sort((a, b) => Number(a?.ts || 0) - Number(b?.ts || 0));
+      if (messages.length > 300) messages.splice(0, messages.length - 300);
+    });
+    session.chat.private = nextPrivateThreads;
+  }
+
+  const pairing = ensurePairingState(session);
+  pairing.invites.forEach((invite) => {
+    if (normalizeName(invite.from) === oldKey) invite.from = newName;
+    if (normalizeName(invite.to) === oldKey) invite.to = newName;
+  });
+  pairing.pairs.forEach((pair) => {
+    pair.members = (pair.members || []).map((name) => normalizeName(name) === oldKey ? newName : name);
+    if (normalizeName(pair.driver) === oldKey) pair.driver = newName;
+    if (normalizeName(pair.navigator) === oldKey) pair.navigator = newName;
+    if (pair.pendingSwitch) {
+      if (normalizeName(pair.pendingSwitch.from) === oldKey) pair.pendingSwitch.from = newName;
+      if (normalizeName(pair.pendingSwitch.to) === oldKey) pair.pendingSwitch.to = newName;
+    }
+    (pair.chat || []).forEach((message) => {
+      if (normalizeName(message.from) === oldKey) message.from = newName;
+    });
+    (pair.suggestions || []).forEach((suggestion) => {
+      if (normalizeName(suggestion.from) === oldKey) suggestion.from = newName;
+    });
+    (pair.tasks || []).forEach((task) => {
+      if (normalizeName(task.createdBy) === oldKey) task.createdBy = newName;
+    });
+  });
+
+  const meta = socketMeta.get(participant.socketId);
+  if (meta) socketMeta.set(participant.socketId, { ...meta, name: newName });
 }
 
 function makePrivateThreadKey(a, b) {
@@ -1753,6 +2006,7 @@ function normalizePermissions(input, files) {
     disableNewFile: Boolean(raw.disableNewFile),
     disableRunCode: Boolean(raw.disableRunCode),
     disableConsoleAccess: Boolean(raw.disableConsoleAccess),
+    disablePairing: Boolean(raw.disablePairing),
     readOnlyAll: Boolean(raw.readOnlyAll),
     roomLocked: Boolean(raw.roomLocked),
     pauseCollab: Boolean(raw.pauseCollab),
@@ -1784,6 +2038,84 @@ function normalizeAllowedFiles(files, input) {
         .filter((name) => name && allNames.has(name)),
     ),
   );
+}
+
+function getStoredParticipantFileAccess(session, name) {
+  const stored = session?.fileAccessByName?.[normalizeName(name)];
+  return Array.isArray(stored) ? normalizeAllowedFiles(session.files, stored) : null;
+}
+
+function storeParticipantFileAccess(session, participant) {
+  if (!session || !participant) return;
+  if (!session.fileAccessByName) session.fileAccessByName = {};
+  const key = normalizeName(participant.name);
+  if (!key) return;
+  if (Array.isArray(participant.allowedFiles)) {
+    session.fileAccessByName[key] = [...participant.allowedFiles];
+  } else {
+    delete session.fileAccessByName[key];
+  }
+}
+
+function getFilesForParticipant(session, participant) {
+  const files = cloneFiles(session?.files || []);
+  if (!participant || !Array.isArray(participant.allowedFiles)) return files;
+  const allowed = new Set(participant.allowedFiles);
+  return files.filter((file) => allowed.has(String(file?.name || "")));
+}
+
+function getActiveFileForParticipant(session, participant) {
+  const visibleFiles = getFilesForParticipant(session, participant);
+  const requested = String(participant?.currentFile || session?.activeFileName || "");
+  return visibleFiles.some((file) => String(file?.name || "") === requested)
+    ? requested
+    : String(visibleFiles[0]?.name || "") || null;
+}
+
+function emitSessionStateToParticipant(session, participant, user = null) {
+  if (!session || !participant?.socketId) return;
+  io.to(participant.socketId).emit("collab:state", {
+    files: getFilesForParticipant(session, participant),
+    activeFileName: getActiveFileForParticipant(session, participant),
+    user,
+  });
+}
+
+function emitSessionStateToRoom(session, sourceSocketId = "", user = null) {
+  (session?.participants || []).forEach((participant) => {
+    if (participant.socketId === sourceSocketId) return;
+    emitSessionStateToParticipant(session, participant, user);
+  });
+}
+
+function mergeFilesFromRestrictedParticipant(sessionFiles, incomingFiles, allowedFiles) {
+  const allowed = new Set(allowedFiles || []);
+  const incomingMap = new Map(
+    (incomingFiles || [])
+      .filter((file) => allowed.has(String(file?.name || "")))
+      .map((file) => [String(file?.name || ""), file]),
+  );
+  const previousNames = new Set((sessionFiles || []).map((file) => String(file?.name || "")));
+  const merged = (sessionFiles || []).flatMap((file) => {
+    const name = String(file?.name || "");
+    if (!allowed.has(name)) return [file];
+    return incomingMap.has(name) ? [incomingMap.get(name)] : [];
+  });
+  (incomingFiles || []).forEach((file) => {
+    const name = String(file?.name || "");
+    if (allowed.has(name) && !previousNames.has(name)) merged.push(file);
+  });
+  return merged;
+}
+
+function rebaseParticipantFileAccess(participant, previousFiles, nextFiles) {
+  if (!Array.isArray(participant?.allowedFiles)) return;
+  const previousNames = (previousFiles || []).map((file) => String(file?.name || ""));
+  const previouslyAllowed = new Set(participant.allowedFiles);
+  const hiddenNames = new Set(previousNames.filter((name) => !previouslyAllowed.has(name)));
+  const nextNames = (nextFiles || []).map((file) => String(file?.name || ""));
+  const nextAllowed = nextNames.filter((name) => !hiddenNames.has(name));
+  participant.allowedFiles = nextAllowed.length === nextNames.length ? null : nextAllowed;
 }
 
 function getChangedFileNames(previousFiles, nextFiles) {
@@ -1826,6 +2158,7 @@ function emitSessionMeta(sessionId) {
 function endSession(sessionId, reason = "Session ended.") {
   const session = sessions.get(sessionId);
   if (!session) return;
+  ensurePairingState(session).pairs.forEach(clearPairTimers);
   io.to(sessionId).emit("collab:session-ended", { reason });
   (session.participants || []).forEach((participant) => {
     const socketRef = io.sockets.sockets.get(participant.socketId);
@@ -1842,6 +2175,7 @@ function endSession(sessionId, reason = "Session ended.") {
     socketMeta.delete(entry.socketId);
     io.to(entry.socketId).emit("collab:join-rejected", { reason });
   });
+  endedSessions.set(sessionId, Date.now() + ENDED_SESSION_TOMBSTONE_MS);
   sessions.delete(sessionId);
   emitAdminUpdate("session-ended");
 }
@@ -1867,10 +2201,11 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     role: "participant",
     mutedChat: false,
     frozenEditing: false,
+    renameDisabled: false,
     priority: false,
     currentFile: session.activeFileName || null,
     joinedAt: Date.now(),
-    allowedFiles: null,
+    allowedFiles: getStoredParticipantFileAccess(session, name),
     disabledFeatures: [],
     deviceId,
   });
@@ -1881,8 +2216,8 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
     ok: true,
     sessionId,
     sessionPin: session.pin || "",
-    files: cloneFiles(session.files),
-    activeFileName: session.activeFileName || null,
+    files: getFilesForParticipant(session, session.participants.at(-1)),
+    activeFileName: getActiveFileForParticipant(session, session.participants.at(-1)),
     hostName: session.hostName,
     permissions: session.permissions,
     participants: session.participants.map(sanitizeParticipant),
@@ -1891,6 +2226,7 @@ function finalizeApprovedJoin(sessionId, socketId, name, theme) {
   logAdminEvent("Join approved", `${name} was approved for session ${sessionId}.`, sessionId);
   emitParticipants(sessionId);
   emitSessionMeta(sessionId);
+  emitPairingState(sessionId);
   return true;
 }
 
@@ -1900,6 +2236,17 @@ io.on("connection", (socket) => {
       editorPresenceSockets.add(socket.id);
       emitAdminUpdate("editor-presence");
     }
+  });
+
+  socket.on("collab:heartbeat", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = canUseSession(sessionId, socket.id);
+    if (!access) {
+      ack?.({ ok: false, needsResume: Boolean(sessions.has(sessionId)), serverTime: Date.now() });
+      return;
+    }
+    access.member.lastSeenAt = Date.now();
+    ack?.({ ok: true, serverTime: Date.now() });
   });
 
   socket.on("collab:create", (payload, ack) => {
@@ -1919,6 +2266,10 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "Invalid session id." });
         return;
       }
+      if (requestedId && isRecentlyEndedSession(sessionId)) {
+        ack?.({ ok: false, error: "This collaboration session was ended." });
+        return;
+      }
       if (!name) {
         ack?.({ ok: false, error: "Name is required." });
         return;
@@ -1936,6 +2287,7 @@ io.on("connection", (socket) => {
         role: "host",
         mutedChat: false,
         frozenEditing: false,
+        renameDisabled: false,
         priority: false,
         currentFile: activeFileName || null,
         joinedAt: Date.now(),
@@ -1955,6 +2307,8 @@ io.on("connection", (socket) => {
         chat: { group: [], private: {} },
         pendingJoins: [],
         bans: [],
+        fileAccessByName: {},
+        pairing: { invites: [], pairs: [], inviteCooldowns: {} },
       });
 
       socket.join(sessionId);
@@ -1971,6 +2325,7 @@ io.on("connection", (socket) => {
       logAdminEvent("Session created", `${name} created session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
       emitSessionMeta(sessionId);
+      emitPairingState(sessionId);
     } catch {
       ack?.({ ok: false, error: "Failed to create session." });
     }
@@ -1989,7 +2344,7 @@ io.on("connection", (socket) => {
 
       const session = sessions.get(sessionId);
       if (!session) {
-        ack?.({ ok: false, error: "Session not found." });
+        ack?.({ ok: false, error: isRecentlyEndedSession(requestedSessionId) ? "This collaboration session was ended." : "Session not found." });
         return;
       }
       if (!name) {
@@ -1998,6 +2353,13 @@ io.on("connection", (socket) => {
       }
       if (deviceId && Array.isArray(session.bans) && session.bans.some((entry) => entry.deviceId === deviceId)) {
         ack?.({ ok: false, error: "This device is banned from the session." });
+        return;
+      }
+      const reconnectingPair = findPairForName(session, name);
+      const reconnectKey = normalizeName(name);
+      const reconnectDeviceId = String(reconnectingPair?._reconnectDevices?.[reconnectKey] || "").trim();
+      if (reconnectDeviceId && reconnectDeviceId !== deviceId) {
+        ack?.({ ok: false, error: "Pair reconnection must come from the original device." });
         return;
       }
       if (session.permissions?.roomLocked) {
@@ -2055,10 +2417,11 @@ io.on("connection", (socket) => {
         role: "participant",
         mutedChat: false,
         frozenEditing: false,
+        renameDisabled: false,
         priority: false,
         currentFile: session.activeFileName || null,
         joinedAt: Date.now(),
-        allowedFiles: null,
+        allowedFiles: getStoredParticipantFileAccess(session, name),
         disabledFeatures: [],
         deviceId,
       });
@@ -2069,8 +2432,8 @@ io.on("connection", (socket) => {
         ok: true,
         sessionId,
         sessionPin: session.pin || "",
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName || null,
+        files: getFilesForParticipant(session, session.participants.at(-1)),
+        activeFileName: getActiveFileForParticipant(session, session.participants.at(-1)),
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
@@ -2079,6 +2442,7 @@ io.on("connection", (socket) => {
       logAdminEvent("Participant joined", `${name} joined session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
       emitSessionMeta(sessionId);
+      emitPairingState(sessionId);
     } catch {
       ack?.({ ok: false, error: "Failed to join session." });
     }
@@ -2089,7 +2453,7 @@ io.on("connection", (socket) => {
       const sessionId = normalizeSessionId(payload?.sessionId);
       const session = sessions.get(sessionId);
       if (!session) {
-        ack?.({ ok: false, error: "Session not found." });
+        ack?.({ ok: false, error: isRecentlyEndedSession(sessionId) ? "This collaboration session was ended." : "Session not found." });
         return;
       }
       ack?.({
@@ -2111,7 +2475,7 @@ io.on("connection", (socket) => {
 
       const session = sessions.get(sessionId);
       if (!session) {
-        ack?.({ ok: false, error: "Session not found." });
+        ack?.({ ok: false, error: isRecentlyEndedSession(sessionId) ? "This collaboration session was ended." : "Session not found." });
         return;
       }
       if (!name) {
@@ -2120,6 +2484,13 @@ io.on("connection", (socket) => {
       }
       if (deviceId && Array.isArray(session.bans) && session.bans.some((entry) => entry.deviceId === deviceId)) {
         ack?.({ ok: false, error: "This device is banned from the session." });
+        return;
+      }
+      const reconnectingPair = findPairForName(session, name);
+      const reconnectKey = normalizeName(name);
+      const reconnectDeviceId = String(reconnectingPair?._reconnectDevices?.[reconnectKey] || "").trim();
+      if (reconnectDeviceId && reconnectDeviceId !== deviceId) {
+        ack?.({ ok: false, error: "Pair reconnection must come from the original device." });
         return;
       }
 
@@ -2141,10 +2512,11 @@ io.on("connection", (socket) => {
           role: "participant",
           mutedChat: false,
           frozenEditing: false,
+          renameDisabled: false,
           priority: false,
           currentFile: session.activeFileName || null,
           joinedAt: Date.now(),
-          allowedFiles: null,
+          allowedFiles: getStoredParticipantFileAccess(session, name),
           disabledFeatures: [],
           deviceId,
         };
@@ -2154,6 +2526,21 @@ io.on("connection", (socket) => {
       if (session.hostName && session.hostName.toLowerCase() === name.toLowerCase()) {
         session.hostSocketId = socket.id;
         participant.role = "host";
+      }
+
+      const resumedPair = findPairForName(session, participant.name);
+      if (resumedPair) {
+        const key = normalizeName(participant.name);
+        if (resumedPair._reconnectDevices) delete resumedPair._reconnectDevices[key];
+        if (resumedPair._disconnectTimers?.[key]) {
+          clearTimeout(resumedPair._disconnectTimers[key]);
+          delete resumedPair._disconnectTimers[key];
+        }
+        const connectedNames = new Set(session.participants.map((entry) => normalizeName(entry.name)));
+        resumedPair.connectionPaused = !resumedPair.members.every((memberName) => connectedNames.has(normalizeName(memberName)));
+        if (!resumedPair.connectionPaused) {
+          recordPairActivity(resumedPair, `${participant.name} reconnected to the pair.`, "reconnect");
+        }
       }
 
       socket.join(sessionId);
@@ -2167,14 +2554,15 @@ io.on("connection", (socket) => {
 
       ack?.({
         ok: true,
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName || null,
+        files: getFilesForParticipant(session, participant),
+        activeFileName: getActiveFileForParticipant(session, participant),
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
       });
       emitParticipants(sessionId);
       emitSessionMeta(sessionId);
+      emitPairingState(sessionId);
     } catch {
       ack?.({ ok: false, error: "Failed to resume session." });
     }
@@ -2289,21 +2677,415 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("collab:update", (payload) => {
+  socket.on("collab:pair:get", (payload, ack) => {
     const sessionId = normalizeSessionId(payload?.sessionId);
     const access = canUseSession(sessionId, socket.id);
-    if (!access) return;
+    if (!access) return ack?.({ ok: false, error: "Session not found." });
+    const pair = findPairForName(access.session, access.member.name);
+    ack?.({
+      ok: true,
+      pair: pair ? sanitizePairForMembers(access.session, pair) : null,
+      overview: ensurePairingState(access.session).pairs.map((entry) => sanitizePairOverview(access.session, entry)),
+    });
+  });
+
+  socket.on("collab:pair:invite", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const access = canUseSession(sessionId, socket.id);
+      if (!access) return ack?.({ ok: false, error: "Session not found." });
+      const { session, member } = access;
+      const pairing = ensurePairingState(session);
+      const disabledFeatures = new Set(member.disabledFeatures || []);
+      if (session.permissions?.disablePairing || disabledFeatures.has("pairing")) {
+        return ack?.({ ok: false, error: "Pairing is disabled for you in this room." });
+      }
+      if (member.mutedChat) return ack?.({ ok: false, error: "Muted participants cannot send pair invitations." });
+      const targetName = normalizeName(payload?.targetName);
+      const target = session.participants.find((participant) => normalizeName(participant.name) === targetName);
+      if (!target || target.socketId === socket.id) {
+        return ack?.({ ok: false, error: "Choose another participant to pair with." });
+      }
+      if ((target.disabledFeatures || []).includes("pairing")) {
+        return ack?.({ ok: false, error: "Pairing is unavailable for that participant." });
+      }
+      if (findPairForName(session, member.name) || findPairForName(session, target.name)) {
+        return ack?.({ ok: false, error: "One of you is already in a pair." });
+      }
+      const cooldownKey = `${normalizeName(member.name)}::${normalizeName(target.name)}`;
+      const lastInviteAt = Number(pairing.inviteCooldowns[cooldownKey] || 0);
+      if (Date.now() - lastInviteAt < 5000) {
+        return ack?.({ ok: false, error: "Wait a moment before sending another pair invitation." });
+      }
+      pairing.inviteCooldowns[cooldownKey] = Date.now();
+      pairing.invites = pairing.invites.filter(
+        (invite) => !(
+          normalizeName(invite.from) === normalizeName(member.name) &&
+          normalizeName(invite.to) === normalizeName(target.name)
+        ),
+      );
+      const mode = String(payload?.mode || "driver").toLowerCase() === "live" ? "live" : "driver";
+      const invite = {
+        id: crypto.randomBytes(8).toString("hex"),
+        from: member.name,
+        to: target.name,
+        mode,
+        ts: Date.now(),
+        expiresAt: Date.now() + 30000,
+      };
+      pairing.invites.push(invite);
+      io.to(target.socketId).emit("collab:pair:invitation", invite);
+      ack?.({ ok: true, inviteId: invite.id });
+    } catch {
+      ack?.({ ok: false, error: "Failed to send pair invitation." });
+    }
+  });
+
+  socket.on("collab:pair:respond", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const access = canUseSession(sessionId, socket.id);
+      if (!access) return ack?.({ ok: false, error: "Session not found." });
+      const { session, member } = access;
+      const pairing = ensurePairingState(session);
+      const invite = pairing.invites.find(
+        (entry) => entry.id === String(payload?.inviteId || "") && normalizeName(entry.to) === normalizeName(member.name),
+      );
+      if (!invite || Number(invite.expiresAt) <= Date.now()) {
+        return ack?.({ ok: false, error: "This pair invitation expired." });
+      }
+      pairing.invites = pairing.invites.filter((entry) => entry.id !== invite.id);
+      const sender = session.participants.find((participant) => normalizeName(participant.name) === normalizeName(invite.from));
+      if (!payload?.accept) {
+        if (sender) io.to(sender.socketId).emit("collab:pair:invitation-response", { accepted: false, by: member.name });
+        return ack?.({ ok: true, accepted: false });
+      }
+      if (
+        session.permissions?.disablePairing ||
+        !sender ||
+        (member.disabledFeatures || []).includes("pairing") ||
+        (sender.disabledFeatures || []).includes("pairing")
+      ) {
+        return ack?.({ ok: false, error: "Pairing is no longer available." });
+      }
+      if (findPairForName(session, sender.name) || findPairForName(session, member.name)) {
+        return ack?.({ ok: false, error: "One of you joined another pair." });
+      }
+      const pair = {
+        id: `pair-${crypto.randomBytes(6).toString("hex")}`,
+        members: [sender.name, member.name],
+        driver: sender.name,
+        navigator: member.name,
+        mode: invite.mode,
+        status: "active",
+        connectionPaused: false,
+        createdAt: Date.now(),
+        helpRequested: false,
+        pendingSwitch: null,
+        chat: [],
+        suggestions: [],
+        tasks: [],
+        activity: [],
+        _disconnectTimers: {},
+        _reconnectDevices: {},
+        _presenceByName: {},
+      };
+      recordPairActivity(pair, `${sender.name} and ${member.name} started pairing.`, "start");
+      pairing.pairs.push(pair);
+      io.to(sender.socketId).emit("collab:pair:invitation-response", { accepted: true, by: member.name });
+      emitPairingState(sessionId);
+      ack?.({ ok: true, accepted: true, pair: sanitizePairForMembers(session, pair) });
+    } catch {
+      ack?.({ ok: false, error: "Failed to answer pair invitation." });
+    }
+  });
+
+  socket.on("collab:pair:leave", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    endPairInternal(sessionId, access.pair, `${access.member.name} left the pair.`, access.member.name);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:end", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const session = sessions.get(sessionId);
+    if (!session) return ack?.({ ok: false, error: "Session not found." });
+    const actor = session.participants.find((participant) => participant.socketId === socket.id);
+    const pair = ensurePairingState(session).pairs.find((entry) => entry.id === String(payload?.pairId || ""));
+    if (!actor || !pair) return ack?.({ ok: false, error: "Pair not found." });
+    const isMember = pair.members.some((name) => normalizeName(name) === normalizeName(actor.name));
+    if (!isMember && !canUseLimitedRoomTools(session, socket.id)) {
+      return ack?.({ ok: false, error: "You cannot end this pair." });
+    }
+    endPairInternal(sessionId, pair, `${actor.name} ended the pair.`, actor.name);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:set-mode", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const mode = String(payload?.mode || "").toLowerCase();
+    if (!["driver", "live"].includes(mode)) return ack?.({ ok: false, error: "Invalid pair mode." });
+    access.pair.mode = mode;
+    access.pair.pendingSwitch = null;
+    recordPairActivity(access.pair, `${access.member.name} changed pair mode to ${mode === "live" ? "Live Pair" : "Driver"}.`, "mode");
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:switch-request", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const partnerName = findPairPartnerName(access.pair, access.member.name);
+    const partner = access.session.participants.find((participant) => normalizeName(participant.name) === normalizeName(partnerName));
+    if (!partner) return ack?.({ ok: false, error: "Your partner is disconnected." });
+    access.pair.pendingSwitch = { from: access.member.name, to: partner.name, ts: Date.now() };
+    io.to(partner.socketId).emit("collab:pair:switch-request", { from: access.member.name });
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:switch-response", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access || normalizeName(access.pair.pendingSwitch?.to) !== normalizeName(access.member.name)) {
+      return ack?.({ ok: false, error: "No role switch is waiting for you." });
+    }
+    const requestedBy = access.pair.pendingSwitch.from;
+    access.pair.pendingSwitch = null;
+    if (payload?.accept) {
+      const previousDriver = access.pair.driver;
+      access.pair.driver = access.pair.navigator;
+      access.pair.navigator = previousDriver;
+      recordPairActivity(access.pair, `${access.member.name} accepted ${requestedBy}'s role switch.`, "role");
+    }
+    emitPairingState(sessionId);
+    ack?.({ ok: true, accepted: Boolean(payload?.accept) });
+  });
+
+  socket.on("collab:pair:chat", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    if (access.session.permissions?.disableAllChat || access.member.mutedChat || (access.member.disabledFeatures || []).includes("chat")) {
+      return ack?.({ ok: false, error: "Chat is disabled for you." });
+    }
+    const text = String(payload?.text || "").trim().slice(0, 1000);
+    if (!text) return ack?.({ ok: false, error: "Message is empty." });
+    const message = { id: crypto.randomBytes(7).toString("hex"), from: access.member.name, text, ts: Date.now() };
+    access.pair.chat.push(message);
+    if (access.pair.chat.length > 200) access.pair.chat.shift();
+    (access.pair.members || []).forEach((name) => {
+      const participant = access.session.participants.find((entry) => normalizeName(entry.name) === normalizeName(name));
+      if (participant) io.to(participant.socketId).emit("collab:pair:chat", message);
+    });
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:suggestion:add", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const fileName = String(payload?.fileName || access.member.currentFile || "").trim();
+    if (!access.session.files.some((file) => file.name === fileName)) {
+      return ack?.({ ok: false, error: "File not found." });
+    }
+    const suggestion = {
+      id: crypto.randomBytes(8).toString("hex"),
+      from: access.member.name,
+      fileName,
+      start: Math.max(0, Number(payload?.start || 0)),
+      end: Math.max(0, Number(payload?.end || 0)),
+      original: String(payload?.original || "").slice(0, 8000),
+      replacement: String(payload?.replacement || "").slice(0, 8000),
+      comment: String(payload?.comment || "").trim().slice(0, 800),
+      status: "open",
+      ts: Date.now(),
+    };
+    access.pair.suggestions.push(suggestion);
+    if (access.pair.suggestions.length > 100) access.pair.suggestions.shift();
+    recordPairActivity(access.pair, `${access.member.name} added a suggestion in ${fileName}.`, "suggestion");
+    emitPairingState(sessionId);
+    ack?.({ ok: true, suggestion });
+  });
+
+  socket.on("collab:pair:suggestion:update", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const suggestion = access.pair.suggestions.find((entry) => entry.id === String(payload?.suggestionId || ""));
+    if (!suggestion) return ack?.({ ok: false, error: "Suggestion not found." });
+    const status = String(payload?.status || "resolved").toLowerCase();
+    if (!["applied", "resolved", "rejected"].includes(status)) {
+      return ack?.({ ok: false, error: "Invalid suggestion status." });
+    }
+    suggestion.status = status;
+    suggestion.resolvedBy = access.member.name;
+    suggestion.resolvedAt = Date.now();
+    recordPairActivity(access.pair, `${access.member.name} marked a suggestion ${status}.`, "suggestion");
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:task:add", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const text = String(payload?.text || "").trim().slice(0, 300);
+    if (!text) return ack?.({ ok: false, error: "Task is empty." });
+    access.pair.tasks.push({
+      id: crypto.randomBytes(7).toString("hex"),
+      text,
+      done: false,
+      createdBy: access.member.name,
+      ts: Date.now(),
+    });
+    if (access.pair.tasks.length > 100) access.pair.tasks.shift();
+    recordPairActivity(access.pair, `${access.member.name} added a pair task.`, "task");
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:task:toggle", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const task = access.pair.tasks.find((entry) => entry.id === String(payload?.taskId || ""));
+    if (!task) return ack?.({ ok: false, error: "Task not found." });
+    task.done = Boolean(payload?.done);
+    task.updatedBy = access.member.name;
+    task.updatedAt = Date.now();
+    recordPairActivity(access.pair, `${access.member.name} ${task.done ? "completed" : "reopened"} a pair task.`, "task");
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:help", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    access.pair.helpRequested = Boolean(payload?.requested);
+    recordPairActivity(access.pair, `${access.member.name} ${access.pair.helpRequested ? "asked the host for help" : "cleared the help request"}.`, "help");
+    if (access.pair.helpRequested) {
+      access.session.participants
+        .filter((participant) => ["host", "co-host"].includes(participant.role))
+        .forEach((participant) => io.to(participant.socketId).emit("collab:pair:help-request", {
+          pair: sanitizePairOverview(access.session, access.pair),
+          from: access.member.name,
+        }));
+    }
+    emitPairingState(sessionId);
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:pair:snapshot", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    recordPairActivity(access.pair, `${access.member.name} saved a pair snapshot.`, "snapshot");
+    ack?.({
+      ok: true,
+      snapshot: {
+        sessionId,
+        pairId: access.pair.id,
+        createdAt: Date.now(),
+        createdBy: access.member.name,
+        pair: sanitizePairForMembers(access.session, access.pair),
+        files: cloneFiles(access.session.files),
+      },
+    });
+    emitPairingState(sessionId);
+  });
+
+  socket.on("collab:pair:presence", (payload) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access || access.pair.status !== "active" || access.pair.connectionPaused) return;
+    const partnerName = findPairPartnerName(access.pair, access.member.name);
+    const partner = access.session.participants.find((participant) => normalizeName(participant.name) === normalizeName(partnerName));
+    if (!partner) return;
+    const presence = {
+      from: access.member.name,
+      fileName: String(payload?.fileName || access.member.currentFile || "").slice(0, 260),
+      selectionStart: Math.max(0, Number(payload?.selectionStart || 0)),
+      selectionEnd: Math.max(0, Number(payload?.selectionEnd || 0)),
+      scrollTop: Math.max(0, Number(payload?.scrollTop || 0)),
+      scrollLeft: Math.max(0, Number(payload?.scrollLeft || 0)),
+      ts: Date.now(),
+    };
+    if (!access.pair._presenceByName) access.pair._presenceByName = {};
+    access.pair._presenceByName[normalizeName(access.member.name)] = presence;
+    io.to(partner.socketId).emit("collab:pair:presence", presence);
+  });
+
+  socket.on("collab:pair:presence-request", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access || access.pair.status !== "active" || access.pair.connectionPaused) {
+      return ack?.({ ok: false, error: "Pair view is unavailable." });
+    }
+    const partnerName = findPairPartnerName(access.pair, access.member.name);
+    const partner = access.session.participants.find((participant) => normalizeName(participant.name) === normalizeName(partnerName));
+    if (!partner) return ack?.({ ok: false, error: "Your partner is disconnected." });
+    const cachedPresence = access.pair._presenceByName?.[normalizeName(partner.name)];
+    if (cachedPresence) io.to(socket.id).emit("collab:pair:presence", cachedPresence);
+    io.to(partner.socketId).emit("collab:pair:presence-request", { from: access.member.name });
+    ack?.({ ok: true, cached: Boolean(cachedPresence) });
+  });
+
+  socket.on("collab:pair:voice", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = getPairAccess(sessionId, socket.id);
+    if (!access) return ack?.({ ok: false, error: "You are not in a pair." });
+    const kind = String(payload?.kind || "").toLowerCase();
+    if (!["invite", "response", "offer", "answer", "ice", "hangup"].includes(kind)) {
+      return ack?.({ ok: false, error: "Invalid voice event." });
+    }
+    let data = payload?.data ?? null;
+    try {
+      if (JSON.stringify(data).length > 200000) return ack?.({ ok: false, error: "Voice signal is too large." });
+    } catch {
+      data = null;
+    }
+    const partnerName = findPairPartnerName(access.pair, access.member.name);
+    const partner = access.session.participants.find((participant) => normalizeName(participant.name) === normalizeName(partnerName));
+    if (!partner) return ack?.({ ok: false, error: "Your partner is disconnected." });
+    io.to(partner.socketId).emit("collab:pair:voice", { kind, data, from: access.member.name });
+    ack?.({ ok: true });
+  });
+
+  socket.on("collab:update", (payload, ack) => {
+    const sessionId = normalizeSessionId(payload?.sessionId);
+    const access = canUseSession(sessionId, socket.id);
+    if (!access) {
+      ack?.({ ok: false, needsResume: Boolean(sessions.has(sessionId)), error: "Session membership needs to be restored." });
+      return;
+    }
     const { session, member } = access;
+    const activePair = findPairForName(session, member.name);
+    const pairNavigatorLocked = Boolean(
+      activePair &&
+      activePair.status === "active" &&
+      !activePair.connectionPaused &&
+      activePair.mode === "driver" &&
+      normalizeName(activePair.driver) !== normalizeName(member.name)
+    );
     if (
       member.frozenEditing ||
       session.permissions?.readOnlyAll ||
-      session.permissions?.pauseCollab
+      session.permissions?.pauseCollab ||
+      pairNavigatorLocked
     ) {
-      socket.emit("collab:state", {
-        files: cloneFiles(session.files),
-        activeFileName: session.activeFileName,
-        user: { name: member.name, theme: member.theme, role: member.role || "participant" },
+      emitSessionStateToParticipant(session, member, {
+        name: member.name,
+        theme: member.theme,
+        role: member.role || "participant",
       });
+      ack?.({ ok: false, error: pairNavigatorLocked ? "Only the Pair Driver can edit right now." : "Editing is currently disabled." });
       return;
     }
 
@@ -2316,40 +3098,97 @@ io.on("connection", (socket) => {
     const incomingFiles = cloneFiles(payload?.files);
     const requestedActiveFileName = payload?.activeFileName || null;
     const allowedFiles = Array.isArray(member.allowedFiles) ? member.allowedFiles : null;
-    if (allowedFiles) {
-      const changedFileNames = getChangedFileNames(session.files, incomingFiles);
-      const attemptedOutsideAllowedFiles = changedFileNames.some(
-        (name) => !allowedFiles.includes(name),
-      );
-      if (attemptedOutsideAllowedFiles) {
-        socket.emit("collab:state", {
-          files: cloneFiles(session.files),
-          activeFileName: session.activeFileName,
-          user: { name: member.name, theme: member.theme, role: member.role || "participant" },
-        });
-        return;
-      }
+    if (allowedFiles && incomingFiles.some((file) => !allowedFiles.includes(String(file?.name || "")))) {
+      emitSessionStateToParticipant(session, member, safeUser);
+      ack?.({ ok: false, error: "One or more files are not available to this participant." });
+      return;
     }
 
-    session.files = incomingFiles;
+    const previousFiles = cloneFiles(session.files);
+    session.files = allowedFiles
+      ? mergeFilesFromRestrictedParticipant(session.files, incomingFiles, allowedFiles)
+      : incomingFiles;
     member.currentFile = requestedActiveFileName || null;
     if (!session.activeFileName || member.role === "host" || member.role === "co-host") {
       session.activeFileName = requestedActiveFileName;
     }
     session.permissions = normalizePermissions(session.permissions, session.files);
-    session.participants.forEach((participant) => {
-      if (Array.isArray(participant.allowedFiles)) {
-        participant.allowedFiles = normalizeAllowedFiles(session.files, participant.allowedFiles);
-      }
-    });
+    session.participants.forEach((participant) =>
+      rebaseParticipantFileAccess(participant, previousFiles, session.files),
+    );
+    session.participants.forEach((participant) => storeParticipantFileAccess(session, participant));
 
-    socket.to(sessionId).emit("collab:state", {
-      files: cloneFiles(session.files),
-      activeFileName: session.activeFileName,
-      user: safeUser,
-    });
+    emitSessionStateToRoom(session, socket.id, safeUser);
     emitParticipants(sessionId);
     emitSessionMeta(sessionId);
+    ack?.({ ok: true, serverTime: Date.now() });
+  });
+
+  socket.on("collab:rename-participant", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const access = canUseSession(sessionId, socket.id);
+      if (!access) {
+        ack?.({ ok: false, error: "Session not found." });
+        return;
+      }
+
+      const { session, member: actor } = access;
+      const targetName = normalizeName(payload?.targetName);
+      const target = session.participants.find((participant) => normalizeName(participant.name) === targetName);
+      if (!target) {
+        ack?.({ ok: false, error: "Participant not found." });
+        return;
+      }
+
+      const renamingSelf = target.socketId === socket.id;
+      if (renamingSelf && target.renameDisabled) {
+        ack?.({ ok: false, error: "A session moderator disabled self-renaming for you." });
+        return;
+      }
+      if (!renamingSelf && !canModerateTarget(session, socket.id, target)) {
+        ack?.({ ok: false, error: "You do not have permission to rename this participant." });
+        return;
+      }
+
+      const validation = validateParticipantDisplayName(payload?.newName);
+      if (!validation.ok) {
+        ack?.({ ok: false, error: validation.error });
+        return;
+      }
+      const newName = validation.name;
+      const oldName = target.name;
+      const duplicate = session.participants.some(
+        (participant) => participant.socketId !== target.socketId && normalizeName(participant.name) === normalizeName(newName),
+      );
+      if (duplicate) {
+        ack?.({ ok: false, error: "That name is already being used in this session." });
+        return;
+      }
+      if (oldName === newName) {
+        ack?.({ ok: true, oldName, newName, unchanged: true });
+        return;
+      }
+
+      migrateParticipantNameState(session, target, oldName, newName);
+      const renamedBy = actor === target ? newName : actor.name;
+      io.to(sessionId).emit("collab:participant-renamed", {
+        oldName,
+        newName,
+        renamedBy,
+      });
+      logAdminEvent(
+        "Participant renamed",
+        `${oldName} was renamed to ${newName} by ${renamedBy} in session ${sessionId}.`,
+        sessionId,
+      );
+      emitParticipants(sessionId);
+      emitSessionMeta(sessionId);
+      emitPairingState(sessionId);
+      ack?.({ ok: true, oldName, newName });
+    } catch {
+      ack?.({ ok: false, error: "Failed to rename participant." });
+    }
   });
 
   socket.on("collab:set-role", (payload, ack) => {
@@ -2458,6 +3297,7 @@ io.on("connection", (socket) => {
       }
       if (typeof payload?.mutedChat === "boolean") target.mutedChat = payload.mutedChat;
       if (typeof payload?.frozenEditing === "boolean") target.frozenEditing = payload.frozenEditing;
+      if (typeof payload?.renameDisabled === "boolean") target.renameDisabled = payload.renameDisabled;
       if (typeof payload?.priority === "boolean") target.priority = payload.priority;
       logAdminEvent("Participant flags updated", `${target.name} was updated in session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
@@ -2493,11 +3333,63 @@ io.on("connection", (socket) => {
       } else {
         target.allowedFiles = normalizeAllowedFiles(session.files, payload?.allowedFiles);
       }
+      storeParticipantFileAccess(session, target);
       logAdminEvent("File access updated", `${target.name}'s file access was changed in session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
+      emitSessionStateToParticipant(session, target);
       ack?.({ ok: true });
     } catch {
       ack?.({ ok: false, error: "Failed to update file access." });
+    }
+  });
+
+  socket.on("collab:set-file-visibility", (payload, ack) => {
+    try {
+      const sessionId = normalizeSessionId(payload?.sessionId);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        ack?.({ ok: false, error: "Session not found." });
+        return;
+      }
+      const actor = canUseLimitedRoomTools(session, socket.id);
+      if (!actor) {
+        ack?.({ ok: false, error: "You do not have permission to hide files." });
+        return;
+      }
+      const fileName = String(payload?.fileName || "").trim();
+      const allNames = (session.files || []).map((file) => String(file?.name || ""));
+      if (!fileName || !allNames.includes(fileName)) {
+        ack?.({ ok: false, error: "File not found." });
+        return;
+      }
+      const requestedHidden = new Set(
+        (Array.isArray(payload?.hiddenFor) ? payload.hiddenFor : []).map(normalizeName),
+      );
+      const changedParticipants = [];
+      session.participants.forEach((target) => {
+        if (!canModerateTarget(session, socket.id, target)) return;
+        const targetKey = normalizeName(target.name);
+        const currentAllowed = Array.isArray(target.allowedFiles)
+          ? new Set(target.allowedFiles)
+          : new Set(allNames);
+        if (requestedHidden.has(targetKey)) currentAllowed.delete(fileName);
+        else currentAllowed.add(fileName);
+        target.allowedFiles = currentAllowed.size === allNames.length
+          ? null
+          : allNames.filter((name) => currentAllowed.has(name));
+        storeParticipantFileAccess(session, target);
+        changedParticipants.push(target);
+      });
+      logAdminEvent(
+        "File visibility updated",
+        `${fileName} visibility was updated for ${changedParticipants.length} participant(s) in session ${sessionId}.`,
+        sessionId,
+      );
+      emitParticipants(sessionId);
+      changedParticipants.forEach((target) => emitSessionStateToParticipant(session, target));
+      ack?.({ ok: true });
+    } catch {
+      ack?.({ ok: false, error: "Failed to update file visibility." });
     }
   });
 
@@ -2521,6 +3413,9 @@ io.on("connection", (socket) => {
         return;
       }
       target.disabledFeatures = normalizeDisabledFeatures(payload?.disabledFeatures);
+      if (target.disabledFeatures.includes("pairing")) {
+        endPairsForParticipant(sessionId, target.name, "Pairing was disabled for a participant.", actor.name);
+      }
       logAdminEvent("Participant feature access updated", `${target.name}'s feature access changed in session ${sessionId}.`, sessionId);
       emitParticipants(sessionId);
       ack?.({ ok: true });
@@ -2556,6 +3451,13 @@ io.on("connection", (socket) => {
         session.permissions = normalizePermissions(cohostOnly, session.files);
       } else {
         session.permissions = normalizedNext;
+      }
+      if (session.permissions.disablePairing) {
+        const pairing = ensurePairingState(session);
+        pairing.invites = [];
+        [...pairing.pairs].forEach((pair) =>
+          endPairInternal(sessionId, pair, "The host disabled pairing for this room.", actor.name),
+        );
       }
       logAdminEvent("Room permissions updated", `${actor.name} updated room controls in session ${sessionId}.`, sessionId);
       emitSessionMeta(sessionId);
@@ -2684,6 +3586,7 @@ io.on("connection", (socket) => {
       });
       logAdminEvent("Invite link regenerated", `Session ${oldSessionId} was regenerated as ${nextSessionId}.`, nextSessionId);
       emitSessionMeta(nextSessionId);
+      emitPairingState(nextSessionId);
       ack?.({ ok: true, sessionId: nextSessionId, shareLink });
     } catch {
       ack?.({ ok: false, error: "Failed to regenerate invite link." });
@@ -2799,6 +3702,8 @@ io.on("connection", (socket) => {
         return;
       }
 
+      endPairsForParticipant(sessionId, target.name, `${target.name} was removed from the session.`, actor.name);
+
       session.participants = session.participants.filter(
         (p) => p.socketId !== target.socketId,
       );
@@ -2836,6 +3741,7 @@ io.on("connection", (socket) => {
       editor: rawIndicator?.editor || null,
       fileName: rawIndicator?.fileName || member.currentFile || null,
       caretPos: Number(rawIndicator?.caretPos || 0),
+      documentRevision: String(rawIndicator?.documentRevision || "").trim().slice(0, 80),
       stopped,
       ts: Date.now(),
     });
@@ -2876,6 +3782,7 @@ io.on("connection", (socket) => {
         });
       }
       session.pendingJoins = (session.pendingJoins || []).filter((entry) => String(entry.deviceId || "") !== deviceId);
+      endPairsForParticipant(sessionId, target.name, `${target.name} was banned from the session.`, actor.name);
       session.participants = session.participants.filter((p) => p.socketId !== target.socketId);
       io.to(target.socketId).emit("collab:banned", { sessionId });
       const socketRef = io.sockets.sockets.get(target.socketId);
@@ -2957,6 +3864,19 @@ io.on("connection", (socket) => {
       if (removedEditorPresence) emitAdminUpdate("editor-presence");
       return;
     }
+    const disconnectedPair = findPairForName(session, meta.name);
+    if (disconnectedPair) {
+      disconnectedPair.connectionPaused = true;
+      if (!disconnectedPair._disconnectTimers) disconnectedPair._disconnectTimers = {};
+      if (!disconnectedPair._reconnectDevices) disconnectedPair._reconnectDevices = {};
+      const disconnectedKey = normalizeName(meta.name);
+      disconnectedPair._reconnectDevices[disconnectedKey] = String(meta.deviceId || "").trim();
+      if (disconnectedPair._disconnectTimers[disconnectedKey]) {
+        clearTimeout(disconnectedPair._disconnectTimers[disconnectedKey]);
+        delete disconnectedPair._disconnectTimers[disconnectedKey];
+      }
+      recordPairActivity(disconnectedPair, `${meta.name} disconnected. Pair state will wait for reconnection.`, "reconnect");
+    }
 
     if (Array.isArray(session.pendingJoins) && session.pendingJoins.length) {
       const before = session.pendingJoins.length;
@@ -2972,8 +3892,16 @@ io.on("connection", (socket) => {
 
     const removedWasHost = meta.sessionId && session.hostSocketId === socket.id;
 
-    if (session.participants.length === 0) {
-      sessions.delete(meta.sessionId);
+    if (session.participants.length === 0 && !disconnectedPair) {
+      session.lastEmptyAt = Date.now();
+      emitAdminUpdate("disconnect");
+      if (removedEditorPresence) emitAdminUpdate("editor-presence");
+      return;
+    }
+
+    if (session.participants.length === 0 && disconnectedPair) {
+      session.lastEmptyAt = Date.now();
+      emitPairingState(meta.sessionId);
       emitAdminUpdate("disconnect");
       if (removedEditorPresence) emitAdminUpdate("editor-presence");
       return;
@@ -2997,6 +3925,7 @@ io.on("connection", (socket) => {
 
     emitParticipants(meta.sessionId);
     emitSessionMeta(meta.sessionId);
+    emitPairingState(meta.sessionId);
     emitAdminUpdate("disconnect");
     if (removedEditorPresence) emitAdminUpdate("editor-presence");
   });
@@ -3026,6 +3955,9 @@ startServer(PORT);
 
 setInterval(() => {
   const now = Date.now();
+  endedSessions.forEach((expiresAt, sessionId) => {
+    if (Number(expiresAt || 0) <= now) endedSessions.delete(sessionId);
+  });
   Array.from(sessions.entries()).forEach(([sessionId, session]) => {
     if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
       endSession(sessionId, "The collaboration session timer ended.");

@@ -17,7 +17,7 @@
     <meta name="theme-color" content="#4CAF50" />
     <link rel="icon" type="image/png" href="cx.png" />
     <link rel="stylesheet" href="theme.css" />
-    <link rel="stylesheet" href="site-enhancements.css?v=20260712" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260713-home-hero3" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -27,7 +27,7 @@
     />
     <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-12","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-14","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
     </script>
     <style>
       * {
@@ -601,7 +601,7 @@
               <li><strong>Auto-Run:</strong> keeps the preview in sync while you type.</li>
               <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
               <li><strong>GitHub:</strong> signs in through GitHub OAuth, lists repositories, and lets you create, edit, upload, and commit repository files.</li>
-              <li><strong>Help:</strong> opens this guide whenever you need a quick reminder.</li>
+              <li><strong>Help:</strong> lets you choose the animated editor tour or open this complete handbook.</li>
               <li><strong>More:</strong> opens saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
               <li><strong>Guided tour:</strong> explains the main editor controls step by step with Back, Next, Finish, and Close actions.</li>
             </ul>
@@ -654,6 +654,7 @@
                 <ul>
                   <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
                   <li>The Show files in Zen Mode setting controls whether the file explorer remains visible.</li>
+                  <li>When files remain visible, Zen Mode places them in a vertically scrolling column beside the code editor instead of a horizontal tab strip.</li>
                   <li>Use the exit button or press <kbd>Esc</kbd> to leave Zen Mode.</li>
                 </ul>
               </article>
@@ -679,16 +680,19 @@
                   <li>Line numbers, syntax colors, and inline error highlights help you stay oriented.</li>
                   <li>CSS and JavaScript inside HTML blocks receive their own highlighting, while JSON keys, Node globals, and environment keys use dedicated colors.</li>
                   <li>Tabs insert four spaces for tidy indentation.</li>
-                  <li>Remote cursors and typing indicators appear in the editor during collaboration.</li>
+                  <li>During collaboration, every host, co-host, and participant gets a participant-colored text caret at their live typing position.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Suggestions</h3>
                 <ul>
                   <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
+                  <li>Suggestion rows use icons instead of emoji or text abbreviations. HTML, CSS, JavaScript, ENV, TXT, JSON, media, and other project paths display the icon that matches their type.</li>
                   <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
-                  <li>Typing <code>lorem</code> can insert placeholder text.</li>
+                  <li>Typing <code>lorem</code> inserts a full placeholder paragraph.</li>
                   <li>Path suggestions help when typing links, scripts, stylesheets, and media sources.</li>
+                  <li>CSS selector suggestions inside an HTML <code>&lt;style&gt;</code> block indent properties one level deeper and keep the closing brace aligned with the opening selector.</li>
+                  <li>Accepting the <code>style</code> tag inserts and displays exactly <code>&lt;style&gt;&lt;/style&gt;</code> with no placeholder space. Press Enter between the tags to create an indented blank CSS line while keeping both tags aligned.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -737,7 +741,10 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-folder-tree"></i> File Explorer</h3>
                 <ul>
-                  <li>Create project files for markup, styling, scripts, and environment-style notes.</li>
+                  <li>Create project files for markup, styling, scripts, environment settings, and plain-text notes using <code>.txt</code> files.</li>
+                  <li>Supported editable extensions are <code>.html</code>, <code>.htm</code>, <code>.css</code>, <code>.scss</code>, <code>.less</code>, <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>, <code>.jsx</code>, <code>.ts</code>, <code>.tsx</code>, <code>.json</code>, <code>.jsonc</code>, <code>.env</code>, <code>.md</code>, and <code>.txt</code>.</li>
+                  <li>TXT files open as plain text, use a dedicated document icon, and are included when importing or exporting ZIP projects.</li>
+                  <li>If the project has unsaved changes, New File offers Save &amp; Create, Create Without Saving, and Cancel.</li>
                   <li>Switch between files from the explorer.</li>
                   <li>Rename or delete files when your project structure changes.</li>
                   <li>Duplicate file names are blocked where the editor needs unique names.</li>
@@ -750,16 +757,24 @@
                 <h3><i class="fa-solid fa-floppy-disk"></i> Saving</h3>
                 <ul>
                   <li>Save projects inside your browser with a custom project name.</li>
-                  <li>Open saved projects from the project library.</li>
-                  <li>Autosave keeps a draft while you work and can restore it after a reload.</li>
+                  <li>Open or delete saved projects from the project library. The browser library keeps up to 24 projects.</li>
+                  <li>Saved Projects includes <strong>ZIP All Projects</strong>, which asks for an archive name and downloads every saved project in its own folder, plus <strong>Import All Projects</strong>, which restores project folders from a library ZIP. Matching project names are replaced.</li>
+                  <li>Saved Projects and Starter Templates open directly from their separate More-menu controls; the old switching buttons are not shown inside either modal.</li>
+                  <li>If the current project has unsaved changes, opening another saved project shows Save &amp; Open, Discard &amp; Open, and Cancel choices.</li>
+                  <li>The New project control shows Save &amp; Start New, Discard &amp; Start New, and Cancel when the current project is unsaved.</li>
+                  <li>Autosave keeps a recovery draft while you work and can offer to restore it after a reload for up to seven days.</li>
                   <li>The project status badge tells you whether the current work is saved or unsaved.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-layer-group"></i> Starter Templates</h3>
                 <ul>
-                  <li>Choose from built-in starters for landing pages, portfolios, and contact forms.</li>
-                  <li>Templates include matching markup, styling, and scripts so you can begin faster.</li>
+                  <li>Choose from eight art-directed concepts: Signal Room product launch, Studio Ledger portfolio, Project Concierge intake form, Pulseboard analytics workspace, Nocturne event experience, Atelier Market concept store, Canvas Desk draggable creative workspace, and Loop Lab browser rhythm machine.</li>
+                  <li>Every concept has its own visual system and responsive layout rather than reusing a generic starter structure.</li>
+                  <li>The included JavaScript provides working interactions such as live demonstrations, filters, multi-step validation, animated data ranges, countdowns, accordions, a cart drawer, draggable windows, and Web Audio sequencing.</li>
+                  <li>Search by concept or feature and filter the gallery by Websites, Apps, Portfolios, or Commerce.</li>
+                  <li>Open a sandboxed live preview before using a concept, then switch the preview among desktop, tablet, and phone widths.</li>
+                  <li>Unique visual previews, categories, feature highlights, and interaction labels make each concept easy to evaluate before opening it.</li>
                   <li>If you have unsaved work, the editor asks before replacing your current project.</li>
                   <li>Apply a template when you want to replace the current project with a coordinated frontend starter.</li>
                 </ul>
@@ -767,8 +782,15 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-file-zipper"></i> Import & Export</h3>
                 <ul>
-                  <li>Export the full project as a ZIP archive and choose the archive name.</li>
+                  <li>Export ZIP File opens two large choice cards styled like Create and Join Collaboration.</li>
+                  <li>Choose Export ZIP File to create the full project as a new archive and select its name.</li>
+                  <li>Choose Update ZIP File, read the selection instructions, and select an existing <code>.zip</code> archive from your device.</li>
+                  <li>Updating replaces files whose paths match the current project, adds new project files, and preserves other entries already in the archive.</li>
+                  <li>Supported browsers save directly back to the selected ZIP after confirmation. Other browsers download an updated copy with the same file name so you can replace the old copy yourself.</li>
                   <li>Import a ZIP archive to load supported project text files.</li>
+                  <li>For a full browser-library backup, use <strong>ZIP All Projects</strong> and <strong>Import All Projects</strong> inside Saved Projects. The bulk archive keeps each project in a separate folder and preserves its name, active file, and preview target.</li>
+                  <li>If every imported file is wrapped in the same outer folder, CodX Editor removes that folder name. For example, <code>my-project/index.html</code> appears as <code>index.html</code>, while meaningful inner paths such as <code>css/style.css</code> remain intact.</li>
+                  <li>Large ZIP imports are decompressed in small batches, rendered efficiently, and autosaved when the browser is idle. In very large projects, automatic diagnostics prioritize the active and preview files to keep the editor responsive.</li>
                   <li>Drag a ZIP, folder, or supported source files into the editor to import them.</li>
                   <li>Imports focus on editable project files, while Add Media handles images, audio, and video.</li>
                 </ul>
@@ -777,6 +799,12 @@
                 <h3><i class="fa-solid fa-photo-film"></i> Media Files</h3>
                 <ul>
                   <li>Add images, videos, and audio to your project from the media button.</li>
+                  <li>Selecting an added media file opens a visual image, video, or audio player inside the editor instead of exposing its data URL as editable code.</li>
+                  <li>Media is kept as binary browser data and opened through a lightweight object URL, avoiding the large base64 copies that can exhaust memory when opening a video.</li>
+                  <li>Media up to 4 MB can be encoded for live collaboration. Larger media stays local to your browser so it cannot destabilize the session.</li>
+                  <li>Direct publishing can prepare up to 12 MB of local media on demand. Use ZIP export for projects containing larger videos.</li>
+                  <li>Developer media information is available only through Developer Tools: use the Media Source shortcut or run <code>media source on</code>. It is read-only; large binary payloads stay hidden for memory safety. Use <code>media source off</code>, Reset Tools, or reload to return to the viewer.</li>
+                  <li>Switching back to an HTML, CSS, JavaScript, ENV, TXT, or other text file restores the normal code editor.</li>
                   <li>The preview rewrites local media references so playback and image display work inside the browser preview.</li>
                 </ul>
               </article>
@@ -818,7 +846,7 @@
                 <h3><i class="fa-solid fa-file-circle-plus"></i> Create & Upload</h3>
                 <ul>
                   <li>Create file adds a new path and text content to the pending changes list.</li>
-                  <li>Upload file supports one or more local files.</li>
+                  <li>Upload file can stage every file from the current CodX Editor project or one or more files selected from your device.</li>
                   <li>Created, edited, and uploaded files can be reviewed or removed before committing.</li>
                   <li>Spaces in newly created or uploaded names are converted to dashes.</li>
                 </ul>
@@ -895,6 +923,7 @@
                   <li>Missing project pages show a friendly fallback instead of breaking the editor.</li>
                   <li>Use the inspect icon, then hover a preview element to see its highlighted HTML structure above that element.</li>
                   <li>Use the magnifying-glass icon to open zoom controls with plus, minus, percentage, and reset actions.</li>
+                  <li>Use the refresh icon to rebuild the current preview without changing your project files.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -902,6 +931,7 @@
                 <ul>
                   <li>Toggle the console panel from the header.</li>
                   <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li>Preview runtime-error notifications show <strong>Click To Open</strong>; selecting one opens the console, jumps to the reported source location when available, and highlights the error.</li>
                   <li>Smart syntax messages report the actual problematic operator or bracket instead of only showing the token where parsing stopped.</li>
                   <li>Located diagnostics are clickable and jump to the reported line and column.</li>
                   <li>Use Clear to remove old console messages.</li>
@@ -930,6 +960,7 @@
             <h2>Publishing</h2>
             <p class="section-copy">
               Publishing turns the current project into a shareable page. You can create a custom link or update a link you already own with its verification key.
+              The publish dialog presents these as large action cards: green for creating a link and blue for updating one.
             </p>
             <div class="feature-grid">
               <article class="feature-item">
@@ -938,7 +969,8 @@
                   <li>Press Publish / Share from the More menu.</li>
                   <li>Choose Create a Link.</li>
                   <li>Type the ending you want for the published link.</li>
-                  <li>The dialog previews the full link as you type.</li>
+                  <li>The empty form displays <code>published/my-custom-link</code> as a preview example without placing it in the typing area.</li>
+                  <li>Once you type, the preview changes to show your custom link.</li>
                   <li>Only letters, numbers, and hyphens are accepted for the custom ending.</li>
                 </ul>
               </article>
@@ -1014,6 +1046,7 @@
                 <ul>
                   <li>Paste a Google Fonts link or embed snippet into settings.</li>
                   <li>The editor can use that font for the code area after applying settings.</li>
+                  <li>After a valid Google Fonts link is detected, customize its weight, italic style, letter spacing, and line height before applying it.</li>
                   <li>The settings preview updates so you can inspect the style before applying.</li>
                   <li>This requires internet access because the font is loaded from Google.</li>
                 </ul>
@@ -1039,14 +1072,19 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-users"></i> Sessions</h3>
                 <ul>
-                  <li>Create a session and share the invite link.</li>
+                  <li>Create a session, then copy its six-character PIN or the ready-made join instructions. The Session Info view also provides a share link.</li>
+                  <li>After the first session you create on a device, closing the Session PIN modal shows a one-time tutorial card beneath the Collaboration button. It explains that <strong>Manage Session</strong> reopens participants, invite details, collaboration tools, and room controls.</li>
                   <li>During setup, hosts can activate the waiting room to review guests before they enter. It is off by default.</li>
                   <li>When someone requests entry, the host receives a waiting-room popup showing the person’s name and chosen color with Accept and Deny buttons.</li>
+                  <li>New waiting-room requests also show <strong>Click To Open</strong>; selecting the notification highlights that person and focuses their Accept button.</li>
                   <li>Admit All processes every current request only after the host confirms the bulk action in a second dialog.</li>
-                  <li>Join with a display name, personal color, and a collaboration cursor icon.</li>
+                  <li>Join with the six-character PIN or a valid invite link, then choose a 2–20 character display name, personal color, and collaboration cursor icon.</li>
                   <li>Invalid session links show a friendly not-found page.</li>
                   <li>If approval is enabled, guests see the host's session name while they wait for acceptance.</li>
-                  <li>If the connection drops, offline notices are throttled to about once per minute and a reconnect message appears once the session is restored.</li>
+                  <li>If the connection drops or the tab wakes after being idle, CodX reconnects automatically, restores session membership, and resumes syncing without requiring a new join code.</li>
+                  <li>Collaboration rooms do not expire because of inactivity or because nobody has joined recently. They remain registered until the host or an administrator explicitly ends them, and an active connection uses a frequent native keepalive to avoid idle proxy timeouts.</li>
+                  <li>If the collaboration server process restarts, the host can automatically rebuild the live room from the open project and everyone can resume syncing.</li>
+                  <li>Local edits waiting during a short outage stay queued until the collaboration server acknowledges them, then sync after membership is restored.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1055,6 +1093,8 @@
                   <li>Use group chat for everyone in the room.</li>
                   <li>Use private chat for direct messages.</li>
                   <li>Messages use the sender’s chosen color.</li>
+                  <li>Unread counters appear on the collaboration button and beside the relevant private-chat recipient until those messages are viewed.</li>
+                  <li>Public and private message notifications show <strong>Click To Open</strong>; selecting the notification opens the correct conversation directly.</li>
                   <li>Moderators can clear group chat when permitted.</li>
                 </ul>
               </article>
@@ -1062,6 +1102,7 @@
                 <h3><i class="fa-solid fa-arrow-pointer"></i> Presence</h3>
                 <ul>
                   <li>See where collaborators are typing.</li>
+                  <li>While someone types, their pointer becomes a colored text caret positioned directly before the next character without jumping between document versions.</li>
                   <li>Choose a pointer, hand, mouse, crosshair, pen, or text cursor for other collaborators to see.</li>
                   <li>See live cursors in participant colors.</li>
                   <li>Follow a participant to stay on their file and cursor location.</li>
@@ -1089,8 +1130,38 @@
                 <ul>
                   <li>Participants can code, preview, chat, and collaborate normally unless room settings limit them.</li>
                   <li>Hosts can freeze editing, mute chat, limit file access, kick, or ban devices from a session.</li>
-                  <li>The participant list shows useful status such as muted, frozen, and priority.</li>
+                  <li>Collaboration name labels show <strong>(you)</strong> beside your own name in the participant list, chat, and Pair tools, plus useful status such as muted, frozen, and priority.</li>
+                  <li>The participant list can be sorted by join time or alphabetically. Joined first is the default and uses each participant's recorded join time.</li>
+                  <li>Participants can rename themselves when allowed; hosts and co-hosts can rename people they are permitted to manage.</li>
                   <li>Participant More options are shown as neat action cards for role, message, mute, freeze, file access, follow, details, copy, kick, and ban actions.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-code-compare"></i> Pair Programming</h3>
+                <ul>
+                  <li>Select Pair beside an eligible participant and choose Driver or Live Pair Mode. Pair setup does not ask for a timer.</li>
+                  <li>The invited participant sees the proposed mode and can accept or decline. Invitations expire and include spam cooldowns.</li>
+                  <li>Driver Mode allows only the Driver to edit. The Navigator can inspect, highlight, suggest replacements, and request a role switch without creating conflicting edits.</li>
+                  <li>Live Pair Mode lets both partners edit using the normal collaboration synchronization and colored presence tools.</li>
+                  <li>The pair dock includes Sync View, Switch Roles, Voice, Tools, and Leave controls.</li>
+                  <li>Sync View starts switched on for the Navigator and appears green while active, following the Driver's current file and exact scroll position without competing with normal cursor tracking. Select it to turn syncing off or on; scrolling or navigating yourself also turns it off.</li>
+                  <li>Role changes require the partner's approval.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-list-check"></i> Pair Tools</h3>
+                <ul>
+                  <li>Pair chat, suggestion pins, a shared task checklist, and activity history are available only to the paired participants.</li>
+                  <li>New Pair chat, suggestion, and task activity places a red dot on Tools and on the affected tab until that tab is opened.</li>
+                  <li>Pair-start and Pair-message notifications show <strong>Click To Open</strong> and open the Pair chat tools directly.</li>
+                  <li>Received Pair suggestions show <strong>Click To Open</strong> and open Suggestions without moving your current editor selection or scroll position. Use View when you intentionally want to jump to the suggested code. New Pair tasks open Tasks and highlight the task.</li>
+                  <li>Pair task checkboxes use rounded green controls, with a clear green checked state for completed work.</li>
+                  <li>Suggestions record the file, selected range, proposed replacement, and optional explanation. They can be viewed, applied with Undo support, resolved, or rejected.</li>
+                  <li>Ask Host marks the pair as needing help without exposing pair-chat content to the host.</li>
+                  <li>Pair help notifications show <strong>Click To Open</strong> and highlight the requesting pair in Group Controls.</li>
+                  <li>Pair Snapshot downloads the current files and pair tools as a JSON backup.</li>
+                  <li>Optional Voice requests microphone permission only after a call is accepted and sends audio directly between the two browsers when a direct WebRTC connection is available. CodX Editor does not record the call.</li>
+                  <li>A disconnected partner can reconnect at any time. Pair state and roles wait indefinitely and return when reconnection succeeds, unless a pair member, the host, or an administrator explicitly ends the pair or room.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1098,9 +1169,11 @@
                 <ul>
                   <li>Lock the room, set read-only mode, pause collaboration, or disable chat.</li>
                   <li>Use checkbox pickers to apply feature restrictions to selected participants.</li>
-                  <li>Limit chat, saving, opening saved projects, templates, publishing, running, or console access for specific participants.</li>
+                  <li>Limit chat, pairing, saving, opening saved projects, templates, publishing, running, or console access for specific participants.</li>
+                  <li>Hosts can disable pairing for the room, end any active pair, and see which pairs requested help without reading private pair chat.</li>
                   <li>Group Controls show affected counts so you can quickly see how many people are limited.</li>
                   <li>Pin a team file, bring everyone to a file, set an announcement, run a session timer, save a snapshot, regenerate invites, and end the session.</li>
+                  <li>File-visibility eye controls appear only while an eligible host or co-host is in an active session and disappear immediately when that session ends.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1128,9 +1201,18 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
                 <ul>
-                  <li>Use the hidden inspection panel for quick internal checks while testing the editor.</li>
-                  <li>It can inspect state, files, participants, permissions, errors, preview information, and clear its output.</li>
-                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd>.</li>
+                  <li>Use Developer Tools as a power-control panel for the preview and code editor.</li>
+                  <li>Emulate a phone, tablet, laptop, or desktop viewport; switch back to a fluid responsive pane; set a custom size with <code>viewport &lt;width&gt; &lt;height&gt;</code>; or use <code>rotate</code> to change orientation.</li>
+                  <li>Control preview zoom, refresh, fullscreen, and element inspection from commands or the device shortcut buttons.</li>
+                  <li>Use Custom Size for an exact viewport, save a preview Screenshot, or toggle an 8-pixel Grid Overlay while checking alignment.</li>
+                  <li>Color Scheme cycles through system, light, and dark simulation. Breakpoints displays the current viewport category and exact CSS width.</li>
+                  <li>Open a project file, jump to a line and column, toggle editor wrapping, or temporarily change the editor font and tab display size.</li>
+                  <li>Format Code safely reindents supported files and remains undoable. It skips whitespace-sensitive HTML blocks instead of risking their content.</li>
+                  <li>Use Media Source or <code>media source on</code> to inspect safe, read-only details for the active image, video, or audio file. Large encoded or binary payloads are not copied into the editor because doing so can exhaust browser memory.</li>
+                  <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, media viewer, wrapping, font, and tab display to normal defaults.</li>
+                  <li>Use <code>state</code> or <code>diagnostics</code> to inspect preview, editor, project, error, connection, and collaboration details without changing project code.</li>
+                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
+                  <li>Type <code>help</code> for the complete command list, use <kbd>↑</kbd>/<kbd>↓</kbd> for command history, and press <kbd>Tab</kbd> to complete a command.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -1160,6 +1242,8 @@
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run the preview manually</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a file in the project</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></span><span>Show or hide the console panel</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd></span><span>Undo the last editor change</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Y</kbd> or <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></span><span>Redo the last editor change</span></div>
               <div class="shortcut-row"><span><kbd>Esc</kbd></span><span>Close supported overlays or exit Zen Mode</span></div>
               <div class="shortcut-row"><span><code>cxstart</code> + <kbd>Enter</kbd></span><span>Insert starter HTML in an empty HTML file</span></div>
               <div class="shortcut-row"><span>Emmet abbreviation + <kbd>Tab</kbd></span><span>Expand HTML shorthand</span></div>

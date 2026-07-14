@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260711-tutorial-pointer11" />
+    <link rel="stylesheet" href="/frontend.css?v=20260714-template-gallery6" />
   </head>
   <body>
     <a
@@ -65,8 +65,8 @@
     >
     <header>
       <div class="header-switches">
-        <label for="autoRun">Auto-Run</label>
-        <label class="switch" title="Toggle auto-run feature">
+        <label class="mobile-preview-control" for="autoRun">Auto-Run</label>
+        <label class="switch mobile-preview-control" title="Toggle auto-run feature">
           <input type="checkbox" id="autoRun" checked />
           <span class="slider"></span>
         </label>
@@ -88,6 +88,7 @@
           />
         </svg>
         <strong>COLLAB WITH FRIENDS</strong>
+        <span id="collabMessageBadge" class="collab-message-badge" aria-label="0 unread messages" hidden>0</span>
       </button>
 
       <button
@@ -135,9 +136,8 @@
       <button
         id="helpPageBtn"
         class="run-button"
-        title="Open help page"
-        aria-label="Open help page"
-        onclick="window.location.href='/help.html'"
+        title="Open help and learning options"
+        aria-label="Open help and learning options"
       >
         <i class="fa-solid fa-circle-question"></i>
         <strong>HELP</strong>
@@ -303,14 +303,26 @@
                 <span id="projectStatusMeta" class="project-status-meta">Ready</span>
               </div>
             </div>
-            <button
-              id="newFileBtn"
-              class="run-button"
-              style="padding: 4px 12px; font-size: 12px"
-              aria-label="Create new file"
-            >
-              <i class="fa-solid fa-plus"></i> <strong>NEW FILE</strong>
-            </button>
+            <div class="file-toolbar-actions">
+              <button
+                id="collabFileVisibilityBtn"
+                class="run-button file-visibility-quick-btn"
+                type="button"
+                aria-label="Manage who can see the active file"
+                title="Manage file visibility"
+                hidden
+              >
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <button
+                id="newFileBtn"
+                class="run-button"
+                style="padding: 4px 12px; font-size: 12px"
+                aria-label="Create new file"
+              >
+                <i class="fa-solid fa-plus"></i> <strong>NEW FILE</strong>
+              </button>
+            </div>
           </div>
           <div
             id="fileList"
@@ -324,7 +336,12 @@
           <div class="line-numbers" id="lineNumbers">1</div>
           <div class="editor-wrapper">
             <pre id="highlightLayer" aria-hidden="true"></pre>
+            <div id="pairSelectionHighlight" class="pair-selection-highlight" aria-hidden="true" hidden><span></span></div>
             <div id="remoteCursorLayer" aria-hidden="true"></div>
+            <div id="localCollabCursor" class="local-collab-cursor" aria-hidden="true" hidden>
+              <span class="local-collab-cursor-label">You</span>
+              <i id="localCollabCursorIcon" class="local-collab-cursor-icon fa-solid fa-arrow-pointer"></i>
+            </div>
             <button
               id="zenExitBtn"
               class="run-button"
@@ -338,6 +355,22 @@
             <div id="editorWatermark" aria-hidden="true">
               Type <strong>cxstart</strong> and hit enter for a html code setup.
             </div>
+            <section
+              id="editorMediaViewer"
+              class="editor-media-viewer"
+              role="region"
+              aria-label="Media file preview"
+              hidden
+            >
+              <div class="editor-media-viewer-header">
+                <span id="editorMediaViewerIcon" class="editor-media-viewer-icon" aria-hidden="true">
+                  <i class="fa-solid fa-photo-film"></i>
+                </span>
+                <strong id="editorMediaViewerName">Media file</strong>
+                <span id="editorMediaViewerKind" class="editor-media-viewer-kind">MEDIA</span>
+              </div>
+              <div id="editorMediaViewerContent" class="editor-media-viewer-content"></div>
+            </section>
             <textarea
               id="activeEditor"
               class="active"
@@ -449,7 +482,19 @@
             <strong id="previewTitle">Preview</strong>
             <span id="previewLink"></span>
           </div>
+          <span id="previewDeviceBadge" class="preview-device-badge" title="Preview viewport">
+            Responsive
+          </span>
           <div class="preview-header-actions" aria-label="Preview tools">
+            <button
+              id="previewRefreshBtn"
+              class="preview-icon-button"
+              type="button"
+              title="Refresh preview"
+              aria-label="Refresh preview"
+            >
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
             <button
               id="previewInspectBtn"
               class="preview-icon-button"
@@ -512,7 +557,14 @@
             </button>
           </div>
         </div>
-        <iframe id="output" title="Preview output"></iframe>
+        <div id="previewViewportStage" class="preview-viewport-stage is-responsive">
+          <span id="previewBreakpointIndicator" class="preview-breakpoint-indicator" hidden></span>
+          <div id="previewDeviceShell" class="preview-device-shell">
+            <div id="previewDeviceFrame" class="preview-device-frame">
+              <iframe id="output" title="Preview output"></iframe>
+            </div>
+          </div>
+        </div>
         <div class="console-container" id="consoleContainer">
           <div
             style="
@@ -552,6 +604,11 @@
         </div>
       </div>
     </div>
+
+    <aside id="pairDock" class="pair-dock" aria-label="Pair programming controls" hidden>
+      <div id="pairDockContent"></div>
+      <audio id="pairVoiceAudio" autoplay></audio>
+    </aside>
 
     <div id="githubRepoModal" class="github-repo-modal" role="dialog" aria-modal="true" aria-labelledby="githubRepoModalTitle" hidden>
       <section class="github-repo-dialog" tabindex="-1">
@@ -799,6 +856,7 @@
         </div>
 
         <div
+          class="mobile-preview-setting"
           style="
             display: flex;
             align-items: center;
@@ -915,6 +973,44 @@
             "
             aria-label="Google Fonts embed link"
           />
+          <div id="googleFontCustomization" class="google-font-customization" hidden>
+            <div class="google-font-customization-header">
+              <span class="google-font-customization-icon" aria-hidden="true"><i class="fa-solid fa-font"></i></span>
+              <div>
+                <strong>Customize Google Font</strong>
+                <small id="googleFontDetectedName">Font detected</small>
+              </div>
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontWeight">Text weight</label>
+                <output id="editorFontWeightValue" for="editorFontWeight">400 · Normal</output>
+              </div>
+              <input id="editorFontWeight" type="range" min="100" max="900" step="100" value="400" />
+              <div class="google-font-range-labels" aria-hidden="true"><span>Thin</span><span>Black</span></div>
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontLetterSpacing">Letter spacing</label>
+                <output id="editorFontLetterSpacingValue" for="editorFontLetterSpacing">0px</output>
+              </div>
+              <input id="editorFontLetterSpacing" type="range" min="-1" max="4" step="0.1" value="0" />
+            </div>
+            <div class="google-font-control">
+              <div class="google-font-control-label">
+                <label for="editorFontLineHeight">Line height</label>
+                <output id="editorFontLineHeightValue" for="editorFontLineHeight">1.5</output>
+              </div>
+              <input id="editorFontLineHeight" type="range" min="1.1" max="2.2" step="0.1" value="1.5" />
+            </div>
+            <label class="google-font-italic-toggle" for="editorFontItalic">
+              <span><i class="fa-solid fa-italic" aria-hidden="true"></i> Italic text</span>
+              <span class="switch">
+                <input id="editorFontItalic" type="checkbox" />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </div>
           <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 12px">
             Uses <code>@import</code>. Internet is required for this custom
             font.
@@ -1226,7 +1322,7 @@
                 font-size: 12px;
               "
             >
-              Hidden test panel for internal editor checks
+              Power controls for the preview and code editor
             </p>
           </div>
           <button
@@ -1239,8 +1335,24 @@
         </div>
         <div style="padding: 16px 18px; border-bottom: 1px solid var(--border-color);">
           <div class="collab-pill-row">
-            <span class="collab-pill">Shortcut: Ctrl/Cmd + C, then X</span>
-            <span class="collab-pill">Commands: help, state, files, participants, permissions, errors, preview, clear, close</span>
+            <span class="collab-pill">Shortcut: Ctrl/Cmd + C, then Ctrl/Cmd + X</span>
+            <span class="collab-pill">Use ↑/↓ for history and Tab to complete a command</span>
+          </div>
+          <div class="developer-console-shortcuts" aria-label="Developer console shortcuts">
+            <button type="button" data-developer-command="device responsive"><i class="fa-solid fa-arrows-left-right"></i> Responsive</button>
+            <button type="button" data-developer-command="device phone"><i class="fa-solid fa-mobile-screen"></i> Phone</button>
+            <button type="button" data-developer-command="device tablet"><i class="fa-solid fa-tablet-screen-button"></i> Tablet</button>
+            <button type="button" data-developer-command="device laptop"><i class="fa-solid fa-laptop"></i> Laptop</button>
+            <button type="button" data-developer-command="viewport prompt"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> Custom Size</button>
+            <button type="button" data-developer-command="rotate"><i class="fa-solid fa-rotate"></i> Rotate</button>
+            <button type="button" data-developer-command="preview refresh"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+            <button type="button" data-developer-command="preview screenshot"><i class="fa-solid fa-camera"></i> Screenshot</button>
+            <button type="button" data-developer-command="grid toggle" aria-pressed="false"><i class="fa-solid fa-border-all"></i> Grid</button>
+            <button type="button" data-developer-command="scheme toggle" aria-pressed="false"><i class="fa-solid fa-circle-half-stroke"></i> Color Scheme</button>
+            <button type="button" data-developer-command="breakpoints toggle" aria-pressed="false"><i class="fa-solid fa-ruler-horizontal"></i> Breakpoints</button>
+            <button type="button" data-developer-command="editor format"><i class="fa-solid fa-align-left"></i> Format Code</button>
+            <button type="button" data-developer-command="media source toggle" aria-pressed="false"><i class="fa-solid fa-file-code"></i> Media Source</button>
+            <button type="button" data-developer-command="tools reset"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Tools</button>
           </div>
         </div>
         <pre
@@ -1578,20 +1690,18 @@
           Start by opening files, previewing your page, and using the main controls for GitHub, collaboration, and publishing.
         </p>
 
-        <ul
-          style="
-            margin: 0 0 20px 0;
-            padding-left: 18px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            font-size: 14px;
-          "
-        >
-          <li>Use Auto-Run or Run to refresh the preview.</li>
-          <li>Use the GitHub button to upload from your current project or your file explorer.</li>
-          <li>Use Collaboration to invite people, chat, and share cursors.</li>
-          <li>Use More for templates, save/load, publish, ZIP tools, and settings.</li>
-        </ul>
+        <div id="tutorialLiveDemo" class="tutorial-live-demo" role="group" aria-labelledby="tutorialDemoTitle">
+          <div class="tutorial-demo-label">
+            <span class="tutorial-live-dot"></span>
+            <strong id="tutorialDemoTitle">LIVE PREVIEW</strong>
+            <button id="tutorialReplayDemoBtn" class="tutorial-demo-replay" type="button" aria-label="Replay this demonstration" title="Replay animation">
+              <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div id="tutorialDemoStage" class="tutorial-demo-stage" aria-hidden="true"></div>
+          <div class="tutorial-demo-result" aria-hidden="true"><i class="fa-solid fa-circle-check"></i><span>Demonstration complete</span></div>
+          <div class="tutorial-demo-timeline"><i></i></div>
+        </div>
 
         <div
           style="
@@ -1623,13 +1733,16 @@
       </div>
       <div id="tutorialToolPointer" class="tutorial-tool-pointer" aria-hidden="true">
         <i id="tutorialToolPointerIcon" class="fa-solid fa-arrow-pointer"></i>
-        <span></span>
+        <span class="tutorial-pointer-ring"></span>
+        <b class="tutorial-pointer-click"></b>
+        <small id="tutorialToolPointerAction">Click</small>
       </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
-    <script src="/frontend.js?v=20260712-waiting-host12"></script>
+    <script src="/starter-templates.js?v=20260714-concepts3"></script>
+    <script src="/frontend.js?v=20260714-template-gallery6"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>
