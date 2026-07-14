@@ -6633,7 +6633,7 @@ async function createNewFile() {
   }
   const dialog = await showAppPrompt(
     "NEW FILE",
-    "Enter a file name. Spaces become dashes; underscores and dashes are allowed.",
+    `Enter a file name. Supported extensions: ${editableTextExtensions.map((extension) => `.${extension}`).join(", ")}. Spaces become dashes; underscores and dashes are allowed.`,
     "",
     "newfile.html",
   );
@@ -11216,6 +11216,7 @@ function getFileIcon(fileName) {
   if (ext === "js" || ext === "mjs") return "JS";
   if (ext === "json") return "JSON";
   if (ext === "env") return "ENV";
+  if (ext === "txt") return "TXT";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "IMG";
   if (["mp3", "wav", "ogg", "mp4", "webm", "m4a"].includes(ext)) return "MED";
   return "FILE";
@@ -11230,8 +11231,9 @@ function createFileExtensionIcon(fileName) {
     mjs: "fa-brands fa-js",
     json: "fa-solid fa-code",
     env: "fa-solid fa-key",
+    txt: "fa-solid fa-file-lines",
   };
-  const safeExt = ["html", "css", "js", "mjs", "json", "env"].includes(ext) ? ext : "file";
+  const safeExt = ["html", "css", "js", "mjs", "json", "env", "txt"].includes(ext) ? ext : "file";
   const icon = document.createElement("span");
   icon.className = `file-extension-icon file-extension-icon-${safeExt}`;
   icon.title = `${getFileIcon(fileName)} file`;
@@ -20493,7 +20495,7 @@ const tutorialSteps = [
     target: "#newFileBtn",
     icon: "fa-solid fa-plus",
     title: "New File",
-    description: "Create new HTML, CSS, JS, or .env files for your project.",
+    description: "Create new HTML, CSS, JS, TXT, or .env files for your project.",
     position: "bottom-right",
   },
   {

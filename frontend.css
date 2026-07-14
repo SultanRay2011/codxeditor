@@ -435,6 +435,10 @@ body.zen-mode #zenExitBtn {
   color: var(--warning-color);
 }
 
+.file-extension-icon-txt {
+  color: #38bdf8;
+}
+
 .file-item.active .file-extension-icon {
   color: #ffffff;
 }
