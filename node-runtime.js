@@ -270,7 +270,10 @@ function setEnabled(nextEnabled) {
   preview?.classList.toggle("node-runtime-active", enabled);
   terminal.hidden = !enabled;
   toggleButton?.classList.toggle("node-runtime-enabled", enabled);
+  if (toggleButton) toggleButton.dataset.runtimeState = enabled ? "enabled" : "disabled";
   if (toggleLabel) toggleLabel.textContent = enabled ? "DISABLE NODE.JS" : "ENABLE NODE.JS";
+  const toggleIcon = toggleButton?.querySelector("i");
+  if (toggleIcon) toggleIcon.className = enabled ? "fa-solid fa-power-off" : "fa-brands fa-node-js";
   toggleButton?.setAttribute("aria-pressed", enabled ? "true" : "false");
   toggleButton?.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} Node.js runtime`);
   toggleButton?.setAttribute("title", `${enabled ? "Disable" : "Enable"} the browser-isolated Node.js runtime`);

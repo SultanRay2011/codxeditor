@@ -603,7 +603,7 @@
               <li><strong>Run:</strong> refreshes the preview manually when Auto-Run is off.</li>
               <li><strong>GitHub:</strong> signs in through GitHub OAuth, lists repositories, and lets you create, edit, upload, and commit repository files.</li>
               <li><strong>Help:</strong> lets you choose the animated editor tour or open this complete handbook.</li>
-              <li><strong>More:</strong> opens the Command Palette, saving, templates, publishing, GitHub, Node.js, fonts, Zen Mode, and navigation tools.</li>
+              <li><strong>More:</strong> opens the Command Palette, saving, templates, publishing, GitHub, Node.js, fonts, icons, desktop Zen Mode, and navigation tools.</li>
               <li><strong>Command Palette:</strong> press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and editor actions without leaving the keyboard.</li>
               <li><strong>Responsive workspace:</strong> desktop keeps the resizable split view, while phones and portrait tablets use large Files, Editor, Preview, and Console tabs with touch-friendly controls.</li>
               <li><strong>Guided tour:</strong> explains the main editor controls step by step with Back, Next, Finish, and Close actions.</li>
@@ -658,6 +658,7 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-laptop-code"></i> Zen Mode</h3>
                 <ul>
+                  <li>Zen Mode is a laptop and desktop feature; it is removed from mobile menus, settings, and commands where the workspace tabs already provide focused views.</li>
                   <li>Zen Mode hides extra interface pieces so you can focus on code.</li>
                   <li>The Show files in Zen Mode setting controls whether the file explorer remains visible.</li>
                   <li>When files remain visible, Zen Mode places them in a vertically scrolling column beside the code editor instead of a horizontal tab strip.</li>
@@ -668,8 +669,8 @@
                 <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
                 <ul>
                   <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
-                  <li>Editor Extras contains Command Palette, Enable Node.js, Fonts, Get Icons, Zen Mode, and Homepage.</li>
-                  <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML.</li>
+                  <li>Editor Extras contains Command Palette, Enable Node.js, Fonts, Get Icons, Homepage, and Zen Mode on laptops and desktops.</li>
+                  <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML. On phones it uses compact two-column cards, scaled controls, and a full-height scrolling catalog.</li>
                   <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
                 </ul>
               </article>
@@ -916,6 +917,7 @@
                 <h3><i class="fa-brands fa-node-js"></i> Enable Node.js</h3>
                 <ul>
                   <li>Enable Node.js hides the normal webpage preview and expands the console into a command terminal.</li>
+                  <li>While Node.js is on, the More action changes to a red power button labeled <strong>Disable Node.js</strong> with an <strong>ON</strong> badge, and enabling or disabling it shows a confirmation message.</li>
                   <li>If missing, CodX Editor creates <code>package.json</code> with project name <code>project</code> and a starter <code>server.js</code>.</li>
                   <li>Disable Node.js stops the active command, removes stale server-preview links, and restores the normal preview while leaving the browser runtime available for the current tab.</li>
                   <li>If runtime startup fails, CodX Editor rolls the interface back to the normal preview so the Enable button can be retried.</li>

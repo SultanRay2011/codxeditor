@@ -290,7 +290,7 @@ function getCommandPaletteCommands() {
     createButtonCommand("editor.undo", "Undo edit", "Undo the last editor change", "fa-solid fa-rotate-left", "undoEditorBtn", "history"),
     createButtonCommand("editor.redo", "Redo edit", "Restore the last undone change", "fa-solid fa-rotate-right", "redoEditorBtn", "history"),
     createButtonCommand("editor.settings", "Open editor settings", "Theme, font and layout preferences", "fa-solid fa-gear", "settingsBtn", "appearance customize"),
-    createButtonCommand("editor.zen", isZenMode ? "Exit Zen Mode" : "Enter Zen Mode", "Toggle the focused editing layout", "fa-solid fa-laptop-code", "zenModeBtn", "focus fullscreen"),
+    ...(isCompactWorkspaceLayout() ? [] : [createButtonCommand("editor.zen", isZenMode ? "Exit Zen Mode" : "Enter Zen Mode", "Toggle the focused editing layout", "fa-solid fa-laptop-code", "zenModeBtn", "focus fullscreen")]),
     createButtonCommand("preview.run", "Run preview", "Build the current project preview", "fa-solid fa-play", "runPreviewBtn", "refresh execute"),
     createButtonCommand("preview.refresh", "Refresh preview", "Reload the preview pane", "fa-solid fa-rotate", "previewRefreshBtn", "reload"),
     createButtonCommand("preview.fullscreen", "Toggle preview fullscreen", "Expand or restore the preview", "fa-solid fa-expand", "previewFullscreenBtn", "screen"),
@@ -883,6 +883,12 @@ enableNodeRuntimeBtn?.addEventListener("click", async () => {
   }
   try {
     await window.codxNodeRuntime.toggle();
+    showNotification(
+      window.codxNodeRuntime.enabled
+        ? "Node.js is ON. Use the red Disable Node.js action to turn it off."
+        : "Node.js is disabled and the normal preview is restored.",
+      window.codxNodeRuntime.enabled ? "success" : "info",
+    );
   } catch (error) {
     showNotification(String(error?.message || error || "Unable to enable Node.js."), "error");
   }
@@ -4949,6 +4955,7 @@ let projectFiles = [
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
             <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs instead of squeezing every panel onto one screen; on desktop, open Console from the Command Palette or keyboard shortcut</li>
             <li>The More button opens a compact two-column menu on phones and tablets so every option fits comfortably</li>
+            <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -4970,6 +4977,7 @@ let projectFiles = [
           <ul>
             <li>Open More and choose Enable Node.js</li>
             <li>The normal preview closes and the console becomes a command terminal</li>
+            <li>While Node.js is on, the More action turns red, displays an ON badge, and clearly says Disable Node.js</li>
             <li>Install dependencies with <code>npm install package-name</code></li>
             <li>Run the starter server with <code>npm start</code></li>
             <li>Run commands with <strong>RUN</strong> or <kbd>Enter</kbd></li>
@@ -22222,7 +22230,7 @@ const tutorialSteps = [
     icon: "fa-solid fa-ellipsis",
     title: "More Tools",
     description:
-      "Open the More menu for project tools like New, Save Project, Open Saved, Templates, Publish / Share, Fonts, and Zen Mode.",
+      "Open the More menu for project tools like New, Save Project, Open Saved, Templates, Publish / Share, Node.js, Fonts, and Icons.",
     position: "bottom-left",
   },
   {
