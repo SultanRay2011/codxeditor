@@ -212,6 +212,36 @@ header .run-button:hover {
   display: none;
 }
 
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .header-more-panel {
+    width: min(372px, calc(100vw - 24px));
+    gap: 10px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .header-more-section {
+    gap: 8px;
+  }
+
+  .header-more-section-title {
+    font-size: 10px;
+  }
+
+  .header-more-panel .header-more-action {
+    min-height: 42px;
+    gap: 7px;
+    padding: 9px 10px;
+    font-size: 11px;
+  }
+
+  .header-more-panel .run-button :is(i, .btn-icon) {
+    width: 15px;
+    height: 15px;
+    font-size: 14px;
+  }
+}
+
 .header-more-action.github-connected {
   border-color: #2ea043;
   background: linear-gradient(180deg, #2ea043, #238636);
