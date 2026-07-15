@@ -2786,6 +2786,7 @@ let lastAnnouncementText = "";
 let activeDialogResolver = null;
 let deviceTransferScannerStream = null;
 let deviceTransferScannerFrame = 0;
+let deviceTransferCountdownTimer = null;
 let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
@@ -4195,6 +4196,7 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
 
 function closeAppDialog(result = null) {
   stopDeviceTransferScanner();
+  stopDeviceTransferCountdown();
   if (appDialog) appDialog.style.display = "none";
   if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
@@ -4977,7 +4979,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to send or receive the workspace, saved projects, media, complete editor settings, and preview preferences with clearly marked transfer controls</li>
+            <li>Use Device Transfer to send or receive the workspace, saved projects, media, complete editor settings, and preview preferences; Send shows a live ten-minute expiry countdown</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -7208,7 +7210,12 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
       <p class="device-transfer-instruction">Scan this QR code with the other device, or open CodX Editor and enter the one-time code:</p>
       ${qrImage ? `<div class="device-transfer-qr"><img src="${escapeHtmlAttributeValue(qrImage)}" alt="QR code for this one-time device transfer"><span><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span></div>` : ""}
       <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
-      <p class="device-transfer-expiry"><i class="fa-regular fa-clock"></i> One use · expires in 10 minutes</p>
+      <p id="deviceTransferExpiry" class="device-transfer-expiry" aria-live="polite">
+        <i class="fa-regular fa-clock"></i>
+        <span>One use ·</span>
+        <strong id="deviceTransferCountdown">10:00</strong>
+        <span id="deviceTransferCountdownLabel">remaining</span>
+      </p>
       ${getDeviceTransferSummaryHtml(data?.summary, skippedMedia ? `${skippedMedia} large or unavailable media file${skippedMedia === 1 ? " was" : "s were"} skipped. Use ZIP export if you need those files.` : "")}
     `;
   }
@@ -7233,7 +7240,49 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   document.getElementById("deviceTransferCopyCodeBtn").onclick = () => copyText(code, "Transfer code copied.");
   document.getElementById("deviceTransferCopyLinkBtn").onclick = () => copyText(shareUrl, "Transfer link copied.");
   document.getElementById("deviceTransferDoneBtn").onclick = () => closeAppDialog();
+  startDeviceTransferCountdown(data?.expiresAt);
   setTimeout(() => document.getElementById("deviceTransferCopyCodeBtn")?.focus(), 0);
+}
+
+function stopDeviceTransferCountdown() {
+  if (deviceTransferCountdownTimer) {
+    clearInterval(deviceTransferCountdownTimer);
+    deviceTransferCountdownTimer = null;
+  }
+}
+
+function startDeviceTransferCountdown(expiresAt) {
+  stopDeviceTransferCountdown();
+  const expiryTime = Number(expiresAt || 0);
+  const expiry = document.getElementById("deviceTransferExpiry");
+  const countdown = document.getElementById("deviceTransferCountdown");
+  const label = document.getElementById("deviceTransferCountdownLabel");
+  if (!expiry || !countdown || !label || !Number.isFinite(expiryTime) || expiryTime <= 0) return;
+
+  const updateCountdown = () => {
+    const remainingSeconds = Math.max(0, Math.ceil((expiryTime - Date.now()) / 1000));
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    countdown.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+
+    if (remainingSeconds <= 0) {
+      expiry.dataset.state = "expired";
+      countdown.textContent = "00:00";
+      label.textContent = "expired · create a new transfer";
+      ["deviceTransferCodeValue", "deviceTransferCopyCodeBtn", "deviceTransferCopyLinkBtn"].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = true;
+      });
+      stopDeviceTransferCountdown();
+      return;
+    }
+
+    expiry.dataset.state = remainingSeconds <= 60 ? "ending" : "active";
+    label.textContent = "remaining";
+  };
+
+  updateCountdown();
+  deviceTransferCountdownTimer = setInterval(updateCountdown, 1000);
 }
 
 async function sendDeviceTransfer() {

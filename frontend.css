@@ -6620,10 +6620,35 @@ iframe {
 }
 
 .device-transfer-expiry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   margin: 9px 0 14px;
   color: var(--text-muted);
   font-size: 11px;
   text-align: center;
+  transition: color .2s ease;
+}
+
+.device-transfer-expiry strong {
+  min-width: 42px;
+  color: var(--accent-color);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+
+.device-transfer-expiry[data-state="ending"],
+.device-transfer-expiry[data-state="ending"] strong { color: #f59e0b; }
+
+.device-transfer-expiry[data-state="expired"],
+.device-transfer-expiry[data-state="expired"] strong { color: #ef4444; }
+
+#appDialog[data-dialog-kind="device-transfer-code"] button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: grayscale(.45);
 }
 
 .device-transfer-summary {
