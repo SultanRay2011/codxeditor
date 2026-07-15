@@ -6370,6 +6370,140 @@ iframe {
   .publish-choice-card { min-height: 126px; }
 }
 
+#appDialog[data-dialog-kind^="device-transfer"] > div {
+  width: min(620px, 94vw) !important;
+  border-color: color-mix(in srgb, var(--accent-color) 58%, var(--border-color)) !important;
+  background:
+    radial-gradient(circle at 88% 0, color-mix(in srgb, var(--accent-color) 18%, transparent), transparent 42%),
+    var(--bg-secondary) !important;
+}
+
+#appDialog[data-dialog-kind="device-transfer-choice"] #appDialogActions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px !important;
+  margin-top: 18px;
+}
+
+.device-transfer-choice-card {
+  min-width: 0;
+  min-height: 150px;
+  color: #fff;
+  border-color: color-mix(in srgb, var(--accent-color) 76%, #fff 24%);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 255, 255, .22), transparent 58%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-color) 88%, #0b3f1e), var(--accent-color));
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--accent-color) 28%, transparent);
+}
+
+.device-transfer-choice-card:nth-child(2) {
+  border-color: color-mix(in srgb, #2563eb 76%, #fff 24%);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 255, 255, .2), transparent 58%),
+    linear-gradient(145deg, #1d4ed8, #2563eb);
+  box-shadow: 0 14px 32px rgba(37, 99, 235, .28);
+}
+
+.device-transfer-choice-card i {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border-radius: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, .16);
+  font-size: 20px;
+}
+
+.device-transfer-choice-card small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, .78);
+  font-size: 11px;
+}
+
+#appDialogActions .device-transfer-cancel {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.device-transfer-privacy,
+.device-transfer-note,
+.device-transfer-warning {
+  display: block;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--bg-primary));
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.device-transfer-warning {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 9%, var(--bg-primary));
+  color: var(--text-primary);
+}
+
+.device-transfer-instruction {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.device-transfer-code {
+  width: 100%;
+  padding: 17px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 58%, var(--border-color));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-primary));
+  color: var(--text-primary);
+  font: 800 clamp(22px, 5vw, 34px)/1.1 "JetBrains Mono", monospace;
+  letter-spacing: .09em;
+  text-align: center;
+  cursor: copy;
+}
+
+.device-transfer-expiry {
+  margin: 9px 0 14px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.device-transfer-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.device-transfer-summary > div {
+  min-width: 0;
+  padding: 11px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  text-align: center;
+}
+
+.device-transfer-summary strong,
+.device-transfer-summary span { display: block; }
+.device-transfer-summary strong { color: var(--accent-color); font-size: 18px; }
+.device-transfer-summary span { margin-top: 3px; color: var(--text-muted); font-size: 9px; line-height: 1.3; }
+
+@media (max-width: 560px) {
+  #appDialog[data-dialog-kind="device-transfer-choice"] #appDialogActions { grid-template-columns: 1fr; }
+  #appDialogActions .device-transfer-cancel { grid-column: auto; justify-self: stretch; }
+  .device-transfer-choice-card { min-height: 118px; }
+  .device-transfer-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .device-transfer-code { font-size: clamp(18px, 6vw, 26px); letter-spacing: .055em; }
+}
+
 #developerConsoleModal > div { border-radius: 18px !important; }
 .developer-console-shortcuts {
   display: flex;

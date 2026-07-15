@@ -39,6 +39,13 @@ const GITHUB_OAUTH_SCOPE = String(process.env.GITHUB_OAUTH_SCOPE || "repo read:u
 const GITHUB_SESSIONS_FILE = path.join(__dirname, ".codx-github-sessions.enc");
 const githubOAuthFlows = new Map();
 const githubSessions = new Map();
+const deviceTransfers = new Map();
+const deviceTransferAttempts = new Map();
+const DEVICE_TRANSFER_TTL_MS = 10 * 60 * 1000;
+const DEVICE_TRANSFER_MAX_BYTES = 20 * 1024 * 1024;
+const DEVICE_TRANSFER_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+const DEVICE_TRANSFER_MAX_ENTRIES = 100;
+const DEVICE_TRANSFER_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 loadGitHubSessions();
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
@@ -335,6 +342,125 @@ async function loadFontsourceCatalog() {
   }
 }
 
+function normalizeDeviceTransferCode(value) {
+  const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return compact.length === 12 ? compact : "";
+}
+
+function formatDeviceTransferCode(value) {
+  const compact = normalizeDeviceTransferCode(value);
+  return compact ? compact.match(/.{1,4}/g).join("-") : "";
+}
+
+function createDeviceTransferCode() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const bytes = crypto.randomBytes(12);
+    let compact = "";
+    for (let index = 0; index < 12; index += 1) {
+      compact += DEVICE_TRANSFER_CODE_CHARS[bytes[index] % DEVICE_TRANSFER_CODE_CHARS.length];
+    }
+    if (!deviceTransfers.has(compact)) return compact;
+  }
+  throw new Error("Unable to create a unique transfer code.");
+}
+
+function sanitizeDeviceTransferSnapshot(value) {
+  const files = Array.isArray(value?.files) ? value.files.slice(0, 500) : [];
+  if (!files.length) return null;
+  return {
+    version: 1,
+    files: files.map((file, index) => ({
+      name: String(file?.name || `file-${index + 1}.txt`).slice(0, 260),
+      type: String(file?.type || "txt").slice(0, 24),
+      mediaType: String(file?.mediaType || "").slice(0, 24),
+      mediaSize: Math.max(0, Number(file?.mediaSize || 0) || 0),
+      mediaMimeType: String(file?.mediaMimeType || "").slice(0, 120),
+      content: String(file?.content || ""),
+      active: Boolean(file?.active),
+    })),
+    activeFileName: String(value?.activeFileName || "").slice(0, 260),
+    previewTarget: value?.previewTarget?.mode === "html"
+      ? { mode: "html", fileName: String(value.previewTarget.fileName || "").slice(0, 260) }
+      : null,
+    savedAt: Number(value?.savedAt || Date.now()) || Date.now(),
+  };
+}
+
+function sanitizeDeviceTransferPayload(value) {
+  const currentProject = sanitizeDeviceTransferSnapshot(value?.currentProject);
+  if (!currentProject) return null;
+  const savedProjects = (Array.isArray(value?.savedProjects) ? value.savedProjects : [])
+    .slice(0, 24)
+    .map((project, index) => {
+      const snapshot = sanitizeDeviceTransferSnapshot(project?.snapshot);
+      if (!snapshot) return null;
+      return {
+        id: String(project?.id || `transferred-${Date.now()}-${index}`).slice(0, 160),
+        name: String(project?.name || `Transferred project ${index + 1}`).trim().slice(0, 120),
+        updatedAt: Number(project?.updatedAt || Date.now()) || Date.now(),
+        snapshot,
+      };
+    })
+    .filter(Boolean);
+  const allowedSettings = [
+    "bgColor", "textSize", "fontFamily", "fontEmbed", "fontWeight", "fontItalic",
+    "fontLetterSpacing", "fontLineHeight", "themeColor", "zenShowFiles", "fullscreenPreviewPanel",
+  ];
+  const editorSettings = {};
+  if (value?.editorSettings && typeof value.editorSettings === "object" && !Array.isArray(value.editorSettings)) {
+    allowedSettings.forEach((key) => {
+      const setting = value.editorSettings[key];
+      if (["string", "number", "boolean"].includes(typeof setting)) {
+        editorSettings[key] = typeof setting === "string" ? setting.slice(0, 2048) : setting;
+      }
+    });
+  }
+  return {
+    version: 1,
+    createdAt: Number(value?.createdAt || Date.now()) || Date.now(),
+    currentProject,
+    savedProjects,
+    editorSettings,
+    activeSavedProjectName: String(value?.activeSavedProjectName || "").trim().slice(0, 120),
+  };
+}
+
+function getDeviceTransferSummary(payload) {
+  const currentFiles = Array.isArray(payload?.currentProject?.files) ? payload.currentProject.files.length : 0;
+  const savedProjects = Array.isArray(payload?.savedProjects) ? payload.savedProjects.length : 0;
+  const settingsCount = payload?.editorSettings && typeof payload.editorSettings === "object"
+    ? Object.keys(payload.editorSettings).length
+    : 0;
+  const mediaFiles = [payload?.currentProject, ...(payload?.savedProjects || []).map((project) => project.snapshot)]
+    .reduce((total, snapshot) => total + (snapshot?.files || []).filter((file) => file.mediaType).length, 0);
+  return { currentFiles, savedProjects, settings: settingsCount > 0, mediaFiles };
+}
+
+function canAttemptDeviceTransfer(req) {
+  const key = getClientIp(req) || "unknown";
+  const now = Date.now();
+  const recent = (deviceTransferAttempts.get(key) || []).filter((timestamp) => now - timestamp < 60 * 1000);
+  if (recent.length >= 30) {
+    deviceTransferAttempts.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  deviceTransferAttempts.set(key, recent);
+  return true;
+}
+
+function findActiveDeviceTransfer(code) {
+  const compact = normalizeDeviceTransferCode(code);
+  if (!compact) return null;
+  const transfer = deviceTransfers.get(compact);
+  if (!transfer) return null;
+  if (transfer.expiresAt <= Date.now()) {
+    deviceTransfers.delete(compact);
+    return null;
+  }
+  return { compact, transfer };
+}
+
 app.use(express.json({ limit: "25mb" }));
 app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
@@ -376,6 +502,81 @@ app.get("/404-for-preview.html", (_req, res) => {
 });
 app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
+
+app.post("/api/device-transfer/create", (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    const payload = sanitizeDeviceTransferPayload(req.body?.payload);
+    if (!payload) {
+      res.status(400).json({ ok: false, error: "The transfer does not contain a valid current project." });
+      return;
+    }
+    const byteSize = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    if (byteSize > DEVICE_TRANSFER_MAX_BYTES) {
+      res.status(413).json({
+        ok: false,
+        error: "This transfer is too large. Remove large media files or use ZIP export instead.",
+      });
+      return;
+    }
+    const getStoredTransferBytes = () => [...deviceTransfers.values()]
+      .reduce((total, transfer) => total + Number(transfer?.byteSize || 0), 0);
+    while (
+      deviceTransfers.size >= DEVICE_TRANSFER_MAX_ENTRIES ||
+      getStoredTransferBytes() + byteSize > DEVICE_TRANSFER_MAX_TOTAL_BYTES
+    ) {
+      const oldestCode = deviceTransfers.keys().next().value;
+      if (!oldestCode) break;
+      deviceTransfers.delete(oldestCode);
+    }
+    const compact = createDeviceTransferCode();
+    const expiresAt = Date.now() + DEVICE_TRANSFER_TTL_MS;
+    const summary = getDeviceTransferSummary(payload);
+    deviceTransfers.set(compact, { payload, expiresAt, summary, byteSize });
+    res.status(201).json({
+      ok: true,
+      code: formatDeviceTransferCode(compact),
+      expiresAt,
+      summary,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || "Unable to prepare the device transfer." });
+  }
+});
+
+app.post("/api/device-transfer/preview", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!canAttemptDeviceTransfer(req)) {
+    res.status(429).json({ ok: false, error: "Too many transfer attempts. Wait one minute and try again." });
+    return;
+  }
+  const match = findActiveDeviceTransfer(req.body?.code);
+  if (!match) {
+    res.status(404).json({ ok: false, error: "That transfer code is invalid, expired, or already used." });
+    return;
+  }
+  res.json({
+    ok: true,
+    code: formatDeviceTransferCode(match.compact),
+    expiresAt: match.transfer.expiresAt,
+    summary: match.transfer.summary,
+  });
+});
+
+app.post("/api/device-transfer/claim", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!canAttemptDeviceTransfer(req)) {
+    res.status(429).json({ ok: false, error: "Too many transfer attempts. Wait one minute and try again." });
+    return;
+  }
+  const match = findActiveDeviceTransfer(req.body?.code);
+  if (!match) {
+    res.status(404).json({ ok: false, error: "That transfer code is invalid, expired, or already used." });
+    return;
+  }
+  deviceTransfers.delete(match.compact);
+  res.json({ ok: true, payload: match.transfer.payload, summary: match.transfer.summary });
+});
 
 app.get("/api/localization/profile", async (req, res) => {
   try {
@@ -4025,6 +4226,14 @@ startServer(PORT);
 
 setInterval(() => {
   const now = Date.now();
+  deviceTransfers.forEach((transfer, code) => {
+    if (Number(transfer?.expiresAt || 0) <= now) deviceTransfers.delete(code);
+  });
+  deviceTransferAttempts.forEach((timestamps, clientIp) => {
+    const recent = (Array.isArray(timestamps) ? timestamps : []).filter((timestamp) => now - timestamp < 60 * 1000);
+    if (recent.length) deviceTransferAttempts.set(clientIp, recent);
+    else deviceTransferAttempts.delete(clientIp);
+  });
   endedSessions.forEach((expiresAt, sessionId) => {
     if (Number(expiresAt || 0) <= now) endedSessions.delete(sessionId);
   });

@@ -103,6 +103,7 @@ const saveProjectBtn = document.getElementById("saveProjectBtn");
 const projectStatusSaveBtn = document.getElementById("projectStatusSaveBtn");
 const newProjectBtn = document.getElementById("newProjectBtn");
 const openSavedProjectsBtn = document.getElementById("openSavedProjectsBtn");
+const deviceTransferBtn = document.getElementById("deviceTransferBtn");
 const templatesBtn = document.getElementById("templatesBtn");
 const publishProjectBtn = document.getElementById("publishProjectBtn");
 const connectGitHubBtn = document.getElementById("connectGitHubBtn");
@@ -283,6 +284,7 @@ function getCommandPaletteCommands() {
     createButtonCommand("project.new", "New project", "Start with a fresh project", "fa-solid fa-folder-plus", "newProjectBtn", "clear reset"),
     createButtonCommand("project.save", "Save project", "Save to your local project library", "fa-solid fa-floppy-disk", "saveProjectBtn", "store library"),
     createButtonCommand("project.open", "Open saved projects", "Browse your local project library", "fa-solid fa-folder-open", "openSavedProjectsBtn", "load library"),
+    createButtonCommand("project.transfer", "Device Transfer", "Move projects and settings to another device", "fa-solid fa-mobile-screen-button", "deviceTransferBtn", "phone laptop import sync code"),
     createButtonCommand("project.templates", "Open starter templates", "Start from a ready-made project", "fa-solid fa-layer-group", "templatesBtn", "gallery examples"),
     createButtonCommand("project.publish", "Publish / share project", "Create or update a public link", "fa-solid fa-share-nodes", "publishProjectBtn", "deploy link"),
     createButtonCommand("project.export", "Export project as ZIP", "Download every project file", "fa-solid fa-file-zipper", "exportZipBtn", "download backup"),
@@ -2804,6 +2806,7 @@ const MAX_DEVELOPER_MEDIA_SOURCE_CHARS = 1024 * 1024;
 const MAX_INLINE_MEDIA_SOURCE_CHARS = 8 * 1024 * 1024;
 const MAX_LIVE_MEDIA_TRANSFER_BYTES = 4 * 1024 * 1024;
 const MAX_PUBLISH_MEDIA_BYTES = 12 * 1024 * 1024;
+const MAX_DEVICE_TRANSFER_MEDIA_BYTES = 12 * 1024 * 1024;
 let autosaveTimer = null;
 let autosaveIdleCallback = null;
 let lastAutosaveAt = null;
@@ -4970,6 +4973,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
+            <li>Use Device Transfer to move the current workspace, saved-project library, media, theme, and font settings between a laptop and phone with a one-time 10-minute code or link</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -6796,6 +6800,377 @@ function findSavedProjectNameForSnapshot(snapshot) {
 
 function setSavedProjects(projects) {
   return safeLocalStorage("set", SAVED_PROJECTS_KEY, JSON.stringify(projects)) === true;
+}
+
+function normalizeDeviceTransferCode(value) {
+  const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return compact.length === 12 ? compact.match(/.{1,4}/g).join("-") : "";
+}
+
+async function requestDeviceTransfer(path, body) {
+  const response = await fetch(`/api/device-transfer/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.ok) {
+    throw new Error(data?.error || "Device Transfer is temporarily unavailable.");
+  }
+  return data;
+}
+
+async function cloneSnapshotForDeviceTransfer(snapshot, runtimeFiles, transferState) {
+  const sourceFiles = Array.isArray(snapshot?.files) ? snapshot.files : [];
+  const files = [];
+  for (const sourceFile of sourceFiles) {
+    const file = {
+      name: String(sourceFile?.name || "file.txt"),
+      type: String(sourceFile?.type || "txt"),
+      mediaType: String(sourceFile?.mediaType || getProjectMediaKind(sourceFile) || ""),
+      mediaSize: Number(sourceFile?.mediaSize || 0) || 0,
+      mediaMimeType: String(sourceFile?.mediaMimeType || ""),
+      content: String(sourceFile?.content || ""),
+      active: Boolean(sourceFile?.active),
+    };
+    if (file.mediaType) {
+      const runtimeFile = (Array.isArray(runtimeFiles) ? runtimeFiles : []).find(
+        (candidate) => String(candidate?.name || "") === file.name,
+      );
+      const storageId = String(sourceFile?.mediaStorageId || runtimeFile?.mediaStorageId || "");
+      let encoded = file.content.startsWith("data:") ? file.content : "";
+      if (!encoded && storageId && transferState.mediaCache.has(storageId)) {
+        encoded = transferState.mediaCache.get(storageId) || "";
+      }
+      if (!encoded) {
+        let blob = runtimeFile?.mediaBlob instanceof Blob ? runtimeFile.mediaBlob : null;
+        if (!blob && storageId) {
+          try {
+            blob = await readPersistedMediaBlob(storageId);
+          } catch (_error) {
+            blob = null;
+          }
+        }
+        if (blob instanceof Blob) {
+          if (transferState.mediaBytes + blob.size <= MAX_DEVICE_TRANSFER_MEDIA_BYTES) {
+            encoded = await readMediaBlobAsDataUrl(blob);
+            transferState.mediaBytes += blob.size;
+          } else {
+            transferState.skippedMedia += 1;
+          }
+        } else if (!file.content) {
+          transferState.skippedMedia += 1;
+        }
+        if (storageId) transferState.mediaCache.set(storageId, encoded);
+      } else {
+        transferState.mediaBytes += Math.ceil(encoded.length * 0.75);
+        if (transferState.mediaBytes > MAX_DEVICE_TRANSFER_MEDIA_BYTES) {
+          encoded = "";
+          transferState.skippedMedia += 1;
+        }
+      }
+      if (
+        !encoded &&
+        file.content &&
+        !file.content.startsWith("data:") &&
+        !file.content.startsWith("blob:")
+      ) {
+        encoded = file.content;
+      }
+      file.content = encoded;
+      if (!file.content) continue;
+    }
+    files.push(file);
+  }
+  return {
+    version: 1,
+    files,
+    activeFileName: String(snapshot?.activeFileName || ""),
+    previewTarget: snapshot?.previewTarget || null,
+    savedAt: Number(snapshot?.savedAt || Date.now()) || Date.now(),
+  };
+}
+
+async function createDeviceTransferPayload() {
+  const transferState = { mediaBytes: 0, skippedMedia: 0, mediaCache: new Map() };
+  const currentProject = await cloneSnapshotForDeviceTransfer(
+    serializeProjectState(),
+    projectFiles,
+    transferState,
+  );
+  if (!currentProject.files.length) {
+    throw new Error("The current workspace only contains media that is too large to transfer. Use ZIP export instead.");
+  }
+  const savedProjects = [];
+  for (const project of getSavedProjects()) {
+    if (!project?.snapshot) continue;
+    savedProjects.push({
+      id: String(project.id || ""),
+      name: String(project.name || "Transferred project"),
+      updatedAt: Number(project.updatedAt || Date.now()) || Date.now(),
+      snapshot: await cloneSnapshotForDeviceTransfer(project.snapshot, [], transferState),
+    });
+  }
+  let editorSettings = {};
+  try {
+    editorSettings = JSON.parse(safeLocalStorage("get", "editorSettings") || "{}") || {};
+  } catch (_error) {
+    editorSettings = {};
+  }
+  return {
+    payload: {
+      version: 1,
+      createdAt: Date.now(),
+      currentProject,
+      savedProjects,
+      editorSettings,
+      activeSavedProjectName: activeSavedProjectName || "",
+    },
+    skippedMedia: transferState.skippedMedia,
+  };
+}
+
+function getDeviceTransferSummaryHtml(summary, note = "") {
+  return `
+    <div class="device-transfer-summary">
+      <div><strong>${Number(summary?.currentFiles || 0)}</strong><span>workspace files</span></div>
+      <div><strong>${Number(summary?.savedProjects || 0)}</strong><span>saved projects</span></div>
+      <div><strong>${summary?.settings ? "Yes" : "No"}</strong><span>editor settings</span></div>
+      <div><strong>${Number(summary?.mediaFiles || 0)}</strong><span>media files</span></div>
+    </div>
+    ${note ? `<p class="device-transfer-note">${escapeHtml(note)}</p>` : ""}
+  `;
+}
+
+function showDeviceTransferChoice() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "device-transfer-choice";
+    if (appDialogTitle) appDialogTitle.textContent = "DEVICE TRANSFER";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `Move your current workspace, saved projects, editor theme, and font settings between a laptop and phone.<br><span class="device-transfer-privacy"><i class="fa-solid fa-shield-halved"></i> The code works once and expires in 10 minutes. GitHub and collaboration sign-ins are never included.</span>`;
+    }
+    if (appDialogInput) appDialogInput.style.display = "none";
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="deviceTransferSendBtn" class="collab-choice-card device-transfer-choice-card">
+          <i class="fa-solid fa-arrow-up-from-bracket"></i><span>Send from this device</span><small>Create a one-time code</small>
+        </button>
+        <button type="button" id="deviceTransferReceiveBtn" class="collab-choice-card device-transfer-choice-card">
+          <i class="fa-solid fa-arrow-down-to-bracket"></i><span>Receive on this device</span><small>Enter a transfer code</small>
+        </button>
+        <button type="button" id="deviceTransferCancelBtn" class="run-button device-transfer-cancel" style="background:#6b7280"><strong>CANCEL</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    document.getElementById("deviceTransferSendBtn").onclick = () => closeAppDialog({ ok: true, action: "send" });
+    document.getElementById("deviceTransferReceiveBtn").onclick = () => closeAppDialog({ ok: true, action: "receive" });
+    document.getElementById("deviceTransferCancelBtn").onclick = () => closeAppDialog({ ok: false });
+    setTimeout(() => document.getElementById("deviceTransferSendBtn")?.focus(), 0);
+  });
+}
+
+function showDeviceTransferCode(data, skippedMedia = 0) {
+  const code = normalizeDeviceTransferCode(data?.code);
+  const transferUrl = new URL("/frontend.html", window.location.origin);
+  transferUrl.searchParams.set("deviceTransfer", code);
+  if (appDialog) appDialog.dataset.dialogKind = "device-transfer-code";
+  if (appDialogTitle) appDialogTitle.textContent = "TRANSFER READY";
+  if (appDialogMessage) {
+    appDialogMessage.innerHTML = `
+      <p class="device-transfer-instruction">On the other device, open CodX Editor, choose <strong>More → Device Transfer → Receive</strong>, then enter:</p>
+      <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
+      <p class="device-transfer-expiry"><i class="fa-regular fa-clock"></i> One use · expires in 10 minutes</p>
+      ${getDeviceTransferSummaryHtml(data?.summary, skippedMedia ? `${skippedMedia} large or unavailable media file${skippedMedia === 1 ? " was" : "s were"} skipped. Use ZIP export if you need those files.` : "")}
+    `;
+  }
+  if (appDialogInput) appDialogInput.style.display = "none";
+  if (appDialogActions) {
+    appDialogActions.innerHTML = `
+      <button type="button" id="deviceTransferCopyCodeBtn" class="run-button"><i class="fa-regular fa-copy"></i><strong>COPY CODE</strong></button>
+      <button type="button" id="deviceTransferCopyLinkBtn" class="run-button" style="background:#2563eb"><i class="fa-solid fa-link"></i><strong>COPY LINK</strong></button>
+      <button type="button" id="deviceTransferDoneBtn" class="run-button" style="background:#6b7280"><strong>DONE</strong></button>
+    `;
+  }
+  if (appDialog) appDialog.style.display = "flex";
+  const copyText = async (value, successMessage) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      showNotification(successMessage, "success");
+    } catch (_error) {
+      showNotification("Copying was blocked. Select the code in this dialog instead.", "error");
+    }
+  };
+  document.getElementById("deviceTransferCodeValue").onclick = () => copyText(code, "Transfer code copied.");
+  document.getElementById("deviceTransferCopyCodeBtn").onclick = () => copyText(code, "Transfer code copied.");
+  document.getElementById("deviceTransferCopyLinkBtn").onclick = () => copyText(transferUrl.toString(), "Transfer link copied.");
+  document.getElementById("deviceTransferDoneBtn").onclick = () => closeAppDialog();
+  setTimeout(() => document.getElementById("deviceTransferCopyCodeBtn")?.focus(), 0);
+}
+
+async function sendDeviceTransfer() {
+  try {
+    showNotification("Preparing your projects and settings…", "info");
+    const prepared = await createDeviceTransferPayload();
+    const data = await requestDeviceTransfer("create", { payload: prepared.payload });
+    showDeviceTransferCode(data, prepared.skippedMedia);
+  } catch (error) {
+    showNotification(error.message || "Unable to prepare the transfer.", "error");
+  }
+}
+
+function dataUrlToBlob(dataUrl) {
+  return fetch(dataUrl).then((response) => response.blob());
+}
+
+async function persistTransferredSnapshotMedia(snapshot, mediaCache) {
+  const files = Array.isArray(snapshot?.files) ? snapshot.files : [];
+  for (const file of files) {
+    const source = String(file?.content || "");
+    if (!getProjectMediaKind(file) || !source.startsWith("data:")) continue;
+    try {
+      let stored = mediaCache.get(source);
+      if (!stored) {
+        const blob = await dataUrlToBlob(source);
+        const mediaFile = {
+          ...file,
+          mediaStorageId: createMediaStorageId(),
+          mediaMimeType: blob.type || file.mediaMimeType,
+          mediaSize: blob.size,
+        };
+        await persistMediaBlob(mediaFile, blob);
+        stored = {
+          mediaStorageId: mediaFile.mediaStorageId,
+          mediaMimeType: mediaFile.mediaMimeType,
+          mediaSize: mediaFile.mediaSize,
+        };
+        mediaCache.set(source, stored);
+      }
+      file.mediaStorageId = stored.mediaStorageId;
+      file.mediaMimeType = stored.mediaMimeType;
+      file.mediaSize = stored.mediaSize;
+      file.content = "";
+    } catch (error) {
+      console.warn(`Unable to store transferred media ${file.name}.`, error);
+    }
+  }
+}
+
+async function importDeviceTransferPayload(payload) {
+  const mediaCache = new Map();
+  await persistTransferredSnapshotMedia(payload.currentProject, mediaCache);
+  for (const project of payload.savedProjects || []) {
+    await persistTransferredSnapshotMedia(project.snapshot, mediaCache);
+  }
+
+  const localProjects = getSavedProjects();
+  const projectsByName = new Map(
+    localProjects.map((project) => [String(project?.name || "").trim().toLowerCase(), project]),
+  );
+  const importedNames = new Set();
+  let importedCount = 0;
+  let newerLocalCount = 0;
+  for (const incoming of payload.savedProjects || []) {
+    const nameKey = String(incoming?.name || "").trim().toLowerCase();
+    if (!nameKey || !incoming?.snapshot) continue;
+    const local = projectsByName.get(nameKey);
+    if (!local || Number(incoming.updatedAt || 0) >= Number(local.updatedAt || 0)) {
+      projectsByName.set(nameKey, local ? { ...incoming, id: local.id } : incoming);
+      importedNames.add(nameKey);
+      importedCount += 1;
+    } else {
+      newerLocalCount += 1;
+    }
+  }
+  const mergedProjects = [...projectsByName.values()]
+    .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
+    .slice(0, MAX_SAVED_PROJECTS);
+  const usedProjectIds = new Set();
+  mergedProjects.forEach((project, index) => {
+    let id = String(project?.id || "").trim();
+    if (!id || usedProjectIds.has(id)) {
+      id = `project-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
+      project.id = id;
+    }
+    usedProjectIds.add(id);
+  });
+  if (!setSavedProjects(mergedProjects)) {
+    throw new Error("This device does not have enough browser storage for the imported project library.");
+  }
+
+  if (payload.editorSettings && Object.keys(payload.editorSettings).length) {
+    safeLocalStorage("set", "editorSettings", JSON.stringify(payload.editorSettings));
+    loadSettings();
+  }
+  const importedName = String(payload.activeSavedProjectName || "").trim();
+  activeSavedProjectName = importedNames.has(importedName.toLowerCase()) ? importedName : null;
+  if (!applyProjectState(payload.currentProject, "device transfer")) {
+    throw new Error("The transferred workspace could not be opened.");
+  }
+  if (activeSavedProjectName) {
+    hasUnsavedChanges = false;
+    updateProjectStatusUI();
+  }
+  return { importedCount, newerLocalCount };
+}
+
+async function receiveDeviceTransfer(prefilledCode = "") {
+  if (activeSessionId) {
+    showNotification("Leave the live collaboration session before importing data from another device.", "error");
+    return;
+  }
+  let code = normalizeDeviceTransferCode(prefilledCode);
+  if (!code) {
+    const dialog = await showAppPrompt(
+      "RECEIVE DEVICE DATA",
+      "Enter the 12-character code shown on your other device:",
+      "",
+      "ABCD-EFGH-JKLM",
+    );
+    if (!dialog?.ok) return;
+    code = normalizeDeviceTransferCode(dialog.value);
+  }
+  if (!code) {
+    showNotification("Enter a valid transfer code in the format ABCD-EFGH-JKLM.", "error");
+    return;
+  }
+  try {
+    const preview = await requestDeviceTransfer("preview", { code });
+    const warning = hasUnsavedChanges
+      ? "Your current workspace has unsaved changes and will be replaced. Saved projects are merged, and the newer copy wins when names match."
+      : "The current workspace will be replaced. Saved projects are merged, and the newer copy wins when names match.";
+    const confirm = await showAppConfirmHtml(
+      "IMPORT FROM DEVICE",
+      `${getDeviceTransferSummaryHtml(preview.summary)}<p class="device-transfer-warning">${escapeHtml(warning)}</p>`,
+      "IMPORT DATA",
+      "CANCEL",
+    );
+    if (!confirm?.ok) return;
+    const claimed = await requestDeviceTransfer("claim", { code });
+    const result = await importDeviceTransferPayload(claimed.payload);
+    const keptNote = result.newerLocalCount
+      ? ` ${result.newerLocalCount} newer project${result.newerLocalCount === 1 ? "" : "s"} already on this device ${result.newerLocalCount === 1 ? "was" : "were"} kept.`
+      : "";
+    showNotification(`Device data imported. ${result.importedCount} saved project${result.importedCount === 1 ? "" : "s"} added or updated.${keptNote}`, "success");
+  } catch (error) {
+    showNotification(error.message || "Unable to import data from that device.", "error");
+  }
+}
+
+async function handleDeviceTransfer() {
+  const choice = await showDeviceTransferChoice();
+  if (!choice?.ok) return;
+  if (choice.action === "send") await sendDeviceTransfer();
+  if (choice.action === "receive") await receiveDeviceTransfer();
+}
+
+function maybeOpenDeviceTransferFromUrl() {
+  const url = new URL(window.location.href);
+  const code = normalizeDeviceTransferCode(url.searchParams.get("deviceTransfer"));
+  if (!code) return;
+  url.searchParams.delete("deviceTransfer");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  setTimeout(() => receiveDeviceTransfer(code), 250);
 }
 
 function saveCurrentProjectToLibrary(projectName) {
@@ -21690,6 +22065,7 @@ window.addEventListener("load", () => {
     .then(() => {
       updateProjectStatusUI();
       updatePreview();
+      maybeOpenDeviceTransferFromUrl();
     });
 });
 
@@ -21719,6 +22095,9 @@ if (projectStatusSaveBtn) {
 }
 if (openSavedProjectsBtn) {
   openSavedProjectsBtn.addEventListener("click", () => renderProjectLibrary("saved"));
+}
+if (deviceTransferBtn) {
+  deviceTransferBtn.addEventListener("click", handleDeviceTransfer);
 }
 if (templatesBtn) {
   templatesBtn.addEventListener("click", () => renderProjectLibrary("templates"));
