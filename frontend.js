@@ -142,6 +142,48 @@ const commandPaletteModal = document.getElementById("commandPaletteModal");
 const commandPaletteInput = document.getElementById("commandPaletteInput");
 const commandPaletteResults = document.getElementById("commandPaletteResults");
 const commandPaletteStatus = document.getElementById("commandPaletteStatus");
+const mobileWorkspaceTabs = document.querySelector(".mobile-workspace-tabs");
+const mobileWorkspaceButtons = [...document.querySelectorAll("[data-mobile-pane]")];
+
+const COMPACT_WORKSPACE_QUERY = "(max-width: 900px)";
+
+function isCompactWorkspaceLayout() {
+  return window.matchMedia(COMPACT_WORKSPACE_QUERY).matches;
+}
+
+function setMobileWorkspacePane(pane, { focus = false } = {}) {
+  const nextPane = ["files", "editor", "preview"].includes(pane) ? pane : "editor";
+  document.body.classList.remove("mobile-pane-files", "mobile-pane-editor", "mobile-pane-preview");
+  document.body.classList.add(`mobile-pane-${nextPane}`);
+  mobileWorkspaceButtons.forEach((button) => {
+    const selected = button.dataset.mobilePane === nextPane;
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+    button.tabIndex = selected ? 0 : -1;
+  });
+  if (nextPane === "preview") {
+    requestAnimationFrame(() => updatePreviewDeviceScale());
+  } else if (focus && nextPane === "editor") {
+    requestAnimationFrame(() => document.getElementById("activeEditor")?.focus({ preventScroll: true }));
+  }
+}
+
+mobileWorkspaceTabs?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-pane]");
+  if (!button) return;
+  setMobileWorkspacePane(button.dataset.mobilePane, { focus: button.dataset.mobilePane === "editor" });
+});
+
+mobileWorkspaceTabs?.addEventListener("keydown", (event) => {
+  if (!isCompactWorkspaceLayout() || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  event.preventDefault();
+  const currentIndex = mobileWorkspaceButtons.findIndex((button) => button.getAttribute("aria-selected") === "true");
+  const direction = event.key === "ArrowRight" ? 1 : -1;
+  const nextButton = mobileWorkspaceButtons[(currentIndex + direction + mobileWorkspaceButtons.length) % mobileWorkspaceButtons.length];
+  setMobileWorkspacePane(nextButton.dataset.mobilePane);
+  nextButton.focus();
+});
+
+window.codxSetMobileWorkspacePane = setMobileWorkspacePane;
 
 
 function getModalDoneBtn() {
@@ -4874,6 +4916,7 @@ let projectFiles = [
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
+            <li>On phones and portrait tablets, use Files, Editor, and Preview tabs instead of squeezing every panel onto one screen</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -7947,6 +7990,7 @@ function renderFileList(options = {}) {
       if (e.target.closest(".delete-file") || e.target.closest(".rename-file") || e.target.closest(".file-visibility-action"))
         return;
       switchFile(file.name);
+      if (isCompactWorkspaceLayout()) setMobileWorkspacePane("editor", { focus: true });
     });
     renameBtn.addEventListener("click", () => renameFile(file.name));
     deleteBtn.addEventListener("click", () => deleteFile(file.name));
@@ -21340,6 +21384,20 @@ function stopDragging() {
 // Reset on window resize
 window.addEventListener("resize", () => {
   if (!isDragging) {
+    if (isCompactWorkspaceLayout()) {
+      editorsPanel.style.width = "";
+      editorsPanel.style.height = "";
+      editorsPanel.style.flex = "";
+      if (previewPanel) {
+        previewPanel.style.width = "";
+        previewPanel.style.height = "";
+        previewPanel.style.flex = "";
+      }
+      if (document.body.classList.contains("mobile-pane-preview")) {
+        requestAnimationFrame(() => updatePreviewDeviceScale());
+      }
+      return;
+    }
     if (isStackedEditorLayout()) {
       editorsPanel.style.width = "100%";
       if (!editorsPanel.style.height) {

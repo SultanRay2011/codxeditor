@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="/theme.css" />
     <link rel="stylesheet" href="/frontend.css?v=20260714-template-gallery6" />
   </head>
-  <body>
+  <body class="mobile-pane-editor">
     <a
       href="#activeEditor"
       style="
@@ -290,9 +290,24 @@
       </div>
     </header>
 
+    <nav class="mobile-workspace-tabs" role="tablist" aria-label="Workspace view">
+      <button type="button" role="tab" data-mobile-pane="files" aria-selected="false" aria-controls="fileExplorerPanel" tabindex="-1">
+        <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
+        <strong>FILES</strong>
+      </button>
+      <button type="button" role="tab" data-mobile-pane="editor" aria-selected="true" aria-controls="codeEditorPanel">
+        <i class="fa-solid fa-code" aria-hidden="true"></i>
+        <strong>EDITOR</strong>
+      </button>
+      <button type="button" role="tab" data-mobile-pane="preview" aria-selected="false" aria-controls="previewPanel" tabindex="-1">
+        <i class="fa-solid fa-eye" aria-hidden="true"></i>
+        <strong>PREVIEW</strong>
+      </button>
+    </nav>
+
     <div class="editor-container">
       <div class="editors">
-        <div class="file-explorer">
+        <div id="fileExplorerPanel" class="file-explorer">
           <div
             class="file-toolbar"
             style="
@@ -343,7 +358,7 @@
           </div>
         </div>
 
-        <div class="code-container">
+        <div id="codeEditorPanel" class="code-container">
           <div class="line-numbers" id="lineNumbers">1</div>
           <div class="editor-wrapper">
             <pre id="highlightLayer" aria-hidden="true"></pre>
@@ -488,7 +503,7 @@
 
       <div class="divider"></div>
 
-      <div class="preview">
+      <div id="previewPanel" class="preview">
         <div class="preview-header">
           <img id="previewFavicon" alt="" hidden />
           <div class="preview-header-meta">
