@@ -4955,7 +4955,7 @@ let projectFiles = [
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace adapts by orientation: landscape tablets use the laptop-style split layout, while portrait tablets use the mobile workspace</li>
             <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on laptops and landscape tablets, use the full split view and header controls</li>
-            <li>The More button uses a compact two-column menu on phones and portrait tablets, then returns to the full laptop panel in tablet landscape</li>
+            <li>The More button uses the same compact two-column menu on phones and tablets in either orientation, while tablet landscape keeps the laptop-style editor workspace</li>
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
