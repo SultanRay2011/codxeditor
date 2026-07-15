@@ -2978,7 +2978,7 @@ iframe {
   white-space: nowrap;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 699px), (max-width: 1100px) and (orientation: portrait), (max-width: 950px) and (max-height: 500px) {
   body {
     height: 100dvh;
   }
@@ -5642,7 +5642,7 @@ iframe {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 699px), (max-width: 1100px) and (orientation: portrait), (max-width: 950px) and (max-height: 500px) {
   .editor-container {
     gap: 6px;
     padding: 6px;
@@ -7251,12 +7251,12 @@ iframe {
   }
 }
 
-/* Compact workspace: full-width panes for phones and portrait tablets. */
+/* Compact workspace: phones and portrait tablets; landscape tablets keep the laptop layout. */
 .mobile-workspace-tabs {
   display: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 699px), (max-width: 1100px) and (orientation: portrait), (max-width: 950px) and (max-height: 500px) {
   body {
     width: 100%;
     min-width: 0;

@@ -145,7 +145,8 @@ const commandPaletteStatus = document.getElementById("commandPaletteStatus");
 const mobileWorkspaceTabs = document.querySelector(".mobile-workspace-tabs");
 const mobileWorkspaceButtons = [...document.querySelectorAll("[data-mobile-pane]")];
 
-const COMPACT_WORKSPACE_QUERY = "(max-width: 900px)";
+const COMPACT_WORKSPACE_QUERY =
+  "(max-width: 699px), (max-width: 1100px) and (orientation: portrait), (max-width: 950px) and (max-height: 500px)";
 
 function isCompactWorkspaceLayout() {
   return window.matchMedia(COMPACT_WORKSPACE_QUERY).matches;
@@ -4952,9 +4953,9 @@ let projectFiles = [
             <li>Press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and commands from the Command Palette</li>
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
-            <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
-            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on desktop, use the header Console toggle, Command Palette, or keyboard shortcut</li>
-            <li>The More button opens a compact two-column menu on phones and tablets so every option fits comfortably</li>
+            <li>The workspace adapts by orientation: landscape tablets use the laptop-style split layout, while portrait tablets use the mobile workspace</li>
+            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on laptops and landscape tablets, use the full split view and header controls</li>
+            <li>The More button uses a compact two-column menu on phones and portrait tablets, then returns to the full laptop panel in tablet landscape</li>
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
