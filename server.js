@@ -3,6 +3,7 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const QRCode = require("qrcode");
 const { Server } = require("socket.io");
 
 loadEnvFile();
@@ -415,12 +416,43 @@ function sanitizeDeviceTransferPayload(value) {
       }
     });
   }
+  const hasWorkspaceSettings = Boolean(
+    value?.workspaceSettings &&
+    typeof value.workspaceSettings === "object" &&
+    !Array.isArray(value.workspaceSettings),
+  );
+  const sourceWorkspaceSettings = hasWorkspaceSettings ? value.workspaceSettings : {};
+  const previewDevice = sourceWorkspaceSettings.previewDevice && typeof sourceWorkspaceSettings.previewDevice === "object"
+    ? {
+        mode: ["responsive", "phone", "tablet", "laptop", "desktop", "custom"].includes(
+          String(sourceWorkspaceSettings.previewDevice.mode || "").toLowerCase(),
+        )
+          ? String(sourceWorkspaceSettings.previewDevice.mode).toLowerCase()
+          : "responsive",
+        width: Math.max(0, Math.min(3840, Number(sourceWorkspaceSettings.previewDevice.width || 0) || 0)),
+        height: Math.max(0, Math.min(2160, Number(sourceWorkspaceSettings.previewDevice.height || 0) || 0)),
+      }
+    : { mode: "responsive", width: 0, height: 0 };
+  const workspaceSettings = hasWorkspaceSettings ? {
+    autoRun: Boolean(sourceWorkspaceSettings.autoRun),
+    consoleVisible: Boolean(sourceWorkspaceSettings.consoleVisible),
+    previewZoom: Math.max(50, Math.min(200, Number(sourceWorkspaceSettings.previewZoom || 100) || 100)),
+    previewDevice,
+    previewGrid: Boolean(sourceWorkspaceSettings.previewGrid),
+    previewBreakpoints: Boolean(sourceWorkspaceSettings.previewBreakpoints),
+    previewColorScheme: ["system", "light", "dark"].includes(
+      String(sourceWorkspaceSettings.previewColorScheme || "").toLowerCase(),
+    )
+      ? String(sourceWorkspaceSettings.previewColorScheme).toLowerCase()
+      : "system",
+  } : {};
   return {
     version: 1,
     createdAt: Number(value?.createdAt || Date.now()) || Date.now(),
     currentProject,
     savedProjects,
     editorSettings,
+    workspaceSettings,
     activeSavedProjectName: String(value?.activeSavedProjectName || "").trim().slice(0, 120),
   };
 }
@@ -428,9 +460,9 @@ function sanitizeDeviceTransferPayload(value) {
 function getDeviceTransferSummary(payload) {
   const currentFiles = Array.isArray(payload?.currentProject?.files) ? payload.currentProject.files.length : 0;
   const savedProjects = Array.isArray(payload?.savedProjects) ? payload.savedProjects.length : 0;
-  const settingsCount = payload?.editorSettings && typeof payload.editorSettings === "object"
-    ? Object.keys(payload.editorSettings).length
-    : 0;
+  const settingsCount =
+    (payload?.editorSettings && typeof payload.editorSettings === "object" ? Object.keys(payload.editorSettings).length : 0) +
+    (payload?.workspaceSettings && typeof payload.workspaceSettings === "object" ? Object.keys(payload.workspaceSettings).length : 0);
   const mediaFiles = [payload?.currentProject, ...(payload?.savedProjects || []).map((project) => project.snapshot)]
     .reduce((total, snapshot) => total + (snapshot?.files || []).filter((file) => file.mediaType).length, 0);
   return { currentFiles, savedProjects, settings: settingsCount > 0, mediaFiles };
@@ -494,6 +526,10 @@ app.use(
   "/vendor/webcontainer",
   express.static(path.join(__dirname, "node_modules", "@webcontainer", "api", "dist")),
 );
+app.get("/vendor/jsqr.js", (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.type("application/javascript").sendFile(path.join(__dirname, "node_modules", "jsqr", "dist", "jsQR.js"));
+});
 app.get("/404.html", (_req, res) => {
   res.status(404).sendFile(path.join(__dirname, "404.html"));
 });
@@ -503,7 +539,7 @@ app.get("/404-for-preview.html", (_req, res) => {
 app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
 
-app.post("/api/device-transfer/create", (req, res) => {
+app.post("/api/device-transfer/create", async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store");
     const payload = sanitizeDeviceTransferPayload(req.body?.payload);
@@ -532,12 +568,26 @@ app.post("/api/device-transfer/create", (req, res) => {
     const compact = createDeviceTransferCode();
     const expiresAt = Date.now() + DEVICE_TRANSFER_TTL_MS;
     const summary = getDeviceTransferSummary(payload);
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+    const forwardedHost = String(req.headers["x-forwarded-host"] || "").split(",")[0].trim();
+    const protocol = forwardedProto || req.protocol || "http";
+    const host = forwardedHost || req.get("host") || "localhost:3000";
+    const transferUrl = new URL("/frontend.html", `${protocol}://${host}`);
+    transferUrl.searchParams.set("deviceTransfer", formatDeviceTransferCode(compact));
+    const qrDataUrl = await QRCode.toDataURL(transferUrl.toString(), {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 320,
+      color: { dark: "#073b1d", light: "#ffffff" },
+    });
     deviceTransfers.set(compact, { payload, expiresAt, summary, byteSize });
     res.status(201).json({
       ok: true,
       code: formatDeviceTransferCode(compact),
       expiresAt,
       summary,
+      transferUrl: transferUrl.toString(),
+      qrDataUrl,
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message || "Unable to prepare the device transfer." });

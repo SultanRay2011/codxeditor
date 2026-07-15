@@ -2784,6 +2784,8 @@ let pairPartnerPresence = null;
 let joinRequestContext = { sessionId: "", name: "" };
 let lastAnnouncementText = "";
 let activeDialogResolver = null;
+let deviceTransferScannerStream = null;
+let deviceTransferScannerFrame = 0;
 let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
@@ -2796,6 +2798,7 @@ const PROJECT_LIBRARY_ARCHIVE_FORMAT = "codx-project-library";
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
+const WORKSPACE_SETTINGS_KEY = "codxWorkspaceSettings";
 const AUTOSAVE_RESTORE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const DEVICE_ID_KEY = "codxDeviceId";
 const COLLAB_MANAGE_TUTORIAL_KEY = "codxCollabManageTutorialSeen";
@@ -4191,6 +4194,7 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
 }
 
 function closeAppDialog(result = null) {
+  stopDeviceTransferScanner();
   if (appDialog) appDialog.style.display = "none";
   if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
@@ -4973,7 +4977,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to move the current workspace, saved-project library, media, theme, and font settings between a laptop and phone with a one-time 10-minute code or link</li>
+            <li>Use Device Transfer to move the workspace, saved projects, media, complete editor settings, and preview preferences with a one-time code, link, or scannable QR code</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -5190,6 +5194,78 @@ function getPreviewDeviceSummary() {
   };
 }
 
+function getWorkspaceSettingsSnapshot() {
+  return {
+    autoRun: Boolean(autoRunCheckbox?.checked),
+    consoleVisible: Boolean(showConsoleCheckbox?.checked),
+    previewZoom: previewZoomPercent,
+    previewDevice: {
+      mode: previewDeviceState.key,
+      width: previewDeviceState.width,
+      height: previewDeviceState.height,
+    },
+    previewGrid: previewGridEnabled,
+    previewBreakpoints: previewBreakpointIndicatorEnabled,
+    previewColorScheme: previewColorSchemeMode,
+  };
+}
+
+function persistWorkspaceSettings() {
+  safeLocalStorage("set", WORKSPACE_SETTINGS_KEY, JSON.stringify(getWorkspaceSettingsSnapshot()));
+}
+
+function applyWorkspaceSettings(settings, { persist = true } = {}) {
+  if (!settings || typeof settings !== "object") return false;
+  if (typeof settings.autoRun === "boolean" && autoRunCheckbox) {
+    autoRunCheckbox.checked = settings.autoRun;
+  }
+  if (typeof settings.consoleVisible === "boolean" && showConsoleCheckbox) {
+    showConsoleCheckbox.checked = settings.consoleVisible;
+    showConsoleCheckbox.dispatchEvent(new Event("change"));
+    if (isCompactWorkspaceLayout() && settings.consoleVisible) {
+      setMobileWorkspacePane("console");
+    }
+  }
+
+  const device = settings.previewDevice;
+  const mode = String(device?.mode || "responsive").toLowerCase();
+  const safeWidth = Math.round(Number(device?.width || 0));
+  const safeHeight = Math.round(Number(device?.height || 0));
+  if (
+    mode !== "responsive" &&
+    Number.isFinite(safeWidth) &&
+    Number.isFinite(safeHeight) &&
+    safeWidth >= 240 && safeWidth <= 3840 &&
+    safeHeight >= 240 && safeHeight <= 2160
+  ) {
+    previewDeviceState = {
+      key: ["phone", "tablet", "laptop", "desktop", "custom"].includes(mode) ? mode : "custom",
+      label: PREVIEW_DEVICE_PRESETS[mode]?.label || "Custom",
+      width: safeWidth,
+      height: safeHeight,
+    };
+    applyPreviewDeviceState();
+  } else {
+    setPreviewDevicePreset("responsive");
+  }
+
+  setPreviewZoom(settings.previewZoom ?? 100);
+  setPreviewGridEnabled(Boolean(settings.previewGrid));
+  setPreviewBreakpointIndicatorEnabled(Boolean(settings.previewBreakpoints));
+  setPreviewColorScheme(settings.previewColorScheme || "system");
+  if (persist) persistWorkspaceSettings();
+  return true;
+}
+
+function loadWorkspaceSettings() {
+  try {
+    const settings = JSON.parse(safeLocalStorage("get", WORKSPACE_SETTINGS_KEY) || "null");
+    if (settings) applyWorkspaceSettings(settings, { persist: false });
+  } catch (error) {
+    console.warn("Unable to load workspace settings.", error);
+  }
+}
+
 function updatePreviewDeviceScale() {
   if (!previewViewportStage || !previewDeviceShell || !previewDeviceFrame) return;
   const { width, height } = previewDeviceState;
@@ -5236,12 +5312,14 @@ function setPreviewDevicePreset(name) {
   if (key === "responsive") {
     previewDeviceState = { key, label: "Responsive", width: null, height: null };
     applyPreviewDeviceState();
+    persistWorkspaceSettings();
     return true;
   }
   const preset = PREVIEW_DEVICE_PRESETS[key];
   if (!preset) return false;
   previewDeviceState = { key, ...preset };
   applyPreviewDeviceState();
+  persistWorkspaceSettings();
   return true;
 }
 
@@ -5265,6 +5343,7 @@ function setCustomPreviewViewport(width, height) {
     height: safeHeight,
   };
   applyPreviewDeviceState();
+  persistWorkspaceSettings();
   return true;
 }
 
@@ -5276,6 +5355,7 @@ function rotatePreviewDevice() {
     height: previewDeviceState.width,
   };
   applyPreviewDeviceState();
+  persistWorkspaceSettings();
   return true;
 }
 
@@ -5297,6 +5377,7 @@ function setPreviewGridEnabled(enabled) {
   previewGridEnabled = Boolean(enabled);
   previewDeviceFrame?.classList.toggle("show-layout-grid", previewGridEnabled);
   setDeveloperShortcutPressed("grid toggle", previewGridEnabled);
+  persistWorkspaceSettings();
 }
 
 function getPreviewBreakpoint(width) {
@@ -5320,6 +5401,7 @@ function setPreviewBreakpointIndicatorEnabled(enabled) {
   previewBreakpointIndicatorEnabled = Boolean(enabled);
   setDeveloperShortcutPressed("breakpoints toggle", previewBreakpointIndicatorEnabled);
   updatePreviewBreakpointIndicator();
+  persistWorkspaceSettings();
 }
 
 function collectPreferredColorSchemeRules(ruleList, mode, output) {
@@ -5373,6 +5455,7 @@ function setPreviewColorScheme(mode) {
     button.setAttribute("aria-pressed", normalized === "system" ? "false" : "true");
     button.title = `Preview color scheme: ${normalized}`;
   }
+  persistWorkspaceSettings();
   return true;
 }
 
@@ -5995,6 +6078,7 @@ function setPreviewZoom(percent) {
   previewZoomPercent = Math.max(50, Math.min(200, Math.round(Number(percent) / 25) * 25));
   updatePreviewZoomUI();
   applyPreviewZoom();
+  persistWorkspaceSettings();
 }
 
 function openPreviewZoomModal() {
@@ -6924,6 +7008,19 @@ async function createDeviceTransferPayload() {
       currentProject,
       savedProjects,
       editorSettings,
+      workspaceSettings: {
+        autoRun: Boolean(autoRunCheckbox?.checked),
+        consoleVisible: Boolean(showConsoleCheckbox?.checked),
+        previewZoom: previewZoomPercent,
+        previewDevice: {
+          mode: previewDeviceState.key,
+          width: previewDeviceState.width,
+          height: previewDeviceState.height,
+        },
+        previewGrid: previewGridEnabled,
+        previewBreakpoints: previewBreakpointIndicatorEnabled,
+        previewColorScheme: previewColorSchemeMode,
+      },
       activeSavedProjectName: activeSavedProjectName || "",
     },
     skippedMedia: transferState.skippedMedia,
@@ -6935,7 +7032,7 @@ function getDeviceTransferSummaryHtml(summary, note = "") {
     <div class="device-transfer-summary">
       <div><strong>${Number(summary?.currentFiles || 0)}</strong><span>workspace files</span></div>
       <div><strong>${Number(summary?.savedProjects || 0)}</strong><span>saved projects</span></div>
-      <div><strong>${summary?.settings ? "Yes" : "No"}</strong><span>editor settings</span></div>
+      <div><strong>${summary?.settings ? "Yes" : "No"}</strong><span>settings bundle</span></div>
       <div><strong>${Number(summary?.mediaFiles || 0)}</strong><span>media files</span></div>
     </div>
     ${note ? `<p class="device-transfer-note">${escapeHtml(note)}</p>` : ""}
@@ -6948,7 +7045,7 @@ function showDeviceTransferChoice() {
     if (appDialog) appDialog.dataset.dialogKind = "device-transfer-choice";
     if (appDialogTitle) appDialogTitle.textContent = "DEVICE TRANSFER";
     if (appDialogMessage) {
-      appDialogMessage.innerHTML = `Move your current workspace, saved projects, editor theme, and font settings between a laptop and phone.<br><span class="device-transfer-privacy"><i class="fa-solid fa-shield-halved"></i> The code works once and expires in 10 minutes. GitHub and collaboration sign-ins are never included.</span>`;
+      appDialogMessage.innerHTML = `Move your workspace, saved projects, complete editor settings, and preview preferences between a laptop and phone.<br><span class="device-transfer-privacy"><i class="fa-solid fa-shield-halved"></i> The code works once and expires in 10 minutes. GitHub and collaboration sign-ins are never included.</span>`;
     }
     if (appDialogInput) appDialogInput.style.display = "none";
     if (appDialogActions) {
@@ -6957,7 +7054,10 @@ function showDeviceTransferChoice() {
           <i class="fa-solid fa-arrow-up-from-bracket"></i><span>Send from this device</span><small>Create a one-time code</small>
         </button>
         <button type="button" id="deviceTransferReceiveBtn" class="collab-choice-card device-transfer-choice-card">
-          <i class="fa-solid fa-arrow-down-to-bracket"></i><span>Receive on this device</span><small>Enter a transfer code</small>
+          <i class="fa-solid fa-keyboard"></i><span>Enter transfer code</span><small>Type the code from another device</small>
+        </button>
+        <button type="button" id="deviceTransferScanBtn" class="collab-choice-card device-transfer-choice-card device-transfer-scan-card">
+          <i class="fa-solid fa-qrcode"></i><span>Scan QR code</span><small>Use the camera or a QR image</small>
         </button>
         <button type="button" id="deviceTransferCancelBtn" class="run-button device-transfer-cancel" style="background:#6b7280"><strong>CANCEL</strong></button>
       `;
@@ -6965,6 +7065,7 @@ function showDeviceTransferChoice() {
     if (appDialog) appDialog.style.display = "flex";
     document.getElementById("deviceTransferSendBtn").onclick = () => closeAppDialog({ ok: true, action: "send" });
     document.getElementById("deviceTransferReceiveBtn").onclick = () => closeAppDialog({ ok: true, action: "receive" });
+    document.getElementById("deviceTransferScanBtn").onclick = () => closeAppDialog({ ok: true, action: "scan" });
     document.getElementById("deviceTransferCancelBtn").onclick = () => closeAppDialog({ ok: false });
     setTimeout(() => document.getElementById("deviceTransferSendBtn")?.focus(), 0);
   });
@@ -6974,11 +7075,14 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   const code = normalizeDeviceTransferCode(data?.code);
   const transferUrl = new URL("/frontend.html", window.location.origin);
   transferUrl.searchParams.set("deviceTransfer", code);
+  const shareUrl = String(data?.transferUrl || transferUrl.toString());
+  const qrImage = String(data?.qrDataUrl || "");
   if (appDialog) appDialog.dataset.dialogKind = "device-transfer-code";
   if (appDialogTitle) appDialogTitle.textContent = "TRANSFER READY";
   if (appDialogMessage) {
     appDialogMessage.innerHTML = `
-      <p class="device-transfer-instruction">On the other device, open CodX Editor, choose <strong>More → Device Transfer → Receive</strong>, then enter:</p>
+      <p class="device-transfer-instruction">Scan this QR code with the other device, or open CodX Editor and enter the one-time code:</p>
+      ${qrImage ? `<div class="device-transfer-qr"><img src="${escapeHtmlAttributeValue(qrImage)}" alt="QR code for this one-time device transfer"><span><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span></div>` : ""}
       <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
       <p class="device-transfer-expiry"><i class="fa-regular fa-clock"></i> One use · expires in 10 minutes</p>
       ${getDeviceTransferSummaryHtml(data?.summary, skippedMedia ? `${skippedMedia} large or unavailable media file${skippedMedia === 1 ? " was" : "s were"} skipped. Use ZIP export if you need those files.` : "")}
@@ -7003,7 +7107,7 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   };
   document.getElementById("deviceTransferCodeValue").onclick = () => copyText(code, "Transfer code copied.");
   document.getElementById("deviceTransferCopyCodeBtn").onclick = () => copyText(code, "Transfer code copied.");
-  document.getElementById("deviceTransferCopyLinkBtn").onclick = () => copyText(transferUrl.toString(), "Transfer link copied.");
+  document.getElementById("deviceTransferCopyLinkBtn").onclick = () => copyText(shareUrl, "Transfer link copied.");
   document.getElementById("deviceTransferDoneBtn").onclick = () => closeAppDialog();
   setTimeout(() => document.getElementById("deviceTransferCopyCodeBtn")?.focus(), 0);
 }
@@ -7017,6 +7121,204 @@ async function sendDeviceTransfer() {
   } catch (error) {
     showNotification(error.message || "Unable to prepare the transfer.", "error");
   }
+}
+
+function stopDeviceTransferScanner() {
+  if (deviceTransferScannerFrame) {
+    cancelAnimationFrame(deviceTransferScannerFrame);
+    deviceTransferScannerFrame = 0;
+  }
+  if (deviceTransferScannerStream) {
+    deviceTransferScannerStream.getTracks().forEach((track) => track.stop());
+    deviceTransferScannerStream = null;
+  }
+  const video = document.getElementById("deviceTransferScannerVideo");
+  if (video) video.srcObject = null;
+}
+
+function extractDeviceTransferCodeFromQr(value) {
+  const raw = String(value || "").trim();
+  const directCode = normalizeDeviceTransferCode(raw);
+  if (directCode) return directCode;
+  try {
+    const scannedUrl = new URL(raw);
+    return normalizeDeviceTransferCode(scannedUrl.searchParams.get("deviceTransfer"));
+  } catch (_error) {
+    return "";
+  }
+}
+
+function decodeDeviceTransferQrCanvas(canvas) {
+  if (typeof window.jsQR !== "function") {
+    throw new Error("The QR scanner did not load. Refresh CodX Editor and try again.");
+  }
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const result = window.jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: "attemptBoth",
+  });
+  return extractDeviceTransferCodeFromQr(result?.data || "");
+}
+
+function completeScannedDeviceTransfer(code) {
+  const normalizedCode = normalizeDeviceTransferCode(code);
+  if (!normalizedCode) return false;
+  stopDeviceTransferScanner();
+  closeAppDialog();
+  setTimeout(() => receiveDeviceTransfer(normalizedCode), 80);
+  return true;
+}
+
+async function scanDeviceTransferQrImage(file, canvas, status) {
+  if (!(file instanceof File) || !String(file.type || "").startsWith("image/")) {
+    throw new Error("Choose a PNG, JPG, WEBP, or other image containing the transfer QR code.");
+  }
+  let imageSource = null;
+  let objectUrl = "";
+  try {
+    if (typeof createImageBitmap === "function") {
+      imageSource = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      imageSource = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("That QR image could not be opened."));
+        image.src = objectUrl;
+      });
+    }
+    const sourceWidth = Number(imageSource.width || imageSource.naturalWidth || 0);
+    const sourceHeight = Number(imageSource.height || imageSource.naturalHeight || 0);
+    const scale = Math.min(1, 1400 / Math.max(sourceWidth, sourceHeight));
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas.getContext("2d", { willReadFrequently: true }).drawImage(
+      imageSource,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    const code = decodeDeviceTransferQrCanvas(canvas);
+    if (!completeScannedDeviceTransfer(code)) {
+      status.textContent = "No CodX transfer QR code was found in that image. Try a clearer image.";
+      status.dataset.state = "error";
+    }
+  } finally {
+    if (typeof imageSource?.close === "function") imageSource.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function startDeviceTransferCamera(video, canvas, status, startButton) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Camera scanning is not supported in this browser. Choose a QR image instead.");
+  }
+  stopDeviceTransferScanner();
+  status.textContent = "Requesting camera access…";
+  status.dataset.state = "loading";
+  deviceTransferScannerStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: "environment" } },
+    audio: false,
+  });
+  video.srcObject = deviceTransferScannerStream;
+  video.hidden = false;
+  video.muted = true;
+  video.setAttribute("playsinline", "");
+  await video.play();
+  startButton.innerHTML = '<i class="fa-solid fa-rotate"></i><strong>RESTART CAMERA</strong>';
+  status.textContent = "Point the camera at a CodX Device Transfer QR code.";
+  status.dataset.state = "scanning";
+  let lastScanAt = 0;
+  const scanFrame = (timestamp) => {
+    if (!deviceTransferScannerStream || !document.body.contains(video)) return;
+    if (video.readyState >= 2 && timestamp - lastScanAt >= 140) {
+      lastScanAt = timestamp;
+      const width = Number(video.videoWidth || 0);
+      const height = Number(video.videoHeight || 0);
+      if (width && height) {
+        const scale = Math.min(1, 900 / Math.max(width, height));
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        canvas.getContext("2d", { willReadFrequently: true }).drawImage(
+          video,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+        const code = decodeDeviceTransferQrCanvas(canvas);
+        if (completeScannedDeviceTransfer(code)) return;
+      }
+    }
+    deviceTransferScannerFrame = requestAnimationFrame(scanFrame);
+  };
+  deviceTransferScannerFrame = requestAnimationFrame(scanFrame);
+}
+
+function showDeviceTransferScanner() {
+  stopDeviceTransferScanner();
+  if (appDialog) appDialog.dataset.dialogKind = "device-transfer-scanner";
+  if (appDialogTitle) appDialogTitle.textContent = "SCAN TRANSFER QR CODE";
+  if (appDialogMessage) {
+    appDialogMessage.innerHTML = `
+      <div class="device-transfer-scanner">
+        <div class="device-transfer-scanner-stage">
+          <video id="deviceTransferScannerVideo" aria-label="QR code camera preview" hidden></video>
+          <div class="device-transfer-scanner-placeholder"><i class="fa-solid fa-qrcode"></i><strong>READY TO SCAN</strong><span>Use the camera or choose a saved QR image.</span></div>
+          <div class="device-transfer-scanner-frame" aria-hidden="true"></div>
+        </div>
+        <p id="deviceTransferScannerStatus" class="device-transfer-scanner-status">Camera access starts only after you press Start Camera.</p>
+        <canvas id="deviceTransferScannerCanvas" hidden></canvas>
+        <input id="deviceTransferQrImageInput" type="file" accept="image/*" hidden>
+      </div>
+    `;
+  }
+  if (appDialogInput) appDialogInput.style.display = "none";
+  if (appDialogActions) {
+    appDialogActions.innerHTML = `
+      <button type="button" id="deviceTransferStartCameraBtn" class="run-button"><i class="fa-solid fa-camera"></i><strong>START CAMERA</strong></button>
+      <button type="button" id="deviceTransferChooseQrBtn" class="run-button" style="background:#2563eb"><i class="fa-solid fa-image"></i><strong>CHOOSE QR IMAGE</strong></button>
+      <button type="button" id="deviceTransferTypeCodeBtn" class="run-button" style="background:#7c3aed"><i class="fa-solid fa-keyboard"></i><strong>ENTER CODE</strong></button>
+      <button type="button" id="deviceTransferScannerCancelBtn" class="run-button" style="background:#6b7280"><strong>CANCEL</strong></button>
+    `;
+  }
+  if (appDialog) appDialog.style.display = "flex";
+  const video = document.getElementById("deviceTransferScannerVideo");
+  const canvas = document.getElementById("deviceTransferScannerCanvas");
+  const status = document.getElementById("deviceTransferScannerStatus");
+  const imageInput = document.getElementById("deviceTransferQrImageInput");
+  const startButton = document.getElementById("deviceTransferStartCameraBtn");
+  startButton.onclick = async () => {
+    try {
+      await startDeviceTransferCamera(video, canvas, status, startButton);
+    } catch (error) {
+      stopDeviceTransferScanner();
+      status.textContent = error.message || "The camera could not be started.";
+      status.dataset.state = "error";
+    }
+  };
+  document.getElementById("deviceTransferChooseQrBtn").onclick = () => imageInput.click();
+  imageInput.onchange = async () => {
+    const file = imageInput.files?.[0];
+    if (!file) return;
+    status.textContent = "Reading QR image…";
+    status.dataset.state = "loading";
+    try {
+      await scanDeviceTransferQrImage(file, canvas, status);
+    } catch (error) {
+      status.textContent = error.message || "That QR image could not be scanned.";
+      status.dataset.state = "error";
+    } finally {
+      imageInput.value = "";
+    }
+  };
+  document.getElementById("deviceTransferTypeCodeBtn").onclick = () => {
+    closeAppDialog();
+    setTimeout(() => receiveDeviceTransfer(), 80);
+  };
+  document.getElementById("deviceTransferScannerCancelBtn").onclick = () => closeAppDialog();
+  setTimeout(() => startButton?.focus(), 0);
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -7107,6 +7409,9 @@ async function importDeviceTransferPayload(payload) {
   if (!applyProjectState(payload.currentProject, "device transfer")) {
     throw new Error("The transferred workspace could not be opened.");
   }
+  if (payload.workspaceSettings && Object.keys(payload.workspaceSettings).length) {
+    applyWorkspaceSettings(payload.workspaceSettings);
+  }
   if (activeSavedProjectName) {
     hasUnsavedChanges = false;
     updateProjectStatusUI();
@@ -7162,6 +7467,7 @@ async function handleDeviceTransfer() {
   if (!choice?.ok) return;
   if (choice.action === "send") await sendDeviceTransfer();
   if (choice.action === "receive") await receiveDeviceTransfer();
+  if (choice.action === "scan") showDeviceTransferScanner();
 }
 
 function maybeOpenDeviceTransferFromUrl() {
@@ -9111,6 +9417,8 @@ if (zenShowFilesCheckbox) {
 }
 
 // PART 4 - UI CONTROLS
+autoRunCheckbox?.addEventListener("change", persistWorkspaceSettings);
+
 showConsoleCheckbox.addEventListener("change", () => {
   if (showConsoleCheckbox.disabled) {
     showConsoleCheckbox.checked = false;
@@ -9122,6 +9430,7 @@ showConsoleCheckbox.addEventListener("change", () => {
     runPreflightDiagnostics(diagnostics);
     renderDiagnosticConsoleEntries(diagnostics);
   }
+  persistWorkspaceSettings();
 });
 
 // PART 5 - PREVIEW & LINE NUMBERS
@@ -22052,6 +22361,7 @@ window.addEventListener("load", () => {
   initializeEditorPresence();
   const sessionFlowStarted = checkForSession();
   loadSettings();
+  loadWorkspaceSettings();
   renderFileList();
   initializeEditor();
   initializeAutomaticLocalization();

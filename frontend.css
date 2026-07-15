@@ -6406,9 +6406,13 @@ iframe {
     var(--bg-secondary) !important;
 }
 
+#appDialog[data-dialog-kind="device-transfer-choice"] > div {
+  width: min(760px, 94vw) !important;
+}
+
 #appDialog[data-dialog-kind="device-transfer-choice"] #appDialogActions {
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px !important;
   margin-top: 18px;
 }
@@ -6430,6 +6434,14 @@ iframe {
     radial-gradient(circle at 50% 0, rgba(255, 255, 255, .2), transparent 58%),
     linear-gradient(145deg, #1d4ed8, #2563eb);
   box-shadow: 0 14px 32px rgba(37, 99, 235, .28);
+}
+
+.device-transfer-choice-card.device-transfer-scan-card {
+  border-color: color-mix(in srgb, #7c3aed 76%, #fff 24%);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 255, 255, .2), transparent 58%),
+    linear-gradient(145deg, #6d28d9, #8b5cf6);
+  box-shadow: 0 14px 32px rgba(124, 58, 237, .28);
 }
 
 .device-transfer-choice-card i {
@@ -6483,6 +6495,28 @@ iframe {
   line-height: 1.6;
 }
 
+.device-transfer-qr {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin: 0 auto 12px;
+}
+
+.device-transfer-qr img {
+  width: min(190px, 55vw);
+  aspect-ratio: 1;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, .18);
+}
+
+.device-transfer-qr span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
 .device-transfer-code {
   width: 100%;
   padding: 17px 12px;
@@ -6524,12 +6558,88 @@ iframe {
 .device-transfer-summary strong { color: var(--accent-color); font-size: 18px; }
 .device-transfer-summary span { margin-top: 3px; color: var(--text-muted); font-size: 9px; line-height: 1.3; }
 
+#appDialog[data-dialog-kind="device-transfer-scanner"] > div {
+  width: min(650px, 94vw) !important;
+}
+
+#appDialog[data-dialog-kind="device-transfer-scanner"] #appDialogActions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px !important;
+}
+
+.device-transfer-scanner {
+  display: grid;
+  gap: 10px;
+}
+
+.device-transfer-scanner-stage {
+  position: relative;
+  min-height: 250px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, #7c3aed 42%, var(--border-color));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(124, 58, 237, .2), transparent 45%),
+    #08110c;
+}
+
+.device-transfer-scanner-stage video {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.device-transfer-scanner-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, .9);
+}
+
+.device-transfer-scanner-placeholder i { font-size: 54px; color: #a78bfa; }
+.device-transfer-scanner-placeholder strong { font-size: 12px; letter-spacing: .1em; }
+.device-transfer-scanner-placeholder span { color: rgba(255, 255, 255, .58); font-size: 10px; }
+
+.device-transfer-scanner-frame {
+  position: absolute;
+  z-index: 3;
+  width: min(190px, 52vw);
+  aspect-ratio: 1;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, .92);
+  border-radius: 18px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, .14), 0 0 26px rgba(124, 58, 237, .45);
+}
+
+.device-transfer-scanner-status {
+  min-height: 34px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.device-transfer-scanner-status[data-state="scanning"] { color: #4ade80; }
+.device-transfer-scanner-status[data-state="loading"] { color: #60a5fa; }
+.device-transfer-scanner-status[data-state="error"] { color: #f87171; }
+
 @media (max-width: 560px) {
   #appDialog[data-dialog-kind="device-transfer-choice"] #appDialogActions { grid-template-columns: 1fr; }
   #appDialogActions .device-transfer-cancel { grid-column: auto; justify-self: stretch; }
   .device-transfer-choice-card { min-height: 118px; }
   .device-transfer-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .device-transfer-code { font-size: clamp(18px, 6vw, 26px); letter-spacing: .055em; }
+  #appDialog[data-dialog-kind="device-transfer-scanner"] #appDialogActions { grid-template-columns: 1fr; }
+  .device-transfer-scanner-stage { min-height: 220px; }
 }
 
 #developerConsoleModal > div { border-radius: 18px !important; }
