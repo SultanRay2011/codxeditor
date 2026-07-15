@@ -585,6 +585,7 @@
       let overview = null;
       let selectedSessionId = "";
       let publishedProjects = [];
+      let projectApiUnavailable = false;
       let realtimeRefreshTimer = null;
 
       function setActiveSidebarItem(activeItem) {
@@ -690,7 +691,7 @@
           api("/admin/api/overview"),
           api("/admin/api/sessions"),
           api("/admin/api/activity"),
-          api("/admin/api/projects"),
+          api("/admin/api/projects").catch(() => ({ projects: [], unavailable: true })),
         ]);
         overview = overviewData;
         renderStats(overview);
@@ -698,6 +699,7 @@
         renderSessions(overview.sessions);
         renderActivity(activity.activity || []);
         publishedProjects = projectData.projects || [];
+        projectApiUnavailable = Boolean(projectData.unavailable);
         renderProjects(publishedProjects);
         sessionNavCount.textContent = String(overview.sessions.length);
         projectNavCount.textContent = String(publishedProjects.length);
@@ -829,9 +831,11 @@
           ].join(" ").toLowerCase();
           return !query || searchable.includes(query);
         });
-        projectSummary.innerHTML = `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>·</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
+        projectSummary.innerHTML = projectApiUnavailable
+          ? "Detailed project catalog waiting for the next normal server restart"
+          : `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>·</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
         if (!filtered.length) {
-          projectsEl.innerHTML = `<div class="empty project-empty">${projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
+          projectsEl.innerHTML = `<div class="empty project-empty">${projectApiUnavailable ? "Project details will appear after the CodX server completes its next normal restart." : projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
           return;
         }
         projectsEl.innerHTML = filtered
