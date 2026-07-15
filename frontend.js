@@ -4956,6 +4956,7 @@ let projectFiles = [
             <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on desktop, use the header Console toggle, Command Palette, or keyboard shortcut</li>
             <li>The More button opens a compact two-column menu on phones and tablets so every option fits comfortably</li>
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
+            <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -15853,9 +15854,35 @@ function updateZenModeButtonState() {
   }
 }
 
+function captureZenEditorViewState(editor) {
+  if (!editor) return null;
+  return {
+    selectionStart: Number(editor.selectionStart || 0),
+    selectionEnd: Number(editor.selectionEnd || 0),
+    selectionDirection: editor.selectionDirection || "none",
+    scrollTop: Number(editor.scrollTop || 0),
+    scrollLeft: Number(editor.scrollLeft || 0),
+  };
+}
+
+function restoreZenEditorViewState(editor, snapshot) {
+  if (!editor || !snapshot) return;
+  const selectionStart = Math.min(snapshot.selectionStart, editor.value.length);
+  const selectionEnd = Math.min(snapshot.selectionEnd, editor.value.length);
+  editor.setSelectionRange(selectionStart, selectionEnd, snapshot.selectionDirection);
+  editor.scrollTop = snapshot.scrollTop;
+  editor.scrollLeft = snapshot.scrollLeft;
+  if (lineNumbers) lineNumbers.scrollTop = editor.scrollTop;
+  if (highlightLayer) {
+    highlightLayer.scrollTop = editor.scrollTop;
+    highlightLayer.scrollLeft = editor.scrollLeft;
+  }
+}
+
 function toggleZenMode(forceState) {
   const nextZenState =
     typeof forceState === "boolean" ? forceState : !document.body.classList.contains("zen-mode");
+  const editorViewSnapshot = captureZenEditorViewState(editorTextarea);
   if (nextZenState && !isZenMode) {
     zenModeLayoutSnapshot = {
       editorsWidth: editorsPanel ? editorsPanel.style.width : "",
@@ -15894,17 +15921,19 @@ function toggleZenMode(forceState) {
   updateZenModeButtonState();
   updateLineNumbers(editorTextarea);
   renderErrorHighlights(editorTextarea);
-  setTimeout(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
     if (editorTextarea) {
-      editorTextarea.focus();
+      editorTextarea.focus({ preventScroll: true });
       syncSyntaxLayerStyle(editorTextarea);
       renderSyntaxHighlight(editorTextarea);
+      restoreZenEditorViewState(editorTextarea, editorViewSnapshot);
       renderErrorHighlights(editorTextarea);
+      restoreZenEditorViewState(editorTextarea, editorViewSnapshot);
     }
     if (!isZenMode) {
-      handleLayoutResize();
+      updatePreviewDeviceScale();
     }
-  }, 0);
+  }));
   if (isZenMode) {
     showNotification("Zen Mode enabled. Press Esc to exit.", "success");
   }
