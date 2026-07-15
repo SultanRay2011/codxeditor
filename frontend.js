@@ -4959,6 +4959,7 @@ let projectFiles = [
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
+            <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -8660,14 +8661,14 @@ settingsModal.addEventListener("click", (e) => {
 });
 
 applySettingsBtn.addEventListener("click", () => {
-  const cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value);
-  if (editorFontEmbedInput.value.trim() && !cssUrl) {
+  const rawFontEmbed = editorFontEmbedInput.value.trim();
+  const cssUrl = extractGoogleFontsCssUrl(rawFontEmbed);
+  if (rawFontEmbed && !cssUrl) {
     showNotification("Invalid Google Fonts embed link. Paste a valid fonts.googleapis.com URL.", "error");
     return;
   }
 
   applyGoogleFontImport(cssUrl);
-  editorFontEmbedInput.value = cssUrl || "";
   updateFontControlsState();
 
   const settings = {
@@ -8675,7 +8676,7 @@ applySettingsBtn.addEventListener("click", () => {
     themeColor: themeColorInput.value,
     textSize: editorTextSizeInput.value,
     fontFamily: editorFontFamilySelect.value,
-    fontEmbed: cssUrl || "",
+    fontEmbed: rawFontEmbed,
     fontWeight: normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight),
     fontItalic: Boolean(editorFontItalicInput?.checked),
     fontLetterSpacing: editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing,
