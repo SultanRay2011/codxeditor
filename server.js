@@ -350,7 +350,7 @@ function normalizeDeviceTransferCode(value) {
 
 function formatDeviceTransferCode(value) {
   const compact = normalizeDeviceTransferCode(value);
-  return compact ? compact.match(/.{1,4}/g).join("-") : "";
+  return compact ? compact.match(/.{1,3}/g).join("-") : "";
 }
 
 function createDeviceTransferCode() {

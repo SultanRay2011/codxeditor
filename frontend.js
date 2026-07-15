@@ -4977,7 +4977,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to move the workspace, saved projects, media, complete editor settings, and preview preferences with a one-time code, link, or scannable QR code</li>
+            <li>Use Device Transfer to move the workspace, saved projects, media, complete editor settings, and preview preferences with an uppercase four-box code, link, or scannable QR code</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -6888,7 +6888,7 @@ function setSavedProjects(projects) {
 
 function normalizeDeviceTransferCode(value) {
   const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return compact.length === 12 ? compact.match(/.{1,4}/g).join("-") : "";
+  return compact.length === 12 ? compact.match(/.{1,3}/g).join("-") : "";
 }
 
 async function requestDeviceTransfer(path, body) {
@@ -7037,6 +7037,130 @@ function getDeviceTransferSummaryHtml(summary, note = "") {
     </div>
     ${note ? `<p class="device-transfer-note">${escapeHtml(note)}</p>` : ""}
   `;
+}
+
+function showDeviceTransferCodePrompt(prefilledCode = "") {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "device-transfer-entry";
+    if (appDialogTitle) appDialogTitle.textContent = "RECEIVE DEVICE DATA";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <p class="device-transfer-instruction">Enter the 12-character code shown on your other device:</p>
+        <div class="device-transfer-code-entry" role="group" aria-label="12-character transfer code">
+          ${[0, 1, 2, 3].map((index) => `
+            ${index ? '<span class="device-transfer-code-dash" aria-hidden="true">–</span>' : ""}
+            <input class="device-transfer-code-box" type="text" inputmode="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Transfer code group ${index + 1}">
+          `).join("")}
+        </div>
+        <p id="deviceTransferCodeEntryStatus" class="device-transfer-code-entry-status">Letters are automatically capitalized.</p>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="deviceTransferEntryCancelBtn" class="run-button" style="background:#6b7280"><strong>CANCEL</strong></button>
+        <button type="button" id="deviceTransferEntrySubmitBtn" class="run-button"><strong>CONTINUE</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+
+    const inputs = [...document.querySelectorAll(".device-transfer-code-box")];
+    const status = document.getElementById("deviceTransferCodeEntryStatus");
+    const submitButton = document.getElementById("deviceTransferEntrySubmitBtn");
+    const cancelButton = document.getElementById("deviceTransferEntryCancelBtn");
+    const cleanCharacters = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const getCompactCode = () => inputs.map((input) => input.value).join("");
+    const updateState = () => {
+      const complete = getCompactCode().length === 12;
+      if (submitButton) submitButton.disabled = !complete;
+      if (status && status.dataset.state === "error" && complete) {
+        delete status.dataset.state;
+        status.textContent = "Code ready. Press Continue to import.";
+      }
+      return complete;
+    };
+    const fillInputs = (startIndex, value) => {
+      const characters = cleanCharacters(value);
+      if (!characters) return;
+      let offset = 0;
+      let lastChangedIndex = startIndex;
+      for (let index = startIndex; index < inputs.length && offset < characters.length; index += 1) {
+        inputs[index].value = characters.slice(offset, offset + 3);
+        offset += 3;
+        lastChangedIndex = index;
+      }
+      const nextInput = inputs[lastChangedIndex].value.length === 3
+        ? inputs[Math.min(lastChangedIndex + 1, inputs.length - 1)]
+        : inputs[lastChangedIndex];
+      nextInput?.focus();
+      nextInput?.select();
+      updateState();
+    };
+    const submit = () => {
+      const code = normalizeDeviceTransferCode(getCompactCode());
+      if (!code) {
+        if (status) {
+          status.dataset.state = "error";
+          status.textContent = "Complete all four boxes before continuing.";
+        }
+        inputs.find((input) => input.value.length < 3)?.focus();
+        return;
+      }
+      closeAppDialog({ ok: true, value: code });
+    };
+
+    inputs.forEach((input, index) => {
+      input.addEventListener("input", () => {
+        const characters = cleanCharacters(input.value);
+        if (characters.length > 3) {
+          fillInputs(index, characters);
+          return;
+        }
+        input.value = characters.slice(0, 3);
+        if (input.value.length === 3 && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+          inputs[index + 1].select();
+        }
+        updateState();
+      });
+      input.addEventListener("paste", (event) => {
+        event.preventDefault();
+        fillInputs(index, event.clipboardData?.getData("text") || "");
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          cancelButton?.click();
+        } else if (event.key === "Backspace" && !input.value && index > 0) {
+          event.preventDefault();
+          inputs[index - 1].focus();
+          inputs[index - 1].setSelectionRange(inputs[index - 1].value.length, inputs[index - 1].value.length);
+        } else if (event.key === "ArrowLeft" && input.selectionStart === 0 && index > 0) {
+          inputs[index - 1].focus();
+        } else if (event.key === "ArrowRight" && input.selectionStart === input.value.length && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      });
+    });
+
+    cancelButton?.addEventListener("click", () => closeAppDialog({ ok: false, value: null }));
+    submitButton?.addEventListener("click", submit);
+    const initialCharacters = cleanCharacters(prefilledCode).slice(0, 12);
+    if (initialCharacters) fillInputs(0, initialCharacters);
+    updateState();
+    setTimeout(() => {
+      const firstIncompleteInput = inputs.find((input) => input.value.length < 3);
+      (firstIncompleteInput || inputs[0])?.focus();
+    }, 0);
+  });
 }
 
 function showDeviceTransferChoice() {
@@ -7426,17 +7550,12 @@ async function receiveDeviceTransfer(prefilledCode = "") {
   }
   let code = normalizeDeviceTransferCode(prefilledCode);
   if (!code) {
-    const dialog = await showAppPrompt(
-      "RECEIVE DEVICE DATA",
-      "Enter the 12-character code shown on your other device:",
-      "",
-      "ABCD-EFGH-JKLM",
-    );
+    const dialog = await showDeviceTransferCodePrompt();
     if (!dialog?.ok) return;
     code = normalizeDeviceTransferCode(dialog.value);
   }
   if (!code) {
-    showNotification("Enter a valid transfer code in the format ABCD-EFGH-JKLM.", "error");
+    showNotification("Enter a valid transfer code in the format ABC-DEF-GHI-JKL.", "error");
     return;
   }
   try {

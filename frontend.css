@@ -6530,6 +6530,65 @@ iframe {
   cursor: copy;
 }
 
+.device-transfer-code-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(5px, 1.2vw, 10px);
+  margin: 18px auto 8px;
+}
+
+.device-transfer-code-box {
+  width: clamp(50px, 15vw, 76px);
+  min-width: 0;
+  padding: 15px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 52%, var(--border-color));
+  border-radius: 13px;
+  outline: none;
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--bg-primary));
+  color: var(--text-primary);
+  font: 800 clamp(18px, 4vw, 25px)/1 var(--font-family);
+  letter-spacing: .08em;
+  text-align: center;
+  text-transform: uppercase;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.device-transfer-code-box:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.device-transfer-code-dash {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: clamp(17px, 3vw, 24px);
+  font-weight: 800;
+}
+
+.device-transfer-code-entry-status {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.device-transfer-code-entry-status[data-state="error"] { color: #ef4444; }
+
+#appDialog[data-dialog-kind="device-transfer-entry"] #appDialogActions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px !important;
+}
+
+#deviceTransferEntrySubmitBtn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: grayscale(.35);
+}
+
 .device-transfer-expiry {
   margin: 9px 0 14px;
   color: var(--text-muted);
@@ -6638,6 +6697,9 @@ iframe {
   .device-transfer-choice-card { min-height: 118px; }
   .device-transfer-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .device-transfer-code { font-size: clamp(18px, 6vw, 26px); letter-spacing: .055em; }
+  .device-transfer-code-entry { gap: 4px; }
+  .device-transfer-code-box { width: clamp(48px, 16vw, 62px); padding: 13px 4px; }
+  .device-transfer-code-dash { font-size: 16px; }
   #appDialog[data-dialog-kind="device-transfer-scanner"] #appDialogActions { grid-template-columns: 1fr; }
   .device-transfer-scanner-stage { min-height: 220px; }
 }
