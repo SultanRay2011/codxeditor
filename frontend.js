@@ -4897,7 +4897,10 @@ let projectFiles = [
             <li>The normal preview closes and the console becomes a command terminal</li>
             <li>Install dependencies with <code>npm install package-name</code></li>
             <li>Run the starter server with <code>npm start</code></li>
+            <li>Run commands with <strong>RUN</strong> or <kbd>Enter</kbd></li>
+            <li>Use Stop before starting another command or disabling Node.js</li>
             <li>Open the clickable <code>http://localhost:8000</code> link in a new preview tab</li>
+            <li>If startup fails, CodX restores the normal preview so you can hard-refresh and retry</li>
           </ul>
         </article>
 

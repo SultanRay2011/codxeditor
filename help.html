@@ -914,14 +914,17 @@
                 <ul>
                   <li>Enable Node.js hides the normal webpage preview and expands the console into a command terminal.</li>
                   <li>If missing, CodX Editor creates <code>package.json</code> with project name <code>project</code> and a starter <code>server.js</code>.</li>
-                  <li>Disable Node.js restores the normal preview while leaving the browser runtime available for the current tab.</li>
+                  <li>Disable Node.js stops the active command, removes stale server-preview links, and restores the normal preview while leaving the browser runtime available for the current tab.</li>
+                  <li>If runtime startup fails, CodX Editor rolls the interface back to the normal preview so the Enable button can be retried.</li>
                   <li>Use a current Chrome or Edge browser and hard-refresh if the isolation-header message appears.</li>
                 </ul>
               </article>
               <article class="feature-item">
                 <h3><i class="fa-solid fa-terminal"></i> Commands</h3>
                 <ul>
-                  <li>Type commands in the Node console and press <kbd>Enter</kbd>.</li>
+                  <li>Type commands in the Node console and choose <strong>Run</strong> or press <kbd>Enter</kbd>.</li>
+                  <li>Commands run one at a time. The command field is locked while a process is active so terminal output cannot become mixed.</li>
+                  <li>Choose <strong>Stop</strong> to end a long-running server or command before starting another one.</li>
                   <li>Install dependencies with commands such as <code>npm install express</code>.</li>
                   <li>Start the generated project with <code>npm start</code>.</li>
                   <li>Terminal output removes spinner/control codes so npm output stays readable.</li>
@@ -941,6 +944,7 @@
                 <h3><i class="fa-solid fa-shield-halved"></i> Runtime Notes</h3>
                 <ul>
                   <li>Project files are copied into the in-browser runtime before commands run.</li>
+                  <li>Files deleted from the editor are removed from the runtime before the next command, while <code>node_modules</code> remains managed by npm.</li>
                   <li>Native Node addons may not work; prefer JavaScript or WebAssembly-compatible packages.</li>
                   <li>Node mode does not expose Railway environment variables or GitHub OAuth secrets to project code.</li>
                   <li>Closing or refreshing the browser tab ends that temporary Node runtime.</li>

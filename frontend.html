@@ -612,6 +612,14 @@
             <form id="nodeTerminalForm" class="node-terminal-form" autocomplete="off">
               <span aria-hidden="true">$</span>
               <input id="nodeTerminalInput" type="text" spellcheck="false" aria-label="Node.js terminal command" placeholder="npm install express">
+              <button id="nodeTerminalRunBtn" class="node-terminal-run" type="submit" aria-label="Run Node.js command">
+                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                <strong>RUN</strong>
+              </button>
+              <button id="nodeTerminalStopBtn" class="node-terminal-stop" type="button" disabled aria-label="Stop running Node.js command">
+                <i class="fa-solid fa-stop" aria-hidden="true"></i>
+                <strong>STOP</strong>
+              </button>
             </form>
           </div>
         </div>
