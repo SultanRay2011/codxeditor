@@ -4977,7 +4977,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to move the workspace, saved projects, media, complete editor settings, and preview preferences with an uppercase four-box code, link, or scannable QR code</li>
+            <li>Use Device Transfer to send or receive the workspace, saved projects, media, complete editor settings, and preview preferences with clearly marked transfer controls</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -7178,7 +7178,7 @@ function showDeviceTransferChoice() {
           <i class="fa-solid fa-arrow-up-from-bracket"></i><span>Send from this device</span><small>Create a one-time code</small>
         </button>
         <button type="button" id="deviceTransferReceiveBtn" class="collab-choice-card device-transfer-choice-card">
-          <i class="fa-solid fa-keyboard"></i><span>Enter transfer code</span><small>Type the code from another device</small>
+          <i class="fa-solid fa-arrow-down"></i><span>Enter transfer code</span><small>Type the code from another device</small>
         </button>
         <button type="button" id="deviceTransferScanBtn" class="collab-choice-card device-transfer-choice-card device-transfer-scan-card">
           <i class="fa-solid fa-qrcode"></i><span>Scan QR code</span><small>Use the camera or a QR image</small>
