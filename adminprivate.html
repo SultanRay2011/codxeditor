@@ -386,7 +386,8 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="/adminprivate.css" />
+    <link rel="stylesheet" href="/theme.css" />
+    <link rel="stylesheet" href="/adminprivate.css?v=20260715-premium4" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
@@ -444,6 +445,12 @@
             <a class="nav-item" href="#sessionsPanel" aria-label="Live sessions">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a4 4 0 1 0-3.46-6H12a4 4 0 0 0 0 8h.54A4 4 0 0 0 16 11ZM8 13c-3.31 0-6 1.79-6 4v2h10v-2c0-1.05.42-2.02 1.14-2.84A9.42 9.42 0 0 0 8 13Zm8 0c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4Z"/></svg>
               <span>Live sessions</span>
+              <b class="nav-count" id="sessionNavCount">0</b>
+            </a>
+            <a class="nav-item" href="#projectsPanel" aria-label="Published projects">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L17.8 7 12 9.8 6.2 7 12 4.3ZM5 8.6l6 3v7.8l-6-3V8.6Zm8 10.8v-7.8l6-3v7.8l-6 3Z"/></svg>
+              <span>Projects</span>
+              <b class="nav-count" id="projectNavCount">0</b>
             </a>
             <a class="nav-item" href="#selectedPanel" aria-label="Session inspector">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3a8 8 0 1 0 4.9 14.33L20.6 22 22 20.6l-4.67-4.7A8 8 0 0 0 11 3Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
@@ -471,46 +478,85 @@
         </aside>
 
         <div class="dashboard-workspace">
-      <header class="topbar" id="overview">
-        <div>
-          <span class="badge">Administrator Dashboard</span>
-          <h1>Live Sessions</h1>
-          <p id="lastUpdated">Loading private admin data...</p>
-        </div>
-        <div class="topbar-actions">
-          <a class="btn secondary" href="/frontend.html">Launch CodX Editor</a>
-          <button id="refreshBtn" class="btn secondary">REFRESH</button>
-          <button id="logoutBtn" class="btn danger">LOGOUT</button>
-        </div>
-      </header>
+          <header class="topbar" id="overview">
+            <div class="topbar-copy">
+              <div class="topbar-kicker">
+                <span class="hero-eyebrow">Operations center</span>
+                <span class="sync-pill"><i></i><span id="liveUpdateLabel">Live data connected</span></span>
+              </div>
+              <h1>Everything happening in CodX, <em>right now.</em></h1>
+              <p id="lastUpdated">Loading private admin data...</p>
+            </div>
+            <div class="topbar-actions">
+              <a class="btn hero-btn" href="/frontend.html">OPEN CODX EDITOR</a>
+              <button id="refreshBtn" class="btn hero-btn">REFRESH DATA</button>
+              <button id="logoutBtn" class="btn hero-btn danger">LOGOUT</button>
+            </div>
+          </header>
 
-      <section class="grid stats" id="statsGrid" aria-label="System overview"></section>
-
-      <section class="grid main-grid">
-        <div class="card" id="sessionsPanel">
-          <div class="session-head">
+          <section class="section-heading" aria-labelledby="overviewTitle">
             <div>
-              <span class="section-label">Manage Session</span>
-              <h2>Active collaboration rooms</h2>
+              <span class="section-label">Platform pulse</span>
+              <h2 id="overviewTitle">Dashboard overview</h2>
+              <p>Live operational totals refresh automatically as people and projects change.</p>
             </div>
-            <button id="copyAllBtn" class="btn secondary">COPY ALL PINS</button>
-          </div>
-          <div id="sessions" class="session-list"></div>
-        </div>
+            <div class="realtime-legend"><span></span> Updating in real time</div>
+          </section>
 
-        <aside class="grid">
-          <section class="card" id="selectedPanel">
-            <span class="section-label">Selected Session</span>
-            <div id="sessionDetail" class="detail-box empty">
-              Select a session to inspect participants, files, and status.
+          <section class="grid stats" id="statsGrid" aria-label="System overview"></section>
+
+          <section class="grid main-grid">
+            <div class="card panel-card" id="sessionsPanel">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-label">Collaboration control</span>
+                  <h2>Live sessions</h2>
+                  <p>Inspect every active room, its invite details, people, files, messages, and permissions.</p>
+                </div>
+                <button id="copyAllBtn" class="btn secondary">COPY ALL PINS</button>
+              </div>
+              <div id="sessions" class="session-list"></div>
             </div>
+
+            <aside class="grid side-stack">
+              <section class="card panel-card" id="selectedPanel">
+                <div class="panel-heading compact">
+                  <div>
+                    <span class="section-label">Deep inspection</span>
+                    <h2>Session inspector</h2>
+                  </div>
+                </div>
+                <div id="sessionDetail" class="detail-box empty">
+                  Select a live session to inspect its complete operational state.
+                </div>
+              </section>
+              <section class="card panel-card" id="activityPanel">
+                <div class="panel-heading compact">
+                  <div>
+                    <span class="section-label">Audit trail</span>
+                    <h2>Admin activity</h2>
+                  </div>
+                </div>
+                <div id="activity" class="activity"></div>
+              </section>
+            </aside>
           </section>
-          <section class="card" id="activityPanel">
-            <span class="section-label">Admin Activity</span>
-            <div id="activity" class="activity"></div>
+
+          <section class="card panel-card projects-panel" id="projectsPanel">
+            <div class="panel-heading projects-heading">
+              <div>
+                <span class="section-label">Published experiences</span>
+                <h2>Projects</h2>
+                <p>Review every published project, copy its public URL, open the live page, or load its files back into CodX Editor.</p>
+              </div>
+              <label class="project-search">
+                <span>Search projects</span>
+                <input id="projectSearch" type="search" placeholder="Name, link, or file type" autocomplete="off" />
+              </label>
+            </div>
+            <div class="project-summary" id="projectSummary">Loading published projects...</div>
+            <div id="projects" class="projects-grid"></div>
           </section>
-        </aside>
-      </section>
         </div>
       </div>
     </main>
@@ -528,10 +574,18 @@
       const refreshBtn = document.getElementById("refreshBtn");
       const logoutBtn = document.getElementById("logoutBtn");
       const copyAllBtn = document.getElementById("copyAllBtn");
+      const projectsEl = document.getElementById("projects");
+      const projectSearch = document.getElementById("projectSearch");
+      const projectSummary = document.getElementById("projectSummary");
+      const sessionNavCount = document.getElementById("sessionNavCount");
+      const projectNavCount = document.getElementById("projectNavCount");
+      const liveUpdateLabel = document.getElementById("liveUpdateLabel");
       const sidebarNavItems = Array.from(document.querySelectorAll(".sidebar-nav .nav-item"));
 
       let overview = null;
       let selectedSessionId = "";
+      let publishedProjects = [];
+      let realtimeRefreshTimer = null;
 
       function setActiveSidebarItem(activeItem) {
         sidebarNavItems.forEach((item) => item.classList.toggle("active", item === activeItem));
@@ -549,9 +603,41 @@
           .replace(/"/g, "&quot;");
       }
 
+      function safeColor(value) {
+        const color = String(value || "").trim();
+        return /^#[0-9a-f]{3,8}$/i.test(color) ? color : "#16a34a";
+      }
+
       function formatTime(ts) {
         if (!ts) return "Unknown";
         return new Date(ts).toLocaleString();
+      }
+
+      function formatCompactNumber(value) {
+        return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 })
+          .format(Math.max(0, Number(value) || 0));
+      }
+
+      function formatUptime(totalSeconds) {
+        const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (days) return `${days}d ${hours}h`;
+        if (hours) return `${hours}h ${minutes}m`;
+        if (minutes) return `${minutes}m ${seconds % 60}s`;
+        return `${seconds}s`;
+      }
+
+      function formatRelativeTime(ts) {
+        const difference = Date.now() - Number(ts || 0);
+        if (!Number.isFinite(difference) || difference < 0) return "just now";
+        const minutes = Math.floor(difference / 60000);
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        return `${Math.floor(hours / 24)}d ago`;
       }
 
       function setLoggedIn(loggedIn) {
@@ -600,43 +686,67 @@
       }
 
       async function loadDashboard() {
-        overview = await api("/admin/api/overview");
-        const sessionData = await api("/admin/api/sessions");
-        const activity = await api("/admin/api/activity");
+        const [overviewData, sessionData, activity, projectData] = await Promise.all([
+          api("/admin/api/overview"),
+          api("/admin/api/sessions"),
+          api("/admin/api/activity"),
+          api("/admin/api/projects"),
+        ]);
+        overview = overviewData;
         renderStats(overview);
         overview.sessions = sessionData.sessions || [];
         renderSessions(overview.sessions);
         renderActivity(activity.activity || []);
+        publishedProjects = projectData.projects || [];
+        renderProjects(publishedProjects);
+        sessionNavCount.textContent = String(overview.sessions.length);
+        projectNavCount.textContent = String(publishedProjects.length);
         if (selectedSessionId) {
           await loadSessionDetail(selectedSessionId).catch(() => {
             selectedSessionId = "";
             detailEl.className = "detail-box empty";
-            detailEl.textContent = "Select a session to inspect participants, files, and status.";
+            detailEl.textContent = "Select a live session to inspect its complete operational state.";
           });
         }
-        lastUpdatedEl.textContent = `Last updated ${new Date().toLocaleTimeString()}`;
+        const updatedTime = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+        lastUpdatedEl.textContent = `Last synchronized at ${updatedTime}`;
+        liveUpdateLabel.textContent = "Live data connected";
       }
 
       function renderStats(data) {
         const stats = data.stats || {};
         const health = data.health || {};
         const cards = [
-          ["People in frontend.html", stats.frontendHtmlOnlyUsers ?? stats.activeUsers ?? 0, "Open editor pages right now"],
-          ["Live sessions", stats.liveSessions ?? 0, "Active collaboration rooms"],
-          ["Session participants", stats.collaboratingUsers ?? 0, "People inside sessions"],
-          ["Pending/moderation", stats.moderationItems ?? 0, "Approvals and flagged users"],
-          ["Connected sockets", health.connectedSockets ?? 0, "All realtime connections"],
-          ["Published projects", stats.publishedProjects ?? 0, "Custom published links"],
-          ["Locked rooms", stats.lockedRooms ?? 0, "Rooms that block new joins"],
-          ["Server uptime", `${health.uptimeSeconds ?? 0}s`, "Current server process"],
+          { label: "People in CodX Editor", value: stats.frontendHtmlOnlyUsers ?? stats.activeUsers ?? 0, note: "Editor pages open now", icon: "users", tone: "emerald" },
+          { label: "Live sessions", value: stats.liveSessions ?? 0, note: "Active collaboration rooms", icon: "signal", tone: "mint" },
+          { label: "Session participants", value: stats.collaboratingUsers ?? 0, note: "People collaborating now", icon: "people", tone: "jade" },
+          { label: "Pending / moderation", value: stats.moderationItems ?? 0, note: "Approvals and flagged people", icon: "shield", tone: "amber" },
+          { label: "Connected sockets", value: health.connectedSockets ?? 0, note: "All realtime connections", icon: "socket", tone: "teal" },
+          { label: "Published projects", value: stats.publishedProjects ?? 0, note: "Public CodX experiences", icon: "project", tone: "lime" },
+          { label: "Locked rooms", value: stats.lockedRooms ?? 0, note: "Rooms blocking new joins", icon: "lock", tone: "rose" },
+          { label: "Server uptime", value: formatUptime(health.uptimeSeconds), note: `${Number(health.uptimeSeconds || 0).toLocaleString()} seconds online`, icon: "uptime", tone: "forest" },
         ];
+        const icons = {
+          users: '<path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM1 19c0-3.3 3.13-6 7-6s7 2.7 7 6v2H1v-2Zm14.2 2v-2c0-1.9-.83-3.62-2.18-4.98A8.7 8.7 0 0 1 16 13c3.87 0 7 2.24 7 5v3h-7.8Z"/>',
+          signal: '<path d="M4 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-2.5-5 2 2A6.35 6.35 0 0 1 8.5 21l2.2.4a8.6 8.6 0 0 0-9.2-7.9Zm0-5 2 2A11.3 11.3 0 0 1 13.5 21l2.2.4A13.54 13.54 0 0 0 1.5 8.5Zm0-5 2 2A16.3 16.3 0 0 1 18.5 21l2.2.4A18.55 18.55 0 0 0 1.5 3.5Z"/>',
+          people: '<path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-5 0-9 2.7-9 6v2h18v-2c0-3.3-4-6-9-6Z"/>',
+          shield: '<path d="m12 2 8 3v6c0 5.1-3.4 9.7-8 11-4.6-1.3-8-5.9-8-11V5l8-3Zm-1 5v6h2V7h-2Zm0 8v2h2v-2h-2Z"/>',
+          socket: '<path d="M7 2h2v6h6V2h2v6h2v5a7 7 0 0 1-6 6.92V23h-2v-3.08A7 7 0 0 1 5 13V8h2V2Zm0 8v3a5 5 0 0 0 10 0v-3H7Z"/>',
+          project: '<path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L17.8 7 12 9.8 6.2 7 12 4.3ZM5 8.6l6 3v7.8l-6-3V8.6Zm8 10.8v-7.8l6-3v7.8l-6 3Z"/>',
+          lock: '<path d="M7 10V8a5 5 0 0 1 10 0v2h2v12H5V10h2Zm2 0h6V8a3 3 0 0 0-6 0v2Zm2 4v4h2v-4h-2Z"/>',
+          uptime: '<path d="M11 2h2v3.06A8 8 0 1 1 5.34 7.2L3.2 5.06A11 11 0 1 0 11 2Zm1 5a1 1 0 0 1 1 1v4.59l3.2 3.2-1.41 1.42L11 13.41V8a1 1 0 0 1 1-1Z"/>',
+        };
         statsGrid.innerHTML = cards
           .map(
-            ([label, value, note]) => `
-              <article class="card stat">
-                <span>${escapeHtml(label)}</span>
-                <strong>${escapeHtml(value)}</strong>
-                <p>${escapeHtml(note)}</p>
+            (card) => `
+              <article class="card stat stat-${escapeHtml(card.tone)}">
+                <div class="stat-topline">
+                  <span class="stat-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[card.icon]}</svg></span>
+                  <span class="live-mini"><i></i> LIVE</span>
+                </div>
+                <strong>${escapeHtml(card.value)}</strong>
+                <span class="stat-label">${escapeHtml(card.label)}</span>
+                <p>${escapeHtml(card.note)}</p>
               </article>
             `,
           )
@@ -656,30 +766,111 @@
               session.requireJoinApproval ? `<span class="chip warn">Approval on</span>` : "",
               session.pendingJoinCount ? `<span class="chip warn">${session.pendingJoinCount} pending</span>` : "",
             ].join("");
+            const participantPreview = Array.isArray(session.participantPreview)
+              ? session.participantPreview
+              : [];
+            const participantStack = participantPreview.length
+              ? `<div class="participant-preview">
+                  <div class="avatar-stack">${participantPreview
+                    .map((person) => `<span class="mini-avatar" style="--avatar:${safeColor(person.theme)}" title="${escapeHtml(person.name)}">${escapeHtml(String(person.name || "?").slice(0, 1).toUpperCase())}</span>`)
+                    .join("")}</div>
+                  <span>${escapeHtml(participantPreview.map((person) => person.name).join(", "))}</span>
+                </div>`
+              : `<div class="participant-preview is-empty"><span>No participants connected yet</span></div>`;
             return `
               <article class="session" data-session="${escapeHtml(session.sessionId)}">
                 <div class="session-head">
                   <div class="session-title">
-                    <h3>${escapeHtml(session.hostName)}'s session</h3>
-                    <span class="pin">${escapeHtml(session.sessionPin || "NO PIN")}</span>
+                    <div class="session-live-line"><span class="session-live-dot"></span> LIVE ROOM <span>·</span> ${escapeHtml(formatRelativeTime(session.createdAt))}</div>
+                    <h3>${escapeHtml(session.hostName)}’s session</h3>
+                    <span class="session-id">ID ${escapeHtml(session.sessionId)}</span>
                   </div>
-                  <button class="btn secondary inspect-btn" data-id="${escapeHtml(session.sessionId)}">INSPECT</button>
+                  <div class="session-pin-block"><small>SESSION PIN</small><span class="pin">${escapeHtml(session.sessionPin || "NO PIN")}</span></div>
                 </div>
-                <div class="linkbox">${escapeHtml(session.shareLink)}</div>
+                <div class="session-metrics">
+                  <div><strong>${escapeHtml(session.participantCount)}</strong><span>People inside</span></div>
+                  <div><strong>${escapeHtml(session.fileCount)}</strong><span>Project files</span></div>
+                  <div><strong>${escapeHtml(session.groupMessageCount)}</strong><span>Group messages</span></div>
+                  <div><strong>${escapeHtml(session.pendingJoinCount || 0)}</strong><span>Waiting</span></div>
+                </div>
+                ${participantStack}
+                <div class="session-link-row">
+                  <div class="linkbox"><span>${escapeHtml(session.shareLink)}</span></div>
+                  <a class="icon-action" href="${escapeHtml(session.shareLink)}" target="_blank" rel="noopener noreferrer" aria-label="Open session link">↗</a>
+                </div>
                 <div class="chips">
-                  <span class="chip">${escapeHtml(session.participantCount)} participants</span>
-                  <span class="chip">${escapeHtml(session.fileCount)} files</span>
-                  <span class="chip">${escapeHtml(session.groupMessageCount)} group messages</span>
                   <span class="chip">Active: ${escapeHtml(session.activeFileName || "None")}</span>
                   ${statusChips}
                 </div>
                 <div class="actions">
+                  <button class="btn inspect-btn" data-id="${escapeHtml(session.sessionId)}">VIEW EVERYTHING</button>
                   <button class="btn secondary copy-link-btn" data-link="${escapeHtml(session.shareLink)}">COPY LINK</button>
                   <button class="btn secondary copy-pin-btn" data-pin="${escapeHtml(session.sessionPin)}">COPY PIN</button>
                   <button class="btn secondary regen-btn" data-id="${escapeHtml(session.sessionId)}">NEW LINK</button>
                   <button class="btn warn lock-btn" data-id="${escapeHtml(session.sessionId)}">${session.roomLocked ? "UNLOCK" : "LOCK"}</button>
                   <button class="btn warn freeze-btn" data-id="${escapeHtml(session.sessionId)}">${session.paused ? "RESUME" : "PAUSE"}</button>
                   <button class="btn danger end-btn" data-id="${escapeHtml(session.sessionId)}">END</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderProjects(projects) {
+        const query = String(projectSearch.value || "").trim().toLowerCase();
+        const filtered = projects.filter((project) => {
+          const searchable = [
+            project.projectName,
+            project.pageTitle,
+            project.id,
+            project.shareLink,
+            ...(project.fileTypes || []),
+          ].join(" ").toLowerCase();
+          return !query || searchable.includes(query);
+        });
+        projectSummary.innerHTML = `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>·</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
+        if (!filtered.length) {
+          projectsEl.innerHTML = `<div class="empty project-empty">${projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
+          return;
+        }
+        projectsEl.innerHTML = filtered
+          .map((project) => {
+            const types = (project.fileTypes || [])
+              .map((type) => `<span class="file-type">${escapeHtml(String(type).toUpperCase())}</span>`)
+              .join("");
+            const initials = String(project.projectName || project.id || "PX")
+              .split(/\s+/)
+              .map((word) => word[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+            return `
+              <article class="project-card">
+                <div class="project-card-top">
+                  <span class="project-mark">${escapeHtml(initials || "PX")}</span>
+                  <span class="project-status"><i></i> PUBLISHED</span>
+                  <span class="project-age">Updated ${escapeHtml(formatRelativeTime(project.updatedAt))}</span>
+                </div>
+                <div class="project-title-row">
+                  <div>
+                    <h3>${escapeHtml(project.projectName || "Untitled project")}</h3>
+                    <p>${escapeHtml(project.pageTitle || project.id)}</p>
+                  </div>
+                </div>
+                <div class="project-link">
+                  <span>${escapeHtml(project.shareLink)}</span>
+                  <button class="project-copy-btn" data-link="${escapeHtml(project.shareLink)}" aria-label="Copy published project link">COPY</button>
+                </div>
+                <div class="project-facts">
+                  <div><strong>${escapeHtml(project.fileCount || 0)}</strong><span>Files</span></div>
+                  <div><strong>${escapeHtml(formatCompactNumber(project.totalCharacters || 0))}</strong><span>Characters</span></div>
+                  <div><strong>${project.hasHtml ? "YES" : "NO"}</strong><span>Preview</span></div>
+                </div>
+                <div class="file-types">${types || '<span class="file-type">NO FILE TYPES</span>'}</div>
+                <div class="project-actions">
+                  <a class="btn" href="${escapeHtml(project.editorLink)}" target="_blank" rel="noopener noreferrer">OPEN IN CODX EDITOR</a>
+                  <a class="btn secondary" href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">VIEW LIVE PAGE ↗</a>
                 </div>
               </article>
             `;
@@ -711,29 +902,55 @@
         const session = data.session;
         const participants = session.participants || [];
         detailEl.className = "detail-box";
+        const permissionStates = [
+          ["Room access", session.roomLocked ? "Locked" : "Open", session.roomLocked ? "danger" : "good"],
+          ["Collaboration", session.paused ? "Paused" : "Live", session.paused ? "warn" : "good"],
+          ["Join approval", session.requireJoinApproval ? "Required" : "Off", session.requireJoinApproval ? "warn" : "good"],
+          ["Global editing", session.readOnlyAll ? "Read only" : "Enabled", session.readOnlyAll ? "warn" : "good"],
+          ["Group chat", session.disableAllChat ? "Disabled" : "Enabled", session.disableAllChat ? "warn" : "good"],
+          ["Publishing", session.disablePublishShare ? "Disabled" : "Enabled", session.disablePublishShare ? "warn" : "good"],
+        ];
         detailEl.innerHTML = `
-          <h2>${escapeHtml(session.hostName)}'s session</h2>
-          <div class="linkbox">${escapeHtml(session.shareLink)}</div>
-          <div class="chips">
-            <span class="chip">PIN ${escapeHtml(session.sessionPin || "None")}</span>
-            <span class="chip">${participants.length} participants</span>
-            <span class="chip">${escapeHtml(session.files.length)} files</span>
-            <span class="chip">${escapeHtml(session.chat.groupCount)} group messages</span>
+          <div class="detail-hero">
+            <div>
+              <span class="session-live-line"><span class="session-live-dot"></span> LIVE SESSION</span>
+              <h3>${escapeHtml(session.hostName)}’s room</h3>
+              <p>${escapeHtml(session.sessionId)} · created ${escapeHtml(formatTime(session.createdAt))}</p>
+            </div>
+            <div class="detail-pin"><small>PIN</small><strong>${escapeHtml(session.sessionPin || "None")}</strong></div>
           </div>
-          <div>
-            <span class="section-label">Participants</span>
-            <div class="grid" style="margin-top:10px;">
+          <div class="session-link-row">
+            <div class="linkbox"><span>${escapeHtml(session.shareLink)}</span></div>
+            <button class="icon-action copy-link-btn" data-link="${escapeHtml(session.shareLink)}" aria-label="Copy session link">COPY</button>
+          </div>
+          <div class="detail-facts">
+            <div><strong>${participants.length}</strong><span>Participants</span></div>
+            <div><strong>${escapeHtml(session.files.length)}</strong><span>Files</span></div>
+            <div><strong>${escapeHtml(session.chat.groupCount)}</strong><span>Group messages</span></div>
+            <div><strong>${escapeHtml(session.chat.privateThreadCount || 0)}</strong><span>Private threads</span></div>
+            <div><strong>${escapeHtml(session.pendingJoinCount || 0)}</strong><span>Waiting</span></div>
+            <div><strong>${escapeHtml(session.flaggedParticipants || 0)}</strong><span>Flagged</span></div>
+          </div>
+          <div class="detail-section">
+            <span class="section-label">Permissions &amp; room state</span>
+            <div class="permission-grid">
+              ${permissionStates.map(([label, value, tone]) => `<div><span>${label}</span><b class="state-${tone}">${value}</b></div>`).join("")}
+            </div>
+          </div>
+          <div class="detail-section">
+            <div class="detail-section-title"><span class="section-label">People inside</span><span>${participants.length}</span></div>
+            <div class="participant-list">
               ${
                 participants.length
                   ? participants
                       .map(
                         (p) => `
                           <div class="participant">
-                            <div style="display:flex;gap:10px;align-items:center;">
-                              <span class="dot" style="background:${escapeHtml(p.theme || "#38bdf8")}"></span>
+                            <div class="participant-identity">
+                              <span class="dot" style="background:${safeColor(p.theme)}"></span>
                               <div>
                                 <strong>${escapeHtml(p.name)}</strong>
-                                <p style="margin:2px 0 0;">${escapeHtml(p.role)} · ${escapeHtml(p.currentFile || "No file")}</p>
+                                <p>${escapeHtml(p.role)} · ${escapeHtml(p.currentFile || "No active file")}</p>
                               </div>
                             </div>
                             <span class="chip ${p.frozenEditing || p.mutedChat ? "warn" : "good"}">${p.frozenEditing ? "Frozen" : p.mutedChat ? "Muted" : "OK"}</span>
@@ -745,15 +962,15 @@
               }
             </div>
           </div>
-          <div>
-            <span class="section-label">Files</span>
-            <div class="chips" style="margin-top:10px;">
+          <div class="detail-section">
+            <div class="detail-section-title"><span class="section-label">Project files</span><span>${session.files.length}</span></div>
+            <div class="file-list-detail">
               ${
                 session.files.length
                   ? session.files
-                      .map((file) => `<span class="chip">${escapeHtml(file.name || "Untitled")}</span>`)
+                      .map((file) => `<span class="file-pill"><i></i>${escapeHtml(file.name || "Untitled")}</span>`)
                       .join("")
-                  : `<span class="chip">No files</span>`
+                  : `<span class="chip">No files in this room</span>`
               }
             </div>
           </div>
@@ -779,7 +996,21 @@
         }
       });
 
-      refreshBtn.addEventListener("click", () => loadDashboard().catch((error) => alert(error.message)));
+      refreshBtn.addEventListener("click", async () => {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "REFRESHING…";
+        liveUpdateLabel.textContent = "Synchronizing data";
+        try {
+          await loadDashboard();
+        } catch (error) {
+          alert(error.message);
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = "REFRESH DATA";
+        }
+      });
+
+      projectSearch.addEventListener("input", () => renderProjects(publishedProjects));
 
       logoutBtn.addEventListener("click", async () => {
         await api("/admin/api/logout", { method: "POST" }).catch(() => {});
@@ -811,6 +1042,10 @@
             await copyText(target.dataset.pin);
             target.textContent = "COPIED";
             setTimeout(() => (target.textContent = "COPY PIN"), 1000);
+          } else if (target.classList.contains("project-copy-btn")) {
+            await copyText(target.dataset.link);
+            target.textContent = "COPIED";
+            setTimeout(() => (target.textContent = "COPY"), 1000);
           } else if (target.classList.contains("lock-btn")) {
             await sessionAction(target.dataset.id, "lock-toggle");
           } else if (target.classList.contains("freeze-btn")) {
@@ -829,7 +1064,9 @@
       if (socket) {
         socket.on("admin:update", () => {
           if (appView.style.display === "block") {
-            loadDashboard().catch(() => {});
+            liveUpdateLabel.textContent = "New activity detected";
+            clearTimeout(realtimeRefreshTimer);
+            realtimeRefreshTimer = setTimeout(() => loadDashboard().catch(() => {}), 140);
           }
         });
       }

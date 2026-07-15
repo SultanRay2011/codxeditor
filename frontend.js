@@ -4973,7 +4973,7 @@ let projectFiles = [
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
             <li>Start a collaboration session for shared files, chat, cursors, roles, and room controls</li>
-            <li>Authorized administrators get a responsive green-and-white control room with a left sidebar, live metrics, session inspection, and management actions</li>
+            <li>Authorized administrators get a premium Outfit-powered green-and-white control room with eight realtime metrics, complete live-session inspection, published-project search, and protected reopening in CodX Editor</li>
           </ul>
         </article>
 
@@ -21622,6 +21622,41 @@ async function initializeAutomaticLocalization() {
   } catch (_error) {}
 }
 
+async function tryOpenAdminPublishedProject() {
+  const url = new URL(window.location.href);
+  const projectId = String(url.searchParams.get("adminProject") || "").trim();
+  if (!projectId) return false;
+  try {
+    const response = await fetch(`/admin/api/project/${encodeURIComponent(projectId)}`, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.ok || !data?.project) {
+      throw new Error(data?.error || "Unable to open this published project.");
+    }
+    const project = data.project;
+    const opened = applyProjectState(
+      {
+        files: project.files,
+        activeFileName: project.activeFileName,
+        previewTarget: project.previewTarget,
+      },
+      `published project “${project.projectName || projectId}”`,
+    );
+    if (!opened) return false;
+    activeSavedProjectName = null;
+    document.title = `${project.projectName || projectId} | CodX Editor`;
+    url.searchParams.delete("adminProject");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    showNotification(`Opened published project “${project.projectName || projectId}”.`, "success");
+    return true;
+  } catch (error) {
+    showNotification(error.message || "Unable to open this published project.", "error");
+    return false;
+  }
+}
+
 // PART 15 - APPLICATION INITIALIZATION
 window.addEventListener("load", () => {
   initializeEditorPresence();
@@ -21631,7 +21666,12 @@ window.addEventListener("load", () => {
   initializeEditor();
   initializeAutomaticLocalization();
   Promise.resolve()
-    .then(() => (sessionFlowStarted ? false : tryRestoreAutosaveDraft()))
+    .then(() => (sessionFlowStarted ? false : tryOpenAdminPublishedProject()))
+    .then((openedAdminProject) =>
+      (openedAdminProject || sessionFlowStarted)
+        ? openedAdminProject
+        : tryRestoreAutosaveDraft(),
+    )
     .then(() => {
       updateProjectStatusUI();
       updatePreview();

@@ -837,6 +837,66 @@ app.get("/admin/api/sessions", (_req, res) => {
   });
 });
 
+app.get("/admin/api/projects", (req, res) => {
+  const origin = `${req.protocol}://${req.get("host")}`;
+  const projects = Array.from(publishedProjects.values())
+    .map((project) => {
+      const files = Array.isArray(project?.files) ? project.files : [];
+      const htmlFile = files.find((file) => String(file?.type || "").toLowerCase() === "html");
+      const id = String(project?.id || "").trim();
+      return {
+        id,
+        projectName: String(project?.projectName || "CodX Editor Project"),
+        pageTitle: extractHtmlTitle(htmlFile?.content || ""),
+        shareLink: `${origin}/published/${encodeURIComponent(id)}`,
+        editorLink: `/frontend.html?adminProject=${encodeURIComponent(id)}`,
+        fileCount: files.length,
+        fileTypes: Array.from(
+          new Set(files.map((file) => String(file?.type || "file").toLowerCase())),
+        ).slice(0, 8),
+        activeFileName: String(project?.activeFileName || htmlFile?.name || ""),
+        hasHtml: Boolean(htmlFile),
+        totalCharacters: files.reduce(
+          (sum, file) => sum + String(file?.content || "").length,
+          0,
+        ),
+        createdAt: Number(project?.createdAt || Date.now()),
+        updatedAt: Number(project?.updatedAt || project?.createdAt || Date.now()),
+      };
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  res.json({ ok: true, projects });
+});
+
+app.get("/admin/api/project/:id", (req, res) => {
+  const entry = findPublishedProjectEntry(req.params.id);
+  if (!entry?.project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const project = entry.project;
+  const files = cloneFiles(project.files || []);
+  const activeFileName =
+    String(project.activeFileName || "") ||
+    String(files.find((file) => String(file?.type || "").toLowerCase() === "html")?.name || "") ||
+    String(files[0]?.name || "");
+  res.json({
+    ok: true,
+    project: {
+      id: String(project.id || entry.key),
+      projectName: String(project.projectName || "CodX Editor Project"),
+      files,
+      activeFileName,
+      previewTarget: {
+        mode: "html",
+        fileName:
+          String(files.find((file) => String(file?.type || "").toLowerCase() === "html")?.name || "") ||
+          activeFileName,
+      },
+    },
+  });
+});
+
 app.get("/admin/api/session/:sessionId", (req, res) => {
   const sessionId = normalizeSessionId(req.params.sessionId);
   const session = sessions.get(sessionId);
@@ -1021,6 +1081,10 @@ app.post("/api/publish", (req, res) => {
   }
   savePublishedProjects();
   const published = findPublishedProjectEntry(id)?.project || publishedProjects.get(id);
+  logAdminEvent(
+    mode === "update" ? "Published project updated" : "Project published",
+    `${projectName || id} is available at /published/${published?.id || id}.`,
+  );
   const responseVerificationKey = String(published?.verificationKey || "").trim();
   res.json({
     ok: true,
@@ -1614,6 +1678,12 @@ function summarizeSession(sessionId, session) {
         participant.priority ||
         Array.isArray(participant.allowedFiles),
     ).length,
+    participantPreview: participants.slice(0, 6).map((participant) => ({
+      name: String(participant?.name || "Guest"),
+      role: String(participant?.role || "participant"),
+      theme: String(participant?.theme || "#16a34a"),
+      currentFile: String(participant?.currentFile || ""),
+    })),
   };
 }
 
