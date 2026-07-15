@@ -4953,7 +4953,7 @@ let projectFiles = [
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
-            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs instead of squeezing every panel onto one screen; on desktop, open Console from the Command Palette or keyboard shortcut</li>
+            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on desktop, use the header Console toggle, Command Palette, or keyboard shortcut</li>
             <li>The More button opens a compact two-column menu on phones and tablets so every option fits comfortably</li>
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
@@ -22185,6 +22185,14 @@ const tutorialSteps = [
       "When enabled, your code runs automatically as you type. Disable it to run manually with the RUN button.",
     position: "bottom",
   },
+  ...(isCompactWorkspaceLayout() ? [] : [{
+    target: 'label[title="Show/hide console output"]',
+    icon: "fa-solid fa-terminal",
+    title: "Console Toggle",
+    description:
+      "Show or hide console logs, errors, and warnings from the desktop header.",
+    position: "bottom",
+  }]),
   {
     target: "#collabBtn",
     icon: "fa-solid fa-users",

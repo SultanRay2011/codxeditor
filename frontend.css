@@ -238,6 +238,10 @@ header .run-button:hover {
   gap: 8px;
 }
 
+.header-switches label[for="showConsole"] {
+  margin-left: 8px;
+}
+
 .switch {
   position: relative;
   display: inline-block;
@@ -5616,6 +5620,10 @@ iframe {
     font-size: 12px;
   }
 
+  .header-switches label[for="showConsole"] {
+    margin-left: 4px;
+  }
+
   header .run-button {
     min-height: 40px;
     padding: 9px 12px;
@@ -7309,6 +7317,10 @@ iframe {
 
   .header-switches > label:not(.switch) {
     display: none;
+  }
+
+  .header-switches > .desktop-console-control {
+    display: none !important;
   }
 
   .header-more-menu,
