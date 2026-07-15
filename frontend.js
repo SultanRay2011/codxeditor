@@ -4917,6 +4917,7 @@ let projectFiles = [
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
             <li>On phones and portrait tablets, use Files, Editor, and Preview tabs instead of squeezing every panel onto one screen</li>
+            <li>The More button opens a full mobile-safe menu above the workspace</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>

@@ -7157,10 +7157,10 @@ iframe {
       max(8px, env(safe-area-inset-right, 0px))
       6px
       max(8px, env(safe-area-inset-left, 0px)) !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+    overflow: visible !important;
     white-space: nowrap;
     scrollbar-width: none;
+    backdrop-filter: none;
   }
 
   header::-webkit-scrollbar {
@@ -7214,6 +7214,8 @@ iframe {
     width: min(320px, calc(100vw - 16px));
     max-height: calc(100dvh - 72px - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 2200;
   }
 
   .header-more-panel .run-button {
