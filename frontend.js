@@ -4958,6 +4958,7 @@ let projectFiles = [
             <li>The More button uses the same compact two-column menu on phones and tablets in either orientation, while tablet landscape keeps the laptop-style editor workspace</li>
             <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
             <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
+            <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -8590,30 +8591,6 @@ themeColorText.addEventListener("input", (e) => {
     updatePreviewBox();
   }
 });
-
-function bindSettingsColorPicker(colorInput, title) {
-  if (!colorInput) return;
-  colorInput.title = title;
-  const openPicker = () => {
-    openCssColorPicker(
-      colorInput,
-      colorInput.value,
-      (color) => {
-        colorInput.value = color;
-        colorInput.dispatchEvent(new Event("input", { bubbles: true }));
-      },
-      title,
-    );
-  };
-  colorInput.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openPicker();
-  });
-}
-
-bindSettingsColorPicker(editorBgColorInput, "Choose editor background color");
-bindSettingsColorPicker(themeColorInput, "Choose theme color");
 
 if (resetThemeColorBtn) {
   resetThemeColorBtn.addEventListener("click", () => {
