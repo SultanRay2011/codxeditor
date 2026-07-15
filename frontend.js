@@ -4979,7 +4979,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to send or receive the workspace, saved projects, media, complete editor settings, and preview preferences; Send shows a live ten-minute expiry countdown</li>
+            <li>Use Device Transfer to send or receive projects and settings with a visible QR code, a live ten-minute countdown, or three four-character code boxes</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -6890,7 +6890,7 @@ function setSavedProjects(projects) {
 
 function normalizeDeviceTransferCode(value) {
   const compact = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return compact.length === 12 ? compact.match(/.{1,3}/g).join("-") : "";
+  return compact.length === 12 ? compact.match(/.{1,4}/g).join("-") : "";
 }
 
 async function requestDeviceTransfer(path, body) {
@@ -7050,9 +7050,9 @@ function showDeviceTransferCodePrompt(prefilledCode = "") {
       appDialogMessage.innerHTML = `
         <p class="device-transfer-instruction">Enter the 12-character code shown on your other device:</p>
         <div class="device-transfer-code-entry" role="group" aria-label="12-character transfer code">
-          ${[0, 1, 2, 3].map((index) => `
+          ${[0, 1, 2].map((index) => `
             ${index ? '<span class="device-transfer-code-dash" aria-hidden="true">–</span>' : ""}
-            <input class="device-transfer-code-box" type="text" inputmode="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Transfer code group ${index + 1}">
+            <input class="device-transfer-code-box" type="text" inputmode="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Transfer code group ${index + 1}">
           `).join("")}
         </div>
         <p id="deviceTransferCodeEntryStatus" class="device-transfer-code-entry-status">Letters are automatically capitalized.</p>
@@ -7092,11 +7092,11 @@ function showDeviceTransferCodePrompt(prefilledCode = "") {
       let offset = 0;
       let lastChangedIndex = startIndex;
       for (let index = startIndex; index < inputs.length && offset < characters.length; index += 1) {
-        inputs[index].value = characters.slice(offset, offset + 3);
-        offset += 3;
+        inputs[index].value = characters.slice(offset, offset + 4);
+        offset += 4;
         lastChangedIndex = index;
       }
-      const nextInput = inputs[lastChangedIndex].value.length === 3
+      const nextInput = inputs[lastChangedIndex].value.length === 4
         ? inputs[Math.min(lastChangedIndex + 1, inputs.length - 1)]
         : inputs[lastChangedIndex];
       nextInput?.focus();
@@ -7108,9 +7108,9 @@ function showDeviceTransferCodePrompt(prefilledCode = "") {
       if (!code) {
         if (status) {
           status.dataset.state = "error";
-          status.textContent = "Complete all four boxes before continuing.";
+          status.textContent = "Complete all three boxes before continuing.";
         }
-        inputs.find((input) => input.value.length < 3)?.focus();
+        inputs.find((input) => input.value.length < 4)?.focus();
         return;
       }
       closeAppDialog({ ok: true, value: code });
@@ -7119,12 +7119,12 @@ function showDeviceTransferCodePrompt(prefilledCode = "") {
     inputs.forEach((input, index) => {
       input.addEventListener("input", () => {
         const characters = cleanCharacters(input.value);
-        if (characters.length > 3) {
+        if (characters.length > 4) {
           fillInputs(index, characters);
           return;
         }
-        input.value = characters.slice(0, 3);
-        if (input.value.length === 3 && index < inputs.length - 1) {
+        input.value = characters.slice(0, 4);
+        if (input.value.length === 4 && index < inputs.length - 1) {
           inputs[index + 1].focus();
           inputs[index + 1].select();
         }
@@ -7159,7 +7159,7 @@ function showDeviceTransferCodePrompt(prefilledCode = "") {
     if (initialCharacters) fillInputs(0, initialCharacters);
     updateState();
     setTimeout(() => {
-      const firstIncompleteInput = inputs.find((input) => input.value.length < 3);
+      const firstIncompleteInput = inputs.find((input) => input.value.length < 4);
       (firstIncompleteInput || inputs[0])?.focus();
     }, 0);
   });
@@ -7208,7 +7208,16 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   if (appDialogMessage) {
     appDialogMessage.innerHTML = `
       <p class="device-transfer-instruction">Scan this QR code with the other device, or open CodX Editor and enter the one-time code:</p>
-      ${qrImage ? `<div class="device-transfer-qr"><img src="${escapeHtmlAttributeValue(qrImage)}" alt="QR code for this one-time device transfer"><span><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span></div>` : ""}
+      <div id="deviceTransferQr" class="device-transfer-qr" data-state="loading">
+        <strong class="device-transfer-qr-title"><i class="fa-solid fa-qrcode"></i> SCAN TO RECEIVE</strong>
+        <div class="device-transfer-qr-frame">
+          <img id="deviceTransferQrImage" alt="QR code for this one-time device transfer" width="320" height="320" hidden>
+          <div id="deviceTransferQrPlaceholder" class="device-transfer-qr-placeholder">
+            <i class="fa-solid fa-spinner fa-spin"></i><span>Preparing QR code…</span>
+          </div>
+        </div>
+        <span id="deviceTransferQrStatus"><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span>
+      </div>
       <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
       <p id="deviceTransferExpiry" class="device-transfer-expiry" aria-live="polite">
         <i class="fa-regular fa-clock"></i>
@@ -7228,6 +7237,27 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
     `;
   }
   if (appDialog) appDialog.style.display = "flex";
+  const qrContainer = document.getElementById("deviceTransferQr");
+  const qrImageElement = document.getElementById("deviceTransferQrImage");
+  const qrPlaceholder = document.getElementById("deviceTransferQrPlaceholder");
+  const qrStatus = document.getElementById("deviceTransferQrStatus");
+  if (qrImage && qrContainer && qrImageElement) {
+    qrImageElement.onload = () => {
+      qrImageElement.hidden = false;
+      if (qrPlaceholder) qrPlaceholder.hidden = true;
+      qrContainer.dataset.state = "ready";
+    };
+    qrImageElement.onerror = () => {
+      qrContainer.dataset.state = "error";
+      if (qrPlaceholder) qrPlaceholder.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>QR image unavailable</span>';
+      if (qrStatus) qrStatus.textContent = "Use the transfer code or Copy Link instead.";
+    };
+    qrImageElement.src = qrImage;
+  } else if (qrContainer) {
+    qrContainer.dataset.state = "error";
+    if (qrPlaceholder) qrPlaceholder.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>QR image unavailable</span>';
+    if (qrStatus) qrStatus.textContent = "Use the transfer code or Copy Link instead.";
+  }
   const copyText = async (value, successMessage) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -7604,7 +7634,7 @@ async function receiveDeviceTransfer(prefilledCode = "") {
     code = normalizeDeviceTransferCode(dialog.value);
   }
   if (!code) {
-    showNotification("Enter a valid transfer code in the format ABC-DEF-GHI-JKL.", "error");
+    showNotification("Enter a valid transfer code in the format A1B2-C3D4-E5F6.", "error");
     return;
   }
   try {
