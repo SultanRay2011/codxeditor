@@ -2937,6 +2937,28 @@ iframe {
   .file-item {
     font-size: 12px;
     padding: 7px 10px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .file-item button {
+    display: inline-grid;
+    place-items: center;
+    min-width: 34px;
+    min-height: 34px;
+    margin-left: 4px;
+    padding: 0;
+    border-radius: 7px;
+  }
+
+  #newFileBtn,
+  .project-status-badge,
+  .project-status-save-btn {
+    min-height: 36px;
+  }
+
+  .editor-actions .run-button {
+    min-height: 40px;
   }
 
   #suggestionPopup {
@@ -2972,7 +2994,6 @@ iframe {
   }
 }
 
-/* Command palette */
 .sr-only {
   position: absolute !important;
   width: 1px !important;

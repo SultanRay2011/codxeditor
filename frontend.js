@@ -4873,6 +4873,7 @@ let projectFiles = [
             <li>Press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and commands from the Command Palette</li>
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
+            <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
