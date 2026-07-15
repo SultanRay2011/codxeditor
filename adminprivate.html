@@ -386,12 +386,17 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="/adminprivate.css" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
       <section class="login-card">
         <span class="badge">Private Admin</span>
-        <svg viewBox="0 0 280 150" role="img" aria-labelledby="adminIllustrationTitle" style="width:min(260px,80%);display:block;margin:0 auto 18px"><title id="adminIllustrationTitle">Private control room protected by an administrator lock</title><rect x="18" y="28" width="150" height="104" rx="17" fill="#111827" stroke="#38bdf8" stroke-width="3"/><path d="M42 57h102M42 78h76M42 99h92" stroke="#334155" stroke-width="8" stroke-linecap="round"/><circle cx="194" cy="82" r="46" fill="#0f172a" stroke="#7c3aed" stroke-width="3"/><rect x="176" y="78" width="36" height="31" rx="6" fill="#38bdf8"/><path d="M182 78V67a12 12 0 0 1 24 0v11" fill="none" stroke="#38bdf8" stroke-width="6"/></svg>
+        <div class="login-brand" aria-label="CodX Editor">
+          <span class="brand-mark">CX</span>
+          <span>CODX EDITOR</span>
+        </div>
+        <svg class="login-illustration" viewBox="0 0 280 150" role="img" aria-labelledby="adminIllustrationTitle"><title id="adminIllustrationTitle">Private control room protected by an administrator lock</title><rect x="18" y="28" width="150" height="104" rx="17" fill="#f0fdf4" stroke="#16a34a" stroke-width="3"/><path d="M42 57h102M42 78h76M42 99h92" stroke="#bbf7d0" stroke-width="8" stroke-linecap="round"/><circle cx="194" cy="82" r="46" fill="#ffffff" stroke="#15803d" stroke-width="3"/><rect x="176" y="78" width="36" height="31" rx="6" fill="#16a34a"/><path d="M182 78V67a12 12 0 0 1 24 0v11" fill="none" stroke="#16a34a" stroke-width="6"/></svg>
         <h1>CodX Editor Control Room</h1>
         <p>
           Sign in to view session links, pins, participant counts, frontend page
@@ -415,7 +420,58 @@
     </main>
 
     <main id="appView" class="app">
-      <header class="topbar">
+      <div class="dashboard-shell">
+        <aside class="sidebar" aria-label="Admin navigation">
+          <a class="sidebar-brand" href="#overview" aria-label="CodX Editor admin home">
+            <span class="brand-mark">CX</span>
+            <span class="sidebar-brand-copy">
+              <strong>CODX</strong>
+              <small>ADMIN</small>
+            </span>
+          </a>
+
+          <div class="sidebar-status">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>Control room online</span>
+          </div>
+
+          <nav class="sidebar-nav">
+            <span class="nav-label">Workspace</span>
+            <a class="nav-item active" href="#overview" aria-label="Overview">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+              <span>Overview</span>
+            </a>
+            <a class="nav-item" href="#sessionsPanel" aria-label="Live sessions">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a4 4 0 1 0-3.46-6H12a4 4 0 0 0 0 8h.54A4 4 0 0 0 16 11ZM8 13c-3.31 0-6 1.79-6 4v2h10v-2c0-1.05.42-2.02 1.14-2.84A9.42 9.42 0 0 0 8 13Zm8 0c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4Z"/></svg>
+              <span>Live sessions</span>
+            </a>
+            <a class="nav-item" href="#selectedPanel" aria-label="Session inspector">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3a8 8 0 1 0 4.9 14.33L20.6 22 22 20.6l-4.67-4.7A8 8 0 0 0 11 3Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
+              <span>Inspector</span>
+            </a>
+            <a class="nav-item" href="#activityPanel" aria-label="Admin activity">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h10V8H7Zm0 4v2h10v-2H7Zm0 4v2h7v-2H7Z"/></svg>
+              <span>Activity</span>
+            </a>
+          </nav>
+
+          <div class="sidebar-footer">
+            <a class="nav-item" href="/help.html" aria-label="Open help">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm0-5.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5ZM12 6c-2.2 0-4 1.57-4 3.5h2c0-.83.9-1.5 2-1.5s2 .67 2 1.5c0 .78-.52 1.11-1.45 1.66C11.5 11.78 11 12.55 11 14h2c0-.63.15-.87.57-1.13C14.65 12.23 16 11.42 16 9.5 16 7.57 14.2 6 12 6Z"/></svg>
+              <span>Help center</span>
+            </a>
+            <div class="admin-profile">
+              <span class="admin-avatar">AD</span>
+              <span class="admin-profile-copy">
+                <strong>Administrator</strong>
+                <small>Private access</small>
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        <div class="dashboard-workspace">
+      <header class="topbar" id="overview">
         <div>
           <span class="badge">Administrator Dashboard</span>
           <h1>Live Sessions</h1>
@@ -428,10 +484,10 @@
         </div>
       </header>
 
-      <section class="grid stats" id="statsGrid"></section>
+      <section class="grid stats" id="statsGrid" aria-label="System overview"></section>
 
       <section class="grid main-grid">
-        <div class="card">
+        <div class="card" id="sessionsPanel">
           <div class="session-head">
             <div>
               <span class="section-label">Manage Session</span>
@@ -443,18 +499,20 @@
         </div>
 
         <aside class="grid">
-          <section class="card">
+          <section class="card" id="selectedPanel">
             <span class="section-label">Selected Session</span>
             <div id="sessionDetail" class="detail-box empty">
               Select a session to inspect participants, files, and status.
             </div>
           </section>
-          <section class="card">
+          <section class="card" id="activityPanel">
             <span class="section-label">Admin Activity</span>
             <div id="activity" class="activity"></div>
           </section>
         </aside>
       </section>
+        </div>
+      </div>
     </main>
 
     <script>
@@ -470,9 +528,18 @@
       const refreshBtn = document.getElementById("refreshBtn");
       const logoutBtn = document.getElementById("logoutBtn");
       const copyAllBtn = document.getElementById("copyAllBtn");
+      const sidebarNavItems = Array.from(document.querySelectorAll(".sidebar-nav .nav-item"));
 
       let overview = null;
       let selectedSessionId = "";
+
+      function setActiveSidebarItem(activeItem) {
+        sidebarNavItems.forEach((item) => item.classList.toggle("active", item === activeItem));
+      }
+
+      sidebarNavItems.forEach((item) => {
+        item.addEventListener("click", () => setActiveSidebarItem(item));
+      });
 
       function escapeHtml(value) {
         return String(value ?? "")

@@ -4973,6 +4973,7 @@ let projectFiles = [
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
             <li>Start a collaboration session for shared files, chat, cursors, roles, and room controls</li>
+            <li>Authorized administrators get a responsive green-and-white control room with a left sidebar, live metrics, session inspection, and management actions</li>
           </ul>
         </article>
 
