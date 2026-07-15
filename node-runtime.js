@@ -301,7 +301,7 @@ async function toggle() {
     consoleWasOpen = Boolean(consoleContainer?.classList.contains("show"));
     consoleContainer?.classList.add("show");
     setEnabled(true);
-    window.codxSetMobileWorkspacePane?.("preview");
+    window.codxSetMobileWorkspacePane?.("console");
     try {
       await bootRuntime();
       terminalInput?.focus();

@@ -152,14 +152,28 @@ function isCompactWorkspaceLayout() {
 }
 
 function setMobileWorkspacePane(pane, { focus = false } = {}) {
-  const nextPane = ["files", "editor", "preview"].includes(pane) ? pane : "editor";
-  document.body.classList.remove("mobile-pane-files", "mobile-pane-editor", "mobile-pane-preview");
+  const nextPane = ["files", "editor", "preview", "console"].includes(pane) ? pane : "editor";
+  document.body.classList.remove("mobile-pane-files", "mobile-pane-editor", "mobile-pane-preview", "mobile-pane-console");
   document.body.classList.add(`mobile-pane-${nextPane}`);
   mobileWorkspaceButtons.forEach((button) => {
     const selected = button.dataset.mobilePane === nextPane;
     button.setAttribute("aria-selected", selected ? "true" : "false");
     button.tabIndex = selected ? 0 : -1;
   });
+  if (isCompactWorkspaceLayout() && nextPane === "console" && !showConsoleCheckbox.disabled) {
+    showConsoleCheckbox.checked = true;
+    showConsoleCheckbox.dispatchEvent(new Event("change"));
+    requestAnimationFrame(() => {
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    });
+  } else if (
+    isCompactWorkspaceLayout() &&
+    nextPane === "preview" &&
+    !previewPanel.classList.contains("node-runtime-active")
+  ) {
+    showConsoleCheckbox.checked = false;
+    showConsoleCheckbox.dispatchEvent(new Event("change"));
+  }
   if (nextPane === "preview") {
     requestAnimationFrame(() => updatePreviewDeviceScale());
   } else if (focus && nextPane === "editor") {
@@ -4916,7 +4930,7 @@ let projectFiles = [
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
-            <li>On phones and portrait tablets, use Files, Editor, and Preview tabs instead of squeezing every panel onto one screen</li>
+            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs instead of squeezing every panel onto one screen</li>
             <li>The More button opens a full mobile-safe menu above the workspace</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>

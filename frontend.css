@@ -7237,7 +7237,7 @@ iframe {
   .mobile-workspace-tabs {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     padding: 6px max(8px, env(safe-area-inset-right, 0px)) 6px max(8px, env(safe-area-inset-left, 0px));
     border-bottom: 1px solid var(--border-color);
@@ -7299,8 +7299,36 @@ iframe {
     display: none !important;
   }
 
-  body.mobile-pane-preview .editor-container > .preview {
+  body.mobile-pane-console .editor-container > .editors {
+    display: none !important;
+  }
+
+  body.mobile-pane-preview .editor-container > .preview,
+  body.mobile-pane-console .editor-container > .preview {
     display: flex !important;
+  }
+
+  body.mobile-pane-console .preview-header,
+  body.mobile-pane-console .preview-viewport-stage {
+    display: none !important;
+  }
+
+  body.mobile-pane-console .console-container {
+    flex: 1 1 auto;
+    display: flex !important;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    border-top: 0;
+    border-radius: 0;
+  }
+
+  body.mobile-pane-console .preview:not(.node-runtime-active) #consoleOutput {
+    flex: 1 1 auto;
+    display: block !important;
+    height: auto;
+    min-height: 0;
+    overflow: auto;
   }
 
   body.mobile-pane-files .file-explorer,
@@ -7412,6 +7440,14 @@ iframe {
 
   .editor-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobile-workspace-tabs button {
+    min-height: 50px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px 3px;
+    font-size: 9px;
   }
 
   #exportZipBtn strong,
