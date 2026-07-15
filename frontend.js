@@ -4969,6 +4969,7 @@ let projectFiles = [
           <h2>Projects & sharing</h2>
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
+            <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -6870,6 +6871,20 @@ async function saveCurrentProjectBeforeOpeningAnother() {
   );
   if (!saveDialog?.ok) return false;
   return saveCurrentProjectToLibrary(saveDialog.value);
+}
+
+async function saveCurrentProjectFromEditor() {
+  if (activeSavedProjectName) {
+    return saveCurrentProjectToLibrary(activeSavedProjectName);
+  }
+  const dialog = await showAppPrompt(
+    "SAVE PROJECT",
+    "Choose a name for this saved project:",
+    getSuggestedProjectName(),
+    "codx-project",
+  );
+  if (!dialog?.ok) return false;
+  return saveCurrentProjectToLibrary(dialog.value);
 }
 
 async function openSavedProjectFromLibrary(projectId) {
@@ -21697,32 +21712,10 @@ if (newProjectBtn) {
   newProjectBtn.addEventListener("click", handleNewProject);
 }
 if (saveProjectBtn) {
-  saveProjectBtn.addEventListener("click", async () => {
-    const dialog = await showAppPrompt(
-      "SAVE PROJECT",
-      "Choose a name for this saved project:",
-      getSuggestedProjectName(),
-      "codx-project",
-    );
-    if (!dialog?.ok) return;
-    saveCurrentProjectToLibrary(dialog.value);
-  });
+  saveProjectBtn.addEventListener("click", saveCurrentProjectFromEditor);
 }
 if (projectStatusSaveBtn) {
-  projectStatusSaveBtn.addEventListener("click", async () => {
-    if (activeSavedProjectName) {
-      saveCurrentProjectToLibrary(activeSavedProjectName);
-      return;
-    }
-    const dialog = await showAppPrompt(
-      "SAVE PROJECT",
-      "Choose a name for this saved project:",
-      getSuggestedProjectName(),
-      "codx-project",
-    );
-    if (!dialog?.ok) return;
-    saveCurrentProjectToLibrary(dialog.value);
-  });
+  projectStatusSaveBtn.addEventListener("click", saveCurrentProjectFromEditor);
 }
 if (openSavedProjectsBtn) {
   openSavedProjectsBtn.addEventListener("click", () => renderProjectLibrary("saved"));
