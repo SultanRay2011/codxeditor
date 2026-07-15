@@ -199,6 +199,26 @@ mobileWorkspaceTabs?.addEventListener("keydown", (event) => {
 
 window.codxSetMobileWorkspacePane = setMobileWorkspacePane;
 
+function isConsoleWorkspaceOpen() {
+  return isCompactWorkspaceLayout()
+    ? document.body.classList.contains("mobile-pane-console")
+    : Boolean(showConsoleCheckbox?.checked);
+}
+
+function setConsoleWorkspaceOpen(open, { focus = false } = {}) {
+  if (!showConsoleCheckbox || (open && showConsoleCheckbox.disabled)) return;
+  if (isCompactWorkspaceLayout()) {
+    setMobileWorkspacePane(open ? "console" : "preview", { focus });
+    return;
+  }
+  showConsoleCheckbox.checked = Boolean(open);
+  showConsoleCheckbox.dispatchEvent(new Event("change"));
+}
+
+function toggleConsoleWorkspace() {
+  setConsoleWorkspaceOpen(!isConsoleWorkspaceOpen(), { focus: true });
+}
+
 
 function getModalDoneBtn() {
   return document.getElementById("modalDoneBtn");
@@ -284,15 +304,12 @@ function getCommandPaletteCommands() {
 
   commands.push({
     id: "view.console",
-    label: showConsoleCheckbox?.checked ? "Hide console" : "Show console",
+    label: isConsoleWorkspaceOpen() ? "Hide console" : "Show console",
     description: "Toggle preview logs and errors",
     icon: "fa-solid fa-rectangle-list",
     keywords: "output debug log",
     disabled: Boolean(!showConsoleCheckbox || showConsoleCheckbox.disabled),
-    run: () => {
-      showConsoleCheckbox.checked = !showConsoleCheckbox.checked;
-      showConsoleCheckbox.dispatchEvent(new Event("change"));
-    },
+    run: toggleConsoleWorkspace,
   });
 
   commands.push({
@@ -4930,7 +4947,7 @@ let projectFiles = [
             <li>Use Auto-Run or the Run button to update the preview</li>
             <li>Inspect preview HTML and adjust preview zoom from its header</li>
             <li>The workspace, content, and touch controls adapt to desktop, tablet, phone, and short landscape screens</li>
-            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs instead of squeezing every panel onto one screen</li>
+            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs instead of squeezing every panel onto one screen; on desktop, open Console from the Command Palette or keyboard shortcut</li>
             <li>The More button opens a full mobile-safe menu above the workspace</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
@@ -4970,7 +4987,7 @@ let projectFiles = [
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> Export your project as a ZIP</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd> Run preview manually</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd> Create a new file</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> Toggle console</li>
+            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> Open or close Console</li>
             <li><kbd>Esc</kbd> Close supported dialogs or exit Zen Mode</li>
             <li>Type <strong>cxstart</strong> in an empty HTML file and press <kbd>Enter</kbd></li>
             <li>Type an Emmet abbreviation and press <kbd>Tab</kbd> to expand it</li>
@@ -7773,10 +7790,7 @@ const previewRuntimeNotificationHistory = new Map();
 
 function openPreviewErrorFromNotification(message) {
   const errorMessage = String(message || "").trim();
-  if (showConsoleCheckbox && !showConsoleCheckbox.disabled) {
-    showConsoleCheckbox.checked = true;
-    showConsoleCheckbox.dispatchEvent(new Event("change"));
-  }
+  setConsoleWorkspaceOpen(true);
   const location = extractErrorLocationFromConsoleMessage(errorMessage);
   if (location) jumpToEditorLocation(location.fileName, location.line, location.col || 1);
   requestAnimationFrame(() => {
@@ -14761,8 +14775,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (mod && e.shiftKey && key === "c") {
     e.preventDefault();
-    showConsoleCheckbox.checked = !showConsoleCheckbox.checked;
-    showConsoleCheckbox.dispatchEvent(new Event("change"));
+    toggleConsoleWorkspace();
   }
 });
 
@@ -22162,14 +22175,6 @@ const tutorialSteps = [
     title: "Auto-Run",
     description:
       "When enabled, your code runs automatically as you type. Disable it to run manually with the RUN button.",
-    position: "bottom",
-  },
-  {
-    target: 'label[title="Show/hide console output"]',
-    icon: "fa-solid fa-terminal",
-    title: "Console Toggle",
-    description:
-      "Show or hide the console output panel. View console.log(), errors, and warnings here.",
     position: "bottom",
   },
   {
