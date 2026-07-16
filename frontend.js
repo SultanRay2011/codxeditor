@@ -4197,6 +4197,7 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
 function closeAppDialog(result = null) {
   stopDeviceTransferScanner();
   stopDeviceTransferCountdown();
+  resetAppDialogScroll();
   if (appDialog) appDialog.style.display = "none";
   if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
@@ -4210,6 +4211,13 @@ function closeAppDialog(result = null) {
   const resolver = activeDialogResolver;
   activeDialogResolver = null;
   if (resolver) resolver(result);
+}
+
+function resetAppDialogScroll() {
+  const dialogSurface = appDialog?.firstElementChild;
+  if (!(dialogSurface instanceof HTMLElement)) return;
+  dialogSurface.scrollTop = 0;
+  dialogSurface.scrollLeft = 0;
 }
 
 function showAppDialog({
@@ -4979,7 +4987,8 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to send or receive projects and settings with a visible QR code, a live ten-minute countdown, or three four-character code boxes</li>
+            <li>Use Device Transfer to send or receive projects and settings with a reliable QR image shown at the top of the modal, a live ten-minute countdown, or three four-character code boxes</li>
+            <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
@@ -7041,6 +7050,84 @@ function getDeviceTransferSummaryHtml(summary, note = "") {
   `;
 }
 
+function showDeviceTransferImportConfirm(summary, currentEditorHasUnsavedChanges = false) {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "device-transfer-import";
+    if (appDialogTitle) appDialogTitle.textContent = "IMPORT FROM DEVICE";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        ${getDeviceTransferSummaryHtml(summary)}
+        <div id="deviceTransferImportMode" class="device-transfer-import-mode" data-mode="replace">
+          <span class="device-transfer-import-mode-icon"><i class="fa-solid fa-code"></i></span>
+          <span class="device-transfer-import-mode-copy">
+            <strong id="deviceTransferImportModeTitle">Replace current editor</strong>
+            <small id="deviceTransferImportModeDescription">Open the transferred workspace in the editor after importing.</small>
+          </span>
+          <label class="switch" title="Replace or keep the current editor">
+            <input id="deviceTransferReplaceEditorToggle" type="checkbox" checked aria-label="Replace current editor" aria-describedby="deviceTransferImportModeDescription">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <p id="deviceTransferImportModeNote" class="device-transfer-warning"></p>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="deviceTransferImportCancelBtn" class="run-button" style="background:#6b7280"><strong>CANCEL</strong></button>
+        <button type="button" id="deviceTransferImportConfirmBtn" class="run-button"><strong id="deviceTransferImportConfirmText">IMPORT &amp; REPLACE</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+    resetAppDialogScroll();
+
+    const mode = document.getElementById("deviceTransferImportMode");
+    const toggle = document.getElementById("deviceTransferReplaceEditorToggle");
+    const title = document.getElementById("deviceTransferImportModeTitle");
+    const description = document.getElementById("deviceTransferImportModeDescription");
+    const note = document.getElementById("deviceTransferImportModeNote");
+    const confirmText = document.getElementById("deviceTransferImportConfirmText");
+    const confirmButton = document.getElementById("deviceTransferImportConfirmBtn");
+    const cancelButton = document.getElementById("deviceTransferImportCancelBtn");
+    const updateMode = () => {
+      const replaceCurrentWorkspace = Boolean(toggle?.checked);
+      if (mode) mode.dataset.mode = replaceCurrentWorkspace ? "replace" : "keep";
+      if (title) title.textContent = replaceCurrentWorkspace ? "Replace current editor" : "Keep current editor";
+      if (description) {
+        description.textContent = replaceCurrentWorkspace
+          ? "Open the transferred workspace in the editor after importing."
+          : "Keep the files and unsaved code currently open on this device.";
+      }
+      if (note) {
+        note.dataset.state = replaceCurrentWorkspace ? "replace" : "keep";
+        note.textContent = replaceCurrentWorkspace
+          ? currentEditorHasUnsavedChanges
+            ? "Your current editor has unsaved changes and will be replaced. Saved projects are still merged, with the newer copy winning when names match."
+            : "The current editor workspace will be replaced. Saved projects are still merged, with the newer copy winning when names match."
+          : "The current editor stays open. The incoming workspace is saved into Saved Projects, while saved projects and settings continue importing.";
+      }
+      if (confirmText) confirmText.textContent = replaceCurrentWorkspace ? "IMPORT & REPLACE" : "IMPORT & KEEP EDITOR";
+    };
+
+    toggle?.addEventListener("change", updateMode);
+    cancelButton?.addEventListener("click", () => closeAppDialog({ ok: false }));
+    confirmButton?.addEventListener("click", () => closeAppDialog({
+      ok: true,
+      replaceCurrentWorkspace: Boolean(toggle?.checked),
+    }));
+    updateMode();
+    setTimeout(() => {
+      toggle?.focus({ preventScroll: true });
+      resetAppDialogScroll();
+    }, 0);
+  });
+}
+
 function showDeviceTransferCodePrompt(prefilledCode = "") {
   return new Promise((resolve) => {
     activeDialogResolver = resolve;
@@ -7202,7 +7289,8 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   const transferUrl = new URL("/frontend.html", window.location.origin);
   transferUrl.searchParams.set("deviceTransfer", code);
   const shareUrl = String(data?.transferUrl || transferUrl.toString());
-  const qrImage = String(data?.qrDataUrl || "");
+  const qrImage = String(data?.qrImageUrl || data?.qrDataUrl || "");
+  const qrFallbackImage = String(data?.qrDataUrl || "");
   if (appDialog) appDialog.dataset.dialogKind = "device-transfer-code";
   if (appDialogTitle) appDialogTitle.textContent = "TRANSFER READY";
   if (appDialogMessage) {
@@ -7237,17 +7325,24 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
     `;
   }
   if (appDialog) appDialog.style.display = "flex";
+  resetAppDialogScroll();
   const qrContainer = document.getElementById("deviceTransferQr");
   const qrImageElement = document.getElementById("deviceTransferQrImage");
   const qrPlaceholder = document.getElementById("deviceTransferQrPlaceholder");
   const qrStatus = document.getElementById("deviceTransferQrStatus");
   if (qrImage && qrContainer && qrImageElement) {
+    let triedInlineFallback = false;
     qrImageElement.onload = () => {
       qrImageElement.hidden = false;
       if (qrPlaceholder) qrPlaceholder.hidden = true;
       qrContainer.dataset.state = "ready";
     };
     qrImageElement.onerror = () => {
+      if (!triedInlineFallback && qrFallbackImage && qrImageElement.src !== qrFallbackImage) {
+        triedInlineFallback = true;
+        qrImageElement.src = qrFallbackImage;
+        return;
+      }
       qrContainer.dataset.state = "error";
       if (qrPlaceholder) qrPlaceholder.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>QR image unavailable</span>';
       if (qrStatus) qrStatus.textContent = "Use the transfer code or Copy Link instead.";
@@ -7271,7 +7366,10 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   document.getElementById("deviceTransferCopyLinkBtn").onclick = () => copyText(shareUrl, "Transfer link copied.");
   document.getElementById("deviceTransferDoneBtn").onclick = () => closeAppDialog();
   startDeviceTransferCountdown(data?.expiresAt);
-  setTimeout(() => document.getElementById("deviceTransferCopyCodeBtn")?.focus(), 0);
+  setTimeout(() => {
+    document.getElementById("deviceTransferCopyCodeBtn")?.focus({ preventScroll: true });
+    resetAppDialogScroll();
+  }, 0);
 }
 
 function stopDeviceTransferCountdown() {
@@ -7561,7 +7659,7 @@ async function persistTransferredSnapshotMedia(snapshot, mediaCache) {
   }
 }
 
-async function importDeviceTransferPayload(payload) {
+async function importDeviceTransferPayload(payload, { replaceCurrentWorkspace = true } = {}) {
   const mediaCache = new Map();
   await persistTransferredSnapshotMedia(payload.currentProject, mediaCache);
   for (const project of payload.savedProjects || []) {
@@ -7569,13 +7667,39 @@ async function importDeviceTransferPayload(payload) {
   }
 
   const localProjects = getSavedProjects();
+  const incomingProjects = [...(payload.savedProjects || [])];
+  let importedWorkspaceName = "";
+  if (!replaceCurrentWorkspace && payload.currentProject) {
+    const requestedName = String(payload.activeSavedProjectName || "").trim();
+    const activeFileStem = String(payload.currentProject.activeFileName || "")
+      .replace(/\.[^.]+$/, "")
+      .trim();
+    const baseName = requestedName
+      ? `${requestedName} (Transferred)`
+      : `Imported ${activeFileStem || "Device Workspace"}`;
+    const usedNames = new Set(
+      [...localProjects, ...incomingProjects].map((project) => String(project?.name || "").trim().toLowerCase()),
+    );
+    importedWorkspaceName = baseName;
+    let suffix = 2;
+    while (usedNames.has(importedWorkspaceName.toLowerCase())) {
+      importedWorkspaceName = `${baseName} ${suffix}`;
+      suffix += 1;
+    }
+    incomingProjects.push({
+      id: `transferred-workspace-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: importedWorkspaceName,
+      updatedAt: Date.now(),
+      snapshot: payload.currentProject,
+    });
+  }
   const projectsByName = new Map(
     localProjects.map((project) => [String(project?.name || "").trim().toLowerCase(), project]),
   );
   const importedNames = new Set();
   let importedCount = 0;
   let newerLocalCount = 0;
-  for (const incoming of payload.savedProjects || []) {
+  for (const incoming of incomingProjects) {
     const nameKey = String(incoming?.name || "").trim().toLowerCase();
     if (!nameKey || !incoming?.snapshot) continue;
     const local = projectsByName.get(nameKey);
@@ -7607,19 +7731,26 @@ async function importDeviceTransferPayload(payload) {
     safeLocalStorage("set", "editorSettings", JSON.stringify(payload.editorSettings));
     loadSettings();
   }
-  const importedName = String(payload.activeSavedProjectName || "").trim();
-  activeSavedProjectName = importedNames.has(importedName.toLowerCase()) ? importedName : null;
-  if (!applyProjectState(payload.currentProject, "device transfer")) {
-    throw new Error("The transferred workspace could not be opened.");
+  if (replaceCurrentWorkspace) {
+    const importedName = String(payload.activeSavedProjectName || "").trim();
+    activeSavedProjectName = importedNames.has(importedName.toLowerCase()) ? importedName : null;
+    if (!applyProjectState(payload.currentProject, "device transfer")) {
+      throw new Error("The transferred workspace could not be opened.");
+    }
   }
   if (payload.workspaceSettings && Object.keys(payload.workspaceSettings).length) {
     applyWorkspaceSettings(payload.workspaceSettings);
   }
-  if (activeSavedProjectName) {
+  if (replaceCurrentWorkspace && activeSavedProjectName) {
     hasUnsavedChanges = false;
     updateProjectStatusUI();
   }
-  return { importedCount, newerLocalCount };
+  return {
+    importedCount,
+    newerLocalCount,
+    keptCurrentWorkspace: !replaceCurrentWorkspace,
+    importedWorkspaceName,
+  };
 }
 
 async function receiveDeviceTransfer(prefilledCode = "") {
@@ -7639,22 +7770,19 @@ async function receiveDeviceTransfer(prefilledCode = "") {
   }
   try {
     const preview = await requestDeviceTransfer("preview", { code });
-    const warning = hasUnsavedChanges
-      ? "Your current workspace has unsaved changes and will be replaced. Saved projects are merged, and the newer copy wins when names match."
-      : "The current workspace will be replaced. Saved projects are merged, and the newer copy wins when names match.";
-    const confirm = await showAppConfirmHtml(
-      "IMPORT FROM DEVICE",
-      `${getDeviceTransferSummaryHtml(preview.summary)}<p class="device-transfer-warning">${escapeHtml(warning)}</p>`,
-      "IMPORT DATA",
-      "CANCEL",
-    );
+    const confirm = await showDeviceTransferImportConfirm(preview.summary, hasUnsavedChanges);
     if (!confirm?.ok) return;
     const claimed = await requestDeviceTransfer("claim", { code });
-    const result = await importDeviceTransferPayload(claimed.payload);
+    const result = await importDeviceTransferPayload(claimed.payload, {
+      replaceCurrentWorkspace: confirm.replaceCurrentWorkspace,
+    });
     const keptNote = result.newerLocalCount
       ? ` ${result.newerLocalCount} newer project${result.newerLocalCount === 1 ? "" : "s"} already on this device ${result.newerLocalCount === 1 ? "was" : "were"} kept.`
       : "";
-    showNotification(`Device data imported. ${result.importedCount} saved project${result.importedCount === 1 ? "" : "s"} added or updated.${keptNote}`, "success");
+    const editorNote = result.keptCurrentWorkspace
+      ? ` Current editor kept. The incoming workspace was saved as “${result.importedWorkspaceName}”.`
+      : " The transferred workspace is now open.";
+    showNotification(`Device data imported. ${result.importedCount} saved project${result.importedCount === 1 ? "" : "s"} added or updated.${keptNote}${editorNote}`, "success");
   } catch (error) {
     showNotification(error.message || "Unable to import data from that device.", "error");
   }

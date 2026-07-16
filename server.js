@@ -47,6 +47,12 @@ const DEVICE_TRANSFER_MAX_BYTES = 20 * 1024 * 1024;
 const DEVICE_TRANSFER_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 const DEVICE_TRANSFER_MAX_ENTRIES = 100;
 const DEVICE_TRANSFER_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DEVICE_TRANSFER_QR_OPTIONS = {
+  errorCorrectionLevel: "M",
+  margin: 2,
+  width: 320,
+  color: { dark: "#073b1d", light: "#ffffff" },
+};
 loadGitHubSessions();
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
@@ -574,24 +580,36 @@ app.post("/api/device-transfer/create", async (req, res) => {
     const host = forwardedHost || req.get("host") || "localhost:3000";
     const transferUrl = new URL("/frontend.html", `${protocol}://${host}`);
     transferUrl.searchParams.set("deviceTransfer", formatDeviceTransferCode(compact));
-    const qrDataUrl = await QRCode.toDataURL(transferUrl.toString(), {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: 320,
-      color: { dark: "#073b1d", light: "#ffffff" },
-    });
-    deviceTransfers.set(compact, { payload, expiresAt, summary, byteSize });
+    const qrPng = await QRCode.toBuffer(transferUrl.toString(), DEVICE_TRANSFER_QR_OPTIONS);
+    const qrDataUrl = `data:image/png;base64,${qrPng.toString("base64")}`;
+    const qrImageUrl = new URL(
+      `/api/device-transfer/qr/${encodeURIComponent(formatDeviceTransferCode(compact))}`,
+      `${protocol}://${host}`,
+    ).toString();
+    deviceTransfers.set(compact, { payload, expiresAt, summary, byteSize, qrPng });
     res.status(201).json({
       ok: true,
       code: formatDeviceTransferCode(compact),
       expiresAt,
       summary,
       transferUrl: transferUrl.toString(),
+      qrImageUrl,
       qrDataUrl,
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message || "Unable to prepare the device transfer." });
   }
+});
+
+app.get("/api/device-transfer/qr/:code", (req, res) => {
+  const match = findActiveDeviceTransfer(req.params?.code);
+  if (!match || !Buffer.isBuffer(match.transfer.qrPng)) {
+    res.status(404).type("text/plain").send("Transfer QR code not found or expired.");
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.type("png").send(match.transfer.qrPng);
 });
 
 app.post("/api/device-transfer/preview", (req, res) => {

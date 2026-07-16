@@ -6519,6 +6519,63 @@ iframe {
   color: var(--text-primary);
 }
 
+.device-transfer-import-mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent-color) 7%, var(--bg-primary));
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.device-transfer-import-mode[data-mode="keep"] {
+  border-color: color-mix(in srgb, #16a34a 50%, var(--border-color));
+  background: color-mix(in srgb, #16a34a 9%, var(--bg-primary));
+  box-shadow: 0 10px 24px color-mix(in srgb, #16a34a 10%, transparent);
+}
+
+.device-transfer-import-mode-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--bg-secondary));
+  color: var(--accent-color);
+  font-size: 15px;
+}
+
+.device-transfer-import-mode[data-mode="keep"] .device-transfer-import-mode-icon {
+  background: color-mix(in srgb, #16a34a 16%, var(--bg-secondary));
+  color: #22c55e;
+}
+
+.device-transfer-import-mode-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.device-transfer-import-mode-copy strong { color: var(--text-primary); font-size: 12px; }
+.device-transfer-import-mode-copy small { color: var(--text-muted); font-size: 10px; line-height: 1.45; }
+.device-transfer-import-mode .switch { flex: 0 0 44px; }
+
+.device-transfer-warning[data-state="keep"] {
+  border-color: color-mix(in srgb, #16a34a 42%, var(--border-color));
+  background: color-mix(in srgb, #16a34a 9%, var(--bg-primary));
+}
+
+#appDialog[data-dialog-kind="device-transfer-import"] #appDialogActions {
+  display: grid !important;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
+  gap: 9px !important;
+}
+
 .device-transfer-instruction {
   margin: 0 0 12px;
   color: var(--text-muted);
@@ -6793,6 +6850,9 @@ iframe {
   .device-transfer-code-entry { gap: 4px; }
   .device-transfer-code-box { width: clamp(68px, 23vw, 88px); padding: 13px 4px; }
   .device-transfer-code-dash { font-size: 16px; }
+  .device-transfer-import-mode { grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; padding: 12px 10px; }
+  .device-transfer-import-mode-icon { width: 34px; height: 34px; }
+  #appDialog[data-dialog-kind="device-transfer-import"] #appDialogActions { grid-template-columns: 1fr; }
   #appDialog[data-dialog-kind="device-transfer-scanner"] #appDialogActions { grid-template-columns: 1fr; }
   .device-transfer-scanner-stage { min-height: 220px; }
 }
