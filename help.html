@@ -766,12 +766,13 @@
                 <h3><i class="fa-solid fa-triangle-exclamation"></i> Error Guidance</h3>
                 <ul>
                   <li>CodX Editor checks common HTML, CSS, JavaScript, and inline script issues.</li>
-                  <li>HTML diagnostics underline the exact incorrect tag or duplicate attribute and distinguish missing, extra, misspelled, malformed, void, and incorrectly nested tags.</li>
-                  <li>The HTML checker understands comments, quoted attributes, script/style content, custom elements, and valid optional closing tags to reduce false errors.</li>
+                  <li>HTML and SVG diagnostics use a stateful tag-and-attribute parser instead of splitting markup with regular expressions. They understand self-closing tags, multiple elements on one line, quoted special characters, custom or SVG element names, and valid optional closing tags.</li>
+                  <li>Quoted attribute values stay intact, including negative numbers, decimals, data URLs, and SVG path data. Only parsed attribute names are compared when checking for duplicates.</li>
+                  <li>CSS diagnostics track strings, comments, braces, parentheses, and brackets, so decimals, negative values, custom properties, and embedded SVG text are not mistaken for syntax errors.</li>
                   <li>Error badges can appear beside affected files.</li>
                   <li>Click an error badge to jump toward the first detected problem.</li>
                   <li>The console also catches logs, warnings, runtime errors, and promise failures from the preview.</li>
-                  <li>JavaScript diagnostics identify exact lines, columns, and causes for dangling operators, reversed comparisons, and mismatched or missing brackets.</li>
+                  <li>JavaScript syntax is validated by the Acorn parser. Valid regex literals, templates, decimals, division, and modern module syntax are accepted; genuine parser errors report an exact line and column.</li>
                   <li>Click a located console diagnostic to open the correct file at the exact problem.</li>
                   <li>Large error counts are shortened so file badges stay readable.</li>
                 </ul>

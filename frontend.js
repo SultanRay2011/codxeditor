@@ -5019,6 +5019,7 @@ let projectFiles = [
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
@@ -10501,6 +10502,12 @@ function scanHtmlTagTokens(htmlText, reportMalformed) {
     const start = source.indexOf("<", cursor);
     if (start === -1) break;
 
+    const possibleTag = source.slice(start + 1).match(/^\s*([/!?A-Za-z])/);
+    if (!possibleTag) {
+      cursor = start + 1;
+      continue;
+    }
+
     if (source.startsWith("<!--", start)) {
       const commentEnd = source.indexOf("-->", start + 4);
       if (commentEnd === -1) {
@@ -10522,6 +10529,7 @@ function scanHtmlTagTokens(htmlText, reportMalformed) {
     }
 
     let quote = "";
+    let nestedTagStart = -1;
     let end = -1;
     for (let index = start + 1; index < source.length; index++) {
       const char = source[index];
@@ -10531,10 +10539,24 @@ function scanHtmlTagTokens(htmlText, reportMalformed) {
       }
       if (char === '"' || char === "'") {
         quote = char;
+      } else if (char === "<") {
+        nestedTagStart = index;
+        reportMalformed(
+          "A new tag starts before the previous tag was closed.",
+          index,
+          1,
+          "Add > before starting the next tag.",
+        );
+        break;
       } else if (char === ">") {
         end = index;
         break;
       }
+    }
+
+    if (nestedTagStart !== -1) {
+      cursor = nestedTagStart;
+      continue;
     }
 
     if (end === -1) {
@@ -10564,11 +10586,19 @@ function scanHtmlTagTokens(htmlText, reportMalformed) {
     const nameEnd = nameStart + tagMatch[2].length;
     const isClosing = Boolean(tagMatch[1]);
     const selfClosing = /\/\s*>$/.test(raw);
-    const token = { raw, name, start, end: end + 1, nameStart, nameEnd, isClosing, selfClosing };
-
-    if (raw.slice(nameEnd - start, -1).includes("<")) {
-      const nestedStart = start + raw.indexOf("<", 1);
-      reportMalformed("A new tag starts before the previous tag was closed.", nestedStart, 1, "Add > before starting the next tag.");
+    const token = {
+      raw,
+      name,
+      start,
+      end: end + 1,
+      nameStart,
+      nameEnd,
+      isClosing,
+      selfClosing,
+      attributes: [],
+    };
+    if (!isClosing) {
+      token.attributes = parseHtmlAttributes(token, source, reportMalformed);
     }
     tokens.push(token);
     cursor = end + 1;
@@ -10581,19 +10611,126 @@ function scanHtmlTagTokens(htmlText, reportMalformed) {
   return tokens;
 }
 
+function parseHtmlAttributes(token, htmlText, reportMalformed) {
+  const source = String(htmlText || "");
+  const attributes = [];
+  const limit = token.end - 1;
+  let cursor = token.nameEnd;
+
+  while (cursor < limit) {
+    while (cursor < limit && /\s/.test(source[cursor])) cursor++;
+    if (cursor >= limit) break;
+    if (source[cursor] === "/") {
+      cursor++;
+      while (cursor < limit && /\s/.test(source[cursor])) cursor++;
+      if (cursor < limit) {
+        reportMalformed(
+          "Unexpected content after the self-closing slash.",
+          cursor,
+          Math.max(1, limit - cursor),
+          "Move the slash to the end of the opening tag.",
+        );
+      }
+      break;
+    }
+
+    const nameStart = cursor;
+    while (cursor < limit && !/[\s=/>]/.test(source[cursor])) cursor++;
+    if (cursor === nameStart) {
+      reportMalformed(
+        "Malformed HTML attribute.",
+        cursor,
+        1,
+        "Use an attribute name followed by an optional value.",
+      );
+      cursor++;
+      continue;
+    }
+
+    const rawName = source.slice(nameStart, cursor);
+    while (cursor < limit && /\s/.test(source[cursor])) cursor++;
+    let value = null;
+    let valueStart = -1;
+    let valueEnd = -1;
+    let quote = "";
+
+    if (source[cursor] === "=") {
+      cursor++;
+      while (cursor < limit && /\s/.test(source[cursor])) cursor++;
+      valueStart = cursor;
+      if (source[cursor] === '"' || source[cursor] === "'") {
+        quote = source[cursor];
+        cursor++;
+        const contentStart = cursor;
+        while (cursor < limit && source[cursor] !== quote) cursor++;
+        if (cursor >= limit) {
+          reportMalformed(
+            `Unclosed ${quote} quote for the "${rawName}" attribute.`,
+            valueStart,
+            Math.max(1, limit - valueStart),
+            `Add the matching ${quote} quote.`,
+          );
+          value = source.slice(contentStart, limit);
+          valueEnd = limit;
+        } else {
+          value = source.slice(contentStart, cursor);
+          cursor++;
+          valueEnd = cursor;
+        }
+      } else {
+        const contentStart = cursor;
+        while (cursor < limit && !/[\s>]/.test(source[cursor])) cursor++;
+        value = source.slice(contentStart, cursor);
+        valueEnd = cursor;
+        if (!value) {
+          reportMalformed(
+            `The "${rawName}" attribute is missing a value.`,
+            Math.max(nameStart, cursor - 1),
+            1,
+            "Add a quoted or unquoted value after =.",
+          );
+        } else {
+          const invalidOffset = value.search(/["'<=`]/);
+          if (invalidOffset !== -1) {
+            reportMalformed(
+              `Invalid character in the unquoted "${rawName}" attribute value.`,
+              contentStart + invalidOffset,
+              1,
+              "Wrap the attribute value in matching quotes.",
+            );
+          }
+        }
+      }
+    }
+
+    attributes.push({
+      name: rawName.toLowerCase(),
+      rawName,
+      nameStart,
+      nameEnd: nameStart + rawName.length,
+      value,
+      valueStart,
+      valueEnd,
+      quote,
+    });
+  }
+
+  return attributes;
+}
+
 function reportDuplicateHtmlAttributes(token, htmlText, fileName, emitDiagnostic) {
   if (token.isClosing) return;
-  const nameEndOffset = token.nameEnd - token.start;
-  const attributesText = token.raw.slice(nameEndOffset, -1).replace(/\/\s*$/, "");
-  const attributeRegex = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
   const seen = new Set();
-  let match;
-  while ((match = attributeRegex.exec(attributesText)) !== null) {
-    const attributeName = String(match[1] || "").toLowerCase();
-    if (!attributeName) continue;
-    const attributeIndex = token.nameEnd + match.index;
+  (token.attributes || []).forEach((attribute) => {
+    const attributeName = String(attribute.name || "").toLowerCase();
+    if (!attributeName) return;
     if (seen.has(attributeName)) {
-      const location = createHtmlDiagnosticLocation(fileName, htmlText, attributeIndex, match[1].length);
+      const location = createHtmlDiagnosticLocation(
+        fileName,
+        htmlText,
+        attribute.nameStart,
+        attribute.rawName.length,
+      );
       emitDiagnostic(
         "error",
         `[${fileName}] HTML issue at line ${location.line}:${location.col}: duplicate "${attributeName}" attribute on <${token.name}>. Fix: Remove the repeated attribute.`,
@@ -10601,7 +10738,7 @@ function reportDuplicateHtmlAttributes(token, htmlText, fileName, emitDiagnostic
       );
     }
     seen.add(attributeName);
-  }
+  });
 }
 
 function analyzeHtmlTagStructure(htmlText, fileName, emitDiagnostic) {
@@ -10624,32 +10761,6 @@ function analyzeHtmlTagStructure(htmlText, fileName, emitDiagnostic) {
       token.nameStart,
       token.nameEnd - token.nameStart,
     );
-    const isCustomElement = token.name.includes("-");
-    const expectedTop = stack[stack.length - 1];
-    if (
-      token.isClosing &&
-      !isCustomElement &&
-      !knownHtmlTags.has(token.name) &&
-      expectedTop &&
-      getLevenshteinDistance(token.name, expectedTop.name) <= 2
-    ) {
-      emitDiagnostic(
-        "error",
-        `[${fileName}] HTML issue at line ${location.line}:${location.col}: mismatched closing tag </${token.name}>. Fix: Use </${expectedTop.name}> to close <${expectedTop.name}>.`,
-        location,
-      );
-      stack.pop();
-      return;
-    }
-    if (!isCustomElement && !knownHtmlTags.has(token.name)) {
-      emitDiagnostic(
-        "error",
-        `[${fileName}] HTML issue at line ${location.line}:${location.col}: unknown tag <${token.name}>. Fix: ${getErrorHint(token.name, { kind: "html-tag", tagName: token.name })}`,
-        location,
-      );
-      return;
-    }
-
     if (token.isClosing) {
       if (HTML_VOID_ELEMENTS.has(token.name)) {
         emitDiagnostic(
@@ -10934,7 +11045,9 @@ function analyzeJavaScriptSource(code, fileName, emitDiagnostic, options = {}) {
 }
 
 function getAcornJavaScriptSyntaxError(code) {
-  if (!window.acorn || typeof window.acorn.parse !== "function") return null;
+  if (!window.acorn || typeof window.acorn.parse !== "function") {
+    return { unavailable: true };
+  }
   const source = String(code || "");
   const parseOptions = {
     ecmaVersion: "latest",
@@ -10963,6 +11076,119 @@ function getAcornJavaScriptSyntaxError(code) {
       };
     }
   }
+}
+
+function analyzeCssSource(code, fileName, emitDiagnostic, options = {}) {
+  const source = String(code || "");
+  const lineOffset = Math.max(0, Number(options.lineOffset || 0));
+  const firstLineColumnOffset = Math.max(0, Number(options.firstLineColumnOffset || 0));
+  const stack = [];
+  const matchingOpen = { "}": "{", ")": "(", "]": "[" };
+  const matchingClose = { "{": "}", "(": ")", "[": "]" };
+  let state = "code";
+  let quote = "";
+  let stateStart = 0;
+  let escaped = false;
+
+  const report = (index, length, problem, fix) => {
+    const local = getLineAndColumnFromIndex(source, Math.max(0, index));
+    const line = local.line + lineOffset;
+    const col = local.col + (local.line === 1 ? firstLineColumnOffset : 0);
+    emitDiagnostic(
+      "error",
+      `[${fileName}] CSS issue at line ${line}:${col}: ${problem} Fix: ${fix}`,
+      { fileName, line, col, length: Math.max(1, Number(length) || 1) },
+    );
+  };
+
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (state === "comment") {
+      if (char === "*" && next === "/") {
+        index++;
+        state = "code";
+      }
+      continue;
+    }
+    if (state === "string") {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        state = "code";
+        quote = "";
+        continue;
+      }
+      if (char === "\n" || char === "\r") {
+        report(stateStart, Math.max(1, index - stateStart), "unclosed quoted value.", `Add the matching ${quote} quote before the line ends.`);
+        state = "code";
+        quote = "";
+      }
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      state = "comment";
+      stateStart = index;
+      index++;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      state = "string";
+      stateStart = index;
+      quote = char;
+      escaped = false;
+      continue;
+    }
+    if (char === "{" || char === "(" || char === "[") {
+      stack.push({ char, index });
+      continue;
+    }
+    if (!(char in matchingOpen)) continue;
+    const top = stack[stack.length - 1];
+    if (!top) {
+      report(index, 1, `unexpected closing "${char}".`, `Remove the extra "${char}" or add its opening "${matchingOpen[char]}".`);
+      continue;
+    }
+    if (top.char !== matchingOpen[char]) {
+      report(index, 1, `mismatched closing "${char}"; "${matchingClose[top.char]}" is required first.`, `Add "${matchingClose[top.char]}" before "${char}".`);
+      continue;
+    }
+    stack.pop();
+  }
+
+  if (state === "comment") {
+    report(stateStart, 2, "unclosed comment.", "Close the comment with */.");
+  } else if (state === "string") {
+    report(stateStart, Math.max(1, source.length - stateStart), "unclosed quoted value.", `Add the matching ${quote} quote.`);
+  }
+  stack.forEach((entry) => {
+    report(entry.index, 1, `unclosed "${entry.char}".`, `Add the matching "${matchingClose[entry.char]}".`);
+  });
+}
+
+function getHtmlRawTextSegments(htmlText, tagName) {
+  const source = String(htmlText || "");
+  const wantedName = String(tagName || "").toLowerCase();
+  const tokens = scanHtmlTagTokens(source, () => {});
+  const segments = [];
+  for (let index = 0; index < tokens.length; index++) {
+    const opening = tokens[index];
+    if (opening.name !== wantedName || opening.isClosing || opening.selfClosing) continue;
+    const closing = tokens.slice(index + 1).find((token) => token.name === wantedName && token.isClosing);
+    if (!closing) continue;
+    segments.push({
+      code: source.slice(opening.end, closing.start),
+      start: opening.end,
+      attributes: opening.attributes || [],
+    });
+  }
+  return segments;
 }
 
 function getProjectFilesForAutomaticDiagnostics() {
@@ -10998,13 +11224,13 @@ function runPreflightDiagnostics(targetEntries = null) {
     }
     appendConsoleMessage(type, message);
   };
-  // JS syntax checks per JS file
+  // Acorn is the syntax authority. Valid JavaScript never falls through to
+  // heuristic token checks that can confuse regex literals, decimals, or JSX-like strings.
   diagnosticFiles
     .filter((f) => f.type === "js")
     .forEach((file) => {
-      const smartIssueCount = analyzeJavaScriptSource(file.content, file.name, emitDiagnostic);
-      const parserError = smartIssueCount === 0 ? getAcornJavaScriptSyntaxError(file.content) : null;
-      if (parserError) {
+      const parserError = getAcornJavaScriptSyntaxError(file.content);
+      if (parserError && !parserError.unavailable) {
         emitDiagnostic(
           "error",
           `[${file.name}] JavaScript SyntaxError at line ${parserError.line}:${parserError.col}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
@@ -11015,79 +11241,15 @@ function runPreflightDiagnostics(targetEntries = null) {
             length: parserError.length,
           },
         );
-        return;
-      }
-      try {
-        // Parse-only check
-        new Function(`${file.content}\n//# sourceURL=${file.name}`);
-      } catch (err) {
-        if (smartIssueCount > 0) return;
-        const location = getFunctionSyntaxErrorLocation(err);
-        const lineInfo = location
-          ? `line ${location.line}, col ${location.col}`
-          : "line unknown";
-        const diagnosticLocation = location
-          ? { fileName: file.name, line: location.line, col: location.col, length: 1 }
-          : null;
-        emitDiagnostic(
-          "error",
-          `[${file.name}] SyntaxError (${lineInfo}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
-          diagnosticLocation,
-        );
       }
     });
 
-  // Basic CSS braces check
+  // CSS strings, comments, and nested delimiters are scanned as syntax states,
+  // so values such as -0.5, .25, data URLs, and SVG path strings stay intact.
   diagnosticFiles
     .filter((f) => f.type === "css")
     .forEach((file) => {
-      const text = file.content || "";
-      const propertyRegex = /(^|[;{]\s*)([a-zA-Z-]+)\s*:/gm;
-      let propertyMatch;
-      while ((propertyMatch = propertyRegex.exec(text)) !== null) {
-        const propertyName = String(propertyMatch[2] || "").trim().toLowerCase();
-        if (!propertyName || propertyName.startsWith("--")) continue;
-        if (!cssPropertySuggestions.includes(propertyName)) {
-          const propertyLine = text.slice(0, propertyMatch.index + propertyMatch[1].length).split("\n").length;
-          emitDiagnostic(
-            "error",
-            `[${file.name}] CSS issue at line ${propertyLine}: unknown property "${propertyName}". Fix: ${getErrorHint(propertyName, { kind: "css-property", propertyName })}`,
-          );
-        }
-      }
-      const normalizedText = text.replace(
-        /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
-        (match) => " ".repeat(match.length),
-      );
-      let depth = 0;
-      const openBraceLines = [];
-      for (let i = 0; i < normalizedText.length; i++) {
-        if (normalizedText[i] === "{") {
-          depth++;
-          openBraceLines.push(text.slice(0, i).split("\n").length);
-        }
-        if (normalizedText[i] === "}") {
-          depth--;
-          if (openBraceLines.length) {
-            openBraceLines.pop();
-          }
-        }
-        if (depth < 0) {
-          const line = text.slice(0, i).split("\n").length;
-          emitDiagnostic(
-            "error",
-            `[${file.name}] CSS issue at line ${line}: extra '}' found.`,
-          );
-          return;
-        }
-      }
-      if (depth > 0) {
-        const line = openBraceLines[openBraceLines.length - 1] || 1;
-        emitDiagnostic(
-          "error",
-          `[${file.name}] CSS issue at line ${line}: missing closing '}' brace.`,
-        );
-      }
+      analyzeCssSource(file.content || "", file.name, emitDiagnostic);
     });
 
   // Position-aware HTML checks for every HTML file in the project.
@@ -11096,27 +11258,17 @@ function runPreflightDiagnostics(targetEntries = null) {
     .forEach((htmlFile) => {
       const htmlText = htmlFile.content || "";
 
-      const inlineScriptRegex = /<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
-      let scriptMatch;
-      while ((scriptMatch = inlineScriptRegex.exec(htmlText)) !== null) {
-        const scriptCode = scriptMatch[1];
-        const scriptContentStartIndex =
-          scriptMatch.index + scriptMatch[0].indexOf(scriptCode);
+      const inlineScripts = getHtmlRawTextSegments(htmlText, "script")
+        .filter((segment) => !segment.attributes.some((attribute) => attribute.name === "src"));
+      inlineScripts.forEach((segment) => {
+        const scriptCode = segment.code;
+        const scriptContentStartIndex = segment.start;
         const scriptContentStart = getLineAndColumnFromIndex(
           htmlText,
           scriptContentStartIndex,
         );
-        const smartIssueCount = analyzeJavaScriptSource(
-          scriptCode,
-          htmlFile.name,
-          emitDiagnostic,
-          {
-            lineOffset: scriptContentStart.line - 1,
-            firstLineColumnOffset: scriptContentStart.col - 1,
-          },
-        );
-        const parserError = smartIssueCount === 0 ? getAcornJavaScriptSyntaxError(scriptCode) : null;
-        if (parserError) {
+        const parserError = getAcornJavaScriptSyntaxError(scriptCode);
+        if (parserError && !parserError.unavailable) {
           const absLine = scriptContentStart.line + parserError.line - 1;
           const absCol = parserError.line === 1
             ? scriptContentStart.col + parserError.col - 1
@@ -11126,32 +11278,16 @@ function runPreflightDiagnostics(targetEntries = null) {
             `[${htmlFile.name}] Inline JavaScript SyntaxError at line ${absLine}:${absCol}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
             { fileName: htmlFile.name, line: absLine, col: absCol, length: parserError.length },
           );
-          continue;
         }
-        try {
-          new Function(`${scriptCode}\n//# sourceURL=${htmlFile.name}`);
-        } catch (err) {
-          if (smartIssueCount > 0) continue;
-          const location = getFunctionSyntaxErrorLocation(err);
-          if (location) {
-            const absLine = scriptContentStart.line + Math.max(0, location.line - 1);
-            const absCol =
-              location.line === 1
-                ? scriptContentStart.col + Math.max(0, location.col - 1)
-                : location.col;
-            emitDiagnostic(
-              "error",
-              `[${htmlFile.name}] Inline JS SyntaxError (line ${absLine}, col ${absCol}): ${err.message}. Fix: ${getErrorHint(err.message)}`,
-              { fileName: htmlFile.name, line: absLine, col: absCol, length: 1 },
-            );
-          } else {
-            emitDiagnostic(
-              "error",
-              `[${htmlFile.name}] Inline JS SyntaxError: ${err.message}. Fix: ${getErrorHint(err.message)}`,
-            );
-          }
-        }
-      }
+      });
+
+      getHtmlRawTextSegments(htmlText, "style").forEach((segment) => {
+        const start = getLineAndColumnFromIndex(htmlText, segment.start);
+        analyzeCssSource(segment.code, htmlFile.name, emitDiagnostic, {
+          lineOffset: start.line - 1,
+          firstLineColumnOffset: start.col - 1,
+        });
+      });
 
       analyzeHtmlTagStructure(htmlText, htmlFile.name, emitDiagnostic);
     });
