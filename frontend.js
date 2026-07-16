@@ -5020,6 +5020,7 @@ let projectFiles = [
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
+            <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
@@ -14560,6 +14561,7 @@ function getHtmlAttributeSuggestionContext(textBefore) {
 
   const tag = tagMatch[1].toLowerCase();
   const afterTagName = openTagText.slice(tagMatch[0].length);
+  if (!/^\s/.test(afterTagName)) return null;
   const usedAttributes = Array.from(
     afterTagName.matchAll(/\b([a-zA-Z_:][-a-zA-Z0-9_:.]*)\b(?=\s*(?:=|\s|$))/g),
   ).map((match) => match[1].toLowerCase());

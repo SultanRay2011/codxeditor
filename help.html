@@ -740,6 +740,7 @@
                 <ul>
                   <li>Suggestions appear for HTML tags, attributes, CSS properties, CSS values, JavaScript terms, and project file paths.</li>
                   <li><strong>Current-file priority:</strong> declared JavaScript variables, functions, parameters, imports, and classes, plus CSS selectors and existing HTML class or ID values, are scanned immediately and ranked above project-learned or generic entries. Exact matches come first, followed by prefix and close matches.</li>
+                  <li>Partial HTML tag names remain in tag-suggestion mode until whitespace begins the attribute area. For example, typing <code>&lt;if</code> suggests <code>&lt;iframe&gt;</code>, while JavaScript <code>if</code> still suggests the full conditional snippet.</li>
                   <li>Suggestion rows use icons instead of emoji or text abbreviations. HTML, CSS, JavaScript, ENV, TXT, JSON, media, and other project paths display the icon that matches their type.</li>
                   <li>Press <kbd>Enter</kbd> or <kbd>Tab</kbd> to accept a suggestion.</li>
                   <li>Typing <code>lorem</code> inserts a full placeholder paragraph.</li>
