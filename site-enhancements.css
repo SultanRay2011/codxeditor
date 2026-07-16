@@ -39,6 +39,19 @@
   margin: 0 auto;
 }
 
+.home-content {
+  position: relative;
+  z-index: 1;
+  width: min(1220px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0 64px;
+  flex-grow: 1;
+}
+
+.home-content > .major-features-section {
+  margin-top: 0;
+}
+
 .home-showcase-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(430px, .95fr);
@@ -773,6 +786,11 @@
 .site-refurbished :is(.value-card,.story-card,.support-card,.faq-card,.data-card,.principle-card):hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--site-accent) 36%, var(--site-line)); box-shadow: 0 14px 30px rgba(17,50,29,.09); }
 
 @media (max-width: 800px) {
+  .home-content {
+    width: min(100% - 28px, 1220px);
+    padding: 48px 0 52px;
+  }
+
   .major-feature { grid-template-columns: 1fr; }
   .major-feature:nth-child(even) :is(.major-feature-copy,.feature-visual) { order: initial; }
   .trust-strip,
@@ -781,6 +799,11 @@
 }
 
 @media (max-width: 520px) {
+  .home-content {
+    width: min(100% - 20px, 1220px);
+    padding: 34px 0 42px;
+  }
+
   .major-features-section { padding: 20px; border-radius: 18px; }
   .major-feature { padding: 16px; border-radius: 16px; }
   .feature-visual { min-height: 205px; }
