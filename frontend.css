@@ -6582,11 +6582,16 @@ iframe {
   line-height: 1.6;
 }
 
+#appDialog[data-dialog-kind="device-transfer-code"] .device-transfer-instruction {
+  margin: 12px 0 0;
+  text-align: center;
+}
+
 .device-transfer-qr {
   display: grid;
   justify-items: center;
   gap: 8px;
-  margin: 0 auto 12px;
+  margin: 16px auto 0;
 }
 
 .device-transfer-qr-title {
@@ -6654,6 +6659,19 @@ iframe {
   text-align: center;
   cursor: copy;
 }
+
+.device-transfer-code-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 14px 0 8px;
+  color: var(--text-primary);
+  font-size: 10px;
+  letter-spacing: .1em;
+}
+
+.device-transfer-code-label i { color: var(--accent-color); }
 
 .device-transfer-code-entry {
   display: flex;
@@ -6724,6 +6742,19 @@ iframe {
   font-size: 11px;
   text-align: center;
   transition: color .2s ease;
+}
+
+#appDialog[data-dialog-kind="device-transfer-code"] .device-transfer-expiry-primary {
+  margin: 0 0 14px;
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--bg-primary));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent-color) 9%, transparent);
+}
+
+#appDialog[data-dialog-kind="device-transfer-code"] .device-transfer-expiry-primary strong {
+  font-size: 18px;
 }
 
 .device-transfer-expiry strong {

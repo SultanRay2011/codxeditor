@@ -4987,7 +4987,7 @@ let projectFiles = [
           <ul>
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to send or receive projects and settings with a reliable QR image shown at the top of the modal, a live ten-minute countdown, or three four-character code boxes</li>
+            <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
@@ -7295,24 +7295,25 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
   if (appDialogTitle) appDialogTitle.textContent = "TRANSFER READY";
   if (appDialogMessage) {
     appDialogMessage.innerHTML = `
-      <p class="device-transfer-instruction">Scan this QR code with the other device, or open CodX Editor and enter the one-time code:</p>
+      <p id="deviceTransferExpiry" class="device-transfer-expiry device-transfer-expiry-primary" aria-live="polite">
+        <i class="fa-regular fa-clock"></i>
+        <span>One use &middot;</span>
+        <strong id="deviceTransferCountdown">10:00</strong>
+        <span id="deviceTransferCountdownLabel">remaining</span>
+      </p>
+      <strong class="device-transfer-code-label"><i class="fa-solid fa-key"></i> TRANSFER CODE</strong>
+      <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
       <div id="deviceTransferQr" class="device-transfer-qr" data-state="loading">
         <strong class="device-transfer-qr-title"><i class="fa-solid fa-qrcode"></i> SCAN TO RECEIVE</strong>
         <div class="device-transfer-qr-frame">
           <img id="deviceTransferQrImage" alt="QR code for this one-time device transfer" width="320" height="320" hidden>
           <div id="deviceTransferQrPlaceholder" class="device-transfer-qr-placeholder">
-            <i class="fa-solid fa-spinner fa-spin"></i><span>Preparing QR code…</span>
+            <i class="fa-solid fa-spinner fa-spin"></i><span>Preparing QR code&hellip;</span>
           </div>
         </div>
         <span id="deviceTransferQrStatus"><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span>
       </div>
-      <button type="button" id="deviceTransferCodeValue" class="device-transfer-code" title="Copy transfer code">${escapeHtml(code)}</button>
-      <p id="deviceTransferExpiry" class="device-transfer-expiry" aria-live="polite">
-        <i class="fa-regular fa-clock"></i>
-        <span>One use ·</span>
-        <strong id="deviceTransferCountdown">10:00</strong>
-        <span id="deviceTransferCountdownLabel">remaining</span>
-      </p>
+      <p class="device-transfer-instruction">Scan the QR code with the other device, or open CodX Editor there and enter the one-time transfer code.</p>
       ${getDeviceTransferSummaryHtml(data?.summary, skippedMedia ? `${skippedMedia} large or unavailable media file${skippedMedia === 1 ? " was" : "s were"} skipped. Use ZIP export if you need those files.` : "")}
     `;
   }
