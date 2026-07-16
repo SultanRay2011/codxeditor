@@ -5022,6 +5022,7 @@ let projectFiles = [
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
+            <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
         </article>
@@ -8878,7 +8879,6 @@ function showNotificationMarkup(messageMarkup, type = "info", options = {}) {
   return notification;
 }
 
-const previewRuntimeNotificationHistory = new Map();
 const runtimeDiagnosticRawErrors = new Map();
 const runtimeDiagnosticRecent = new Map();
 let runtimeDiagnosticSequence = 0;
@@ -9226,7 +9226,6 @@ function renderRuntimeDiagnostic(payload, rawError) {
   const root = document.createElement("div");
   root.className = `error codx-runtime-diagnostic${context ? " has-location" : ""}`;
   root.dataset.runtimeDiagnosticId = diagnosticId;
-  root.dataset.notificationMessage = `Error: [${fileName}] line ${line}:${col} - ${payload.errorName || "Error"}: ${payload.message}. Likely cause: ${diagnosis.explanation} Fix: ${diagnosis.fix}`;
   if (context) {
     root.tabIndex = 0;
     root.setAttribute("role", "button");
@@ -9335,55 +9334,8 @@ window.__codxReportRuntimeDiagnostic = (payload, rawError = null) => {
 window.__codxGetRawRuntimeError = (diagnosticId) =>
   runtimeDiagnosticRawErrors.get(String(diagnosticId || ""))?.error || null;
 
-function openPreviewErrorFromNotification(message) {
-  const errorMessage = String(message || "").trim();
-  setConsoleWorkspaceOpen(true);
-  const location = extractErrorLocationFromConsoleMessage(errorMessage);
-  if (location) jumpToEditorLocation(location.fileName, location.line, location.col || 1);
-  requestAnimationFrame(() => {
-    const matchingLine = Array.from(consoleOutput?.querySelectorAll("div.error") || [])
-      .find((line) =>
-        String(line.dataset.notificationMessage || line.textContent || "").trim() === errorMessage,
-      );
-    if (!matchingLine) return;
-    matchingLine.scrollIntoView({ behavior: "smooth", block: "center" });
-    matchingLine.classList.add("notification-target-flash");
-    setTimeout(() => matchingLine.classList.remove("notification-target-flash"), 1800);
-  });
-}
-
-function notifyPreviewRuntimeError(message) {
-  const text = String(message || "").trim();
-  if (!text || !/^(?:Error:\s*\[|Promise rejected:|File not found:)/i.test(text)) return;
-  const now = Date.now();
-  const previousAt = Number(previewRuntimeNotificationHistory.get(text) || 0);
-  if (now - previousAt < 8000) return;
-  previewRuntimeNotificationHistory.set(text, now);
-  if (previewRuntimeNotificationHistory.size > 50) {
-    const oldest = previewRuntimeNotificationHistory.keys().next().value;
-    previewRuntimeNotificationHistory.delete(oldest);
-  }
-  const summary = text.length > 150 ? `${text.slice(0, 147)}...` : text;
-  showActionNotificationHtml(
-    `<strong>Preview error:</strong> ${escapeHtml(summary)}`,
-    () => openPreviewErrorFromNotification(text),
-    "error",
-  );
-}
-
-const consoleErrorObserver = new MutationObserver((mutations) => {
+const consoleErrorObserver = new MutationObserver(() => {
   updateFileErrorCountsFromConsole();
-  mutations.forEach((mutation) => {
-    mutation.addedNodes.forEach((node) => {
-      if (!(node instanceof HTMLElement)) return;
-      const errorLines = [];
-      if (node.matches("div.error:not(.codx-diagnostic-line)")) errorLines.push(node);
-      node.querySelectorAll?.("div.error:not(.codx-diagnostic-line)").forEach((line) => errorLines.push(line));
-      errorLines.forEach((line) =>
-        notifyPreviewRuntimeError(line.dataset.notificationMessage || line.textContent),
-      );
-    });
-  });
 });
 if (consoleOutput) {
   consoleErrorObserver.observe(consoleOutput, {
