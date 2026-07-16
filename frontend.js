@@ -5021,6 +5021,7 @@ let projectFiles = [
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
+            <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
@@ -15763,6 +15764,31 @@ function updateSuggestionHighlight(items) {
 
 // PART 6.7 - AUTO-CLOSING & INDENTATION LOGIC
 
+function getJavaScriptExpressionEndForAutoWrap(source, start) {
+  const text = String(source || "");
+  const expressionStart = Math.max(0, Number(start) || 0);
+  if (expressionStart >= text.length || /\s/.test(text[expressionStart])) return -1;
+
+  if (window.acorn && typeof window.acorn.parseExpressionAt === "function") {
+    try {
+      const expression = window.acorn.parseExpressionAt(text, expressionStart, {
+        ecmaVersion: "latest",
+        allowAwaitOutsideFunction: true,
+      });
+      if (expression && Number(expression.end) > expressionStart) {
+        return Number(expression.end);
+      }
+    } catch (_error) {
+      // Fall through to the conservative identifier/member-chain scanner.
+    }
+  }
+
+  const fallbackMatch = text.slice(expressionStart).match(
+    /^[A-Za-z_$][\w$]*(?:(?:\?\.)?\.[A-Za-z_$][\w$]*|\[[^\]\r\n]*\]|\([^()\r\n]*\))*/,
+  );
+  return fallbackMatch ? expressionStart + fallbackMatch[0].length : -1;
+}
+
 /**
  * Handles auto-closing of brackets/parentheses and indentation on 'Enter'.
  * This is specific for CSS and JS files.
@@ -15819,6 +15845,35 @@ function handleAutoCloseAndIndent(e, editor) {
   // --- A. Handle typing an opening bracket/parenthesis ({ or () ---
   if (autoClosePair) {
     e.preventDefault(); // Stop default { or ( insertion
+
+    if (autoClosePair === "(" && isJsContext) {
+      if (editor.selectionEnd > pos) {
+        const selectedText = editorValue.slice(pos, editor.selectionEnd);
+        applyEditorMutation(
+          editor,
+          pos,
+          editor.selectionEnd,
+          `(${selectedText})`,
+          pos + 1,
+          pos + 1 + selectedText.length,
+        );
+        return true;
+      }
+
+      const expressionEnd = getJavaScriptExpressionEndForAutoWrap(editorValue, pos);
+      if (expressionEnd > pos) {
+        const expressionText = editorValue.slice(pos, expressionEnd);
+        applyEditorMutation(
+          editor,
+          pos,
+          expressionEnd,
+          `(${expressionText})`,
+          pos + 1,
+          pos + 1,
+        );
+        return true;
+      }
+    }
 
     const newIndent = currentIndent;
     applyEditorMutation(editor, pos, editor.selectionEnd, autoClosePair + closingChar, pos + 1, pos + 1);
