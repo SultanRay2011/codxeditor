@@ -994,6 +994,10 @@
                 <ul>
                   <li>Open Console from its workspace tab on phones and portrait tablets. On desktop, use the header Console toggle, Command Palette, or <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd>.</li>
                   <li>See logs, warnings, errors, and unhandled promise messages from your preview.</li>
+                  <li><strong>Root-cause diagnostics:</strong> runtime exceptions are classified as undeclared variables, syntax or bracket problems, missing values, wrong value types, type coercion failures, asynchronous failures, range errors, or general runtime-state problems.</li>
+                  <li>Each runtime diagnostic reads the mapped project source around the failing line, explains why the failure most likely occurred, and recommends a fix based on that code instead of repeating the browser message.</li>
+                  <li>Expand <strong>Original error and full stack trace</strong> for the unabridged technical output. Advanced users can retrieve the preserved error object with the command shown inside that section.</li>
+                  <li>Rapid repeats of the same exception are grouped into one diagnostic card with a repeat counter, preventing an error loop from flooding or slowing the console.</li>
                   <li>Preview runtime-error notifications show <strong>Click To Open</strong>; selecting one opens the console, jumps to the reported source location when available, and highlights the error.</li>
                   <li>Smart syntax messages report the actual problematic operator or bracket instead of only showing the token where parsing stopped.</li>
                   <li>Located diagnostics are clickable and jump to the reported line and column.</li>

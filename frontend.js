@@ -5019,6 +5019,7 @@ let projectFiles = [
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
           </ul>
         </article>
@@ -8876,6 +8877,461 @@ function showNotificationMarkup(messageMarkup, type = "info", options = {}) {
 }
 
 const previewRuntimeNotificationHistory = new Map();
+const runtimeDiagnosticRawErrors = new Map();
+const runtimeDiagnosticRecent = new Map();
+let runtimeDiagnosticSequence = 0;
+
+const RUNTIME_DIAGNOSTIC_GLOBALS = [
+  "console", "document", "window", "localStorage", "sessionStorage", "navigator",
+  "location", "history", "fetch", "setTimeout", "setInterval", "clearTimeout",
+  "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "querySelector",
+  "querySelectorAll", "getElementById", "createElement", "appendChild", "classList",
+  "JSON", "Math", "Array", "Object", "String", "Number", "Boolean", "Date",
+  "Promise", "Map", "Set", "URL", "FormData", "Event", "Error",
+];
+
+const RUNTIME_DIAGNOSTIC_KEYWORDS = new Set(
+  "await break case catch class const continue debugger default delete do else export extends false finally for function if import in instanceof let new null return static super switch this throw true try typeof undefined var void while with yield async of".split(" "),
+);
+
+function parseRuntimeStackFrames(stack) {
+  const frames = [];
+  const text = String(stack || "");
+  const frameRegex = /(?:at\s+(.*?)\s+\()?([^\s()]+):(\d+):(\d+)\)?/g;
+  let match;
+  while ((match = frameRegex.exec(text)) !== null && frames.length < 20) {
+    frames.push({
+      functionName: String(match[1] || "").trim(),
+      source: String(match[2] || "").trim(),
+      line: Number(match[3] || 1),
+      col: Number(match[4] || 1),
+    });
+  }
+  return frames;
+}
+
+function resolveRuntimeDiagnosticFile(rawName) {
+  const name = String(rawName || "").split(/[?#]/)[0].split(/[\\/]/).pop();
+  if (!name) return null;
+  return projectFiles.find(
+    (file) => String(file.name || "").toLowerCase() === name.toLowerCase(),
+  ) || null;
+}
+
+function getRuntimeSourceContext(fileName, line, col) {
+  const file = resolveRuntimeDiagnosticFile(fileName);
+  if (!file || getProjectMediaKind(file)) return null;
+  const lines = String(file.content || "").split(/\r?\n/);
+  const safeLine = Math.max(1, Math.min(Number(line || 1), lines.length || 1));
+  const safeCol = Math.max(1, Number(col || 1));
+  const startLine = Math.max(1, safeLine - 2);
+  const endLine = Math.min(lines.length, safeLine + 2);
+  const excerpt = [];
+  for (let number = startLine; number <= endLine; number += 1) {
+    excerpt.push({ number, text: lines[number - 1] || "", active: number === safeLine });
+  }
+  return {
+    file,
+    fileName: file.name,
+    line: safeLine,
+    col: safeCol,
+    sourceLine: lines[safeLine - 1] || "",
+    nearbySource: lines.slice(Math.max(0, safeLine - 4), Math.min(lines.length, safeLine + 3)).join("\n"),
+    excerpt,
+  };
+}
+
+function findRuntimeSyntaxSourceLocation() {
+  const javascriptFiles = projectFiles.filter(
+    (file) => file && file.type === "js" && !getProjectMediaKind(file),
+  );
+  const preferredJavaScriptFiles = activeFile?.type === "js"
+    ? [activeFile, ...javascriptFiles.filter((file) => file !== activeFile)]
+    : javascriptFiles;
+  for (const file of preferredJavaScriptFiles) {
+    const parserError = getAcornJavaScriptSyntaxError(file.content);
+    if (parserError) {
+      return {
+        fileName: file.name,
+        line: parserError.line,
+        col: parserError.col,
+      };
+    }
+  }
+
+  for (const file of projectFiles.filter((candidate) => candidate?.type === "html")) {
+    const html = String(file.content || "");
+    const scriptRegex = /<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptRegex.exec(html)) !== null) {
+      const scriptCode = match[1] || "";
+      const parserError = getAcornJavaScriptSyntaxError(scriptCode);
+      if (!parserError) continue;
+      const contentStart = match.index + match[0].indexOf(scriptCode);
+      const startLocation = getLineAndColumnFromIndex(html, contentStart);
+      return {
+        fileName: file.name,
+        line: startLocation.line + parserError.line - 1,
+        col: parserError.line === 1
+          ? startLocation.col + parserError.col - 1
+          : parserError.col,
+      };
+    }
+  }
+  return null;
+}
+
+function collectRuntimeDiagnosticIdentifiers(preferredFile = null) {
+  const candidates = new Set(RUNTIME_DIAGNOSTIC_GLOBALS);
+  const files = preferredFile
+    ? [preferredFile, ...projectFiles.filter((file) => file !== preferredFile)]
+    : projectFiles;
+  files.forEach((file) => {
+    if (!file || getProjectMediaKind(file)) return;
+    const source = String(file.content || "").slice(0, 180 * 1024);
+    const matches = source.match(/[A-Za-z_$][\w$]*/g) || [];
+    matches.forEach((name) => {
+      if (!RUNTIME_DIAGNOSTIC_KEYWORDS.has(name)) candidates.add(name);
+    });
+  });
+  return candidates;
+}
+
+function findClosestRuntimeIdentifier(name, preferredFile = null) {
+  const target = String(name || "").trim();
+  if (target.length < 3) return "";
+  let best = "";
+  let bestDistance = Infinity;
+  collectRuntimeDiagnosticIdentifiers(preferredFile).forEach((candidate) => {
+    if (!candidate || candidate === target || Math.abs(candidate.length - target.length) > 4) return;
+    const distance = getLevenshteinDistance(target, candidate);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  });
+  const maxDistance = target.length <= 5 ? 1 : target.length <= 9 ? 2 : 3;
+  return bestDistance <= maxDistance ? best : "";
+}
+
+function findRuntimeBracketIssue(source) {
+  const masked = maskJavaScriptForDiagnostics(String(source || ""));
+  const openers = { "(": ")", "[": "]", "{": "}" };
+  const closers = new Set(Object.values(openers));
+  const stack = [];
+  for (let index = 0; index < masked.length; index += 1) {
+    const char = masked[index];
+    if (openers[char]) {
+      stack.push({ char, index });
+      continue;
+    }
+    if (!closers.has(char)) continue;
+    const last = stack[stack.length - 1];
+    if (!last || openers[last.char] !== char) {
+      const location = getLineAndColumnFromIndex(masked, index);
+      return {
+        explanation: `The parser reached an unexpected "${char}" at line ${location.line}; it does not match the currently open bracket.`,
+        fix: last
+          ? `Close "${last.char}" with "${openers[last.char]}" before this "${char}".`
+          : `Remove this "${char}" or add its matching opening bracket.`,
+      };
+    }
+    stack.pop();
+  }
+  const last = stack[stack.length - 1];
+  if (!last) return null;
+  const location = getLineAndColumnFromIndex(masked, last.index);
+  return {
+    explanation: `The "${last.char}" opened at line ${location.line} is never closed, so JavaScript cannot finish parsing the file.`,
+    fix: `Add the matching "${openers[last.char]}" after the intended block or expression.`,
+  };
+}
+
+function inferRuntimeRootCause(payload, context) {
+  const message = String(payload.message || "Unknown runtime error");
+  const lower = message.toLowerCase();
+  const errorName = String(payload.errorName || "Error");
+  const sourceLine = String(context?.sourceLine || "").trim();
+  const nearby = String(context?.nearbySource || "");
+  const isPromise = payload.kind === "unhandledrejection";
+
+  if (
+    errorName === "SyntaxError" ||
+    /unexpected token|unexpected end|missing\s+[)\]}]|unterminated|invalid or unexpected token|expected/.test(lower)
+  ) {
+    const bracketIssue = context ? findRuntimeBracketIssue(context.file.content) : null;
+    return {
+      category: "Syntax / structure",
+      confidence: bracketIssue ? "High confidence" : "Likely",
+      explanation: bracketIssue?.explanation ||
+        "JavaScript could not build a valid statement near this location, usually because punctuation, quotes, or brackets are incomplete or out of order.",
+      fix: bracketIssue?.fix ||
+        "Compare the opening and closing quotes, parentheses, square brackets, and braces around the highlighted line.",
+    };
+  }
+
+  const notDefined = message.match(/\b([A-Za-z_$][\w$]*) is not defined\b/i);
+  if (notDefined) {
+    const unresolved = notDefined[1];
+    const nearest = findClosestRuntimeIdentifier(unresolved, context?.file || null);
+    return {
+      category: "Undeclared variable",
+      confidence: nearest ? "High confidence" : "Likely",
+      explanation: nearest
+        ? `"${unresolved}" is not available in this scope, and "${nearest}" is the closest name already used by this project.`
+        : `"${unresolved}" is used on this line, but no matching variable, function, import, or browser global was found in the project.`,
+      fix: nearest
+        ? `Replace "${unresolved}" with "${nearest}" if that is the intended name; otherwise declare or import "${unresolved}" before this line.`
+        : `Declare, import, or correctly spell "${unresolved}" before it is used.`,
+    };
+  }
+
+  const beforeInitialization = message.match(/Cannot access ['"]?([^'"]+)['"]? before initialization/i);
+  if (beforeInitialization) {
+    return {
+      category: "Initialization order",
+      confidence: "High confidence",
+      explanation: `"${beforeInitialization[1]}" exists, but this code runs before its let, const, class, or module initialization has completed.`,
+      fix: `Move the declaration above this use, or delay this code until initialization is complete.`,
+    };
+  }
+
+  const propertyFailure = message.match(/Cannot\s+(read|set)\s+properties?\s+of\s+(null|undefined)(?:\s*\((?:reading|setting)\s+['"]([^'"]+)['"]\))?/i);
+  if (propertyFailure) {
+    const valueType = propertyFailure[2];
+    const property = propertyFailure[3] || "the requested property";
+    const propertyAction = propertyFailure[1].toLowerCase() === "set" ? "assign" : "read";
+    const domLookup = /querySelector|getElementById|getElementsBy|closest\s*\(/.test(nearby);
+    const collectionLookup = /\.find\s*\(|\[[^\]]+\]/.test(sourceLine);
+    const timing = isPromise || /setTimeout|setInterval|fetch\s*\(|await\s+|then\s*\(/.test(nearby);
+    return {
+      category: timing ? "Async timing / missing value" : "Missing value",
+      confidence: domLookup || collectionLookup ? "High confidence" : "Likely",
+      explanation: domLookup
+        ? `A DOM lookup near this line most likely returned ${valueType}, so the code cannot ${propertyAction} "${property}". The selector may not match, or the script may run before the element exists.`
+        : collectionLookup
+          ? `A lookup near this line most likely returned ${valueType} because no matching item or index exists, then the code tried to ${propertyAction} "${property}".`
+          : timing
+            ? `The value is still ${valueType} when asynchronous code reaches this line, so the code tries to ${propertyAction} "${property}" before the expected data is ready.`
+            : `The value used for ".${property}" is ${valueType}, which means an earlier lookup, assignment, or function result did not produce the expected object.`,
+      fix: domLookup
+        ? `Verify the selector, run after DOMContentLoaded or use defer, and guard the result before trying to ${propertyAction} ".${property}".`
+        : timing
+          ? `Await the operation that creates the value, handle its failure path, and check the value before trying to ${propertyAction} ".${property}".`
+          : `Trace the value immediately before this line, handle the missing case, and only ${propertyAction} ".${property}" after confirming the object exists.`,
+    };
+  }
+
+  if (/is not a function/i.test(message)) {
+    const calledValue = message.match(/([^\s]+) is not a function/i)?.[1] || "The called value";
+    const arrayMethod = /\.(map|filter|reduce|forEach|find|some|every)\s*\(/.test(sourceLine);
+    return {
+      category: "Wrong value type",
+      confidence: "Likely",
+      explanation: arrayMethod
+        ? `An array method is called here, but the value at runtime is not an array or its method was overwritten.`
+        : `${calledValue} is being called with parentheses, but its current runtime value is not callable. It may have been overwritten, misspelled, or read from the wrong object.`,
+      fix: arrayMethod
+        ? `Confirm the value with Array.isArray(...), normalize non-array input, and only call the array method on an array.`
+        : `Inspect typeof ${calledValue}, verify the method name and receiver, and make sure no earlier assignment replaced the function.`,
+    };
+  }
+
+  if (
+    /cannot convert|cannot mix bigint|invalid time value|cannot create property|cannot assign to read only|symbol.*convert|bigint/.test(lower) ||
+    (/typeerror/i.test(errorName) && /\+|==|===|number\s*\(|string\s*\(/.test(sourceLine))
+  ) {
+    return {
+      category: "Type coercion",
+      confidence: "Likely",
+      explanation: "This operation received a different value type than it supports, so JavaScript could not safely convert or combine the operands.",
+      fix: "Inspect each operand with typeof, convert deliberately with Number(...), String(...), or BigInt(...), and validate the result before this operation.",
+    };
+  }
+
+  if (isPromise || /uncaught \(in promise\)|failed to fetch|networkerror|aborterror/.test(lower)) {
+    return {
+      category: "Asynchronous operation",
+      confidence: "Likely",
+      explanation: "A promise rejected without a matching error handler. The failure may come from a network request, an awaited operation, or code that ran before its dependency was ready.",
+      fix: "Wrap the awaited operation in try/catch or add .catch(...), check response.ok for fetch calls, and handle loading and failure states explicitly.",
+    };
+  }
+
+  if (errorName === "RangeError" || /maximum call stack|out of range|invalid array length/.test(lower)) {
+    return {
+      category: "Range / recursion",
+      confidence: "Likely",
+      explanation: /maximum call stack/.test(lower)
+        ? "A function is repeatedly calling itself without reaching a stopping condition."
+        : "A number, index, length, or recursive operation exceeded the range JavaScript accepts.",
+      fix: /maximum call stack/.test(lower)
+        ? "Add or correct the recursion base case and verify that each call moves toward it."
+        : "Validate the value before using it as a length, index, or numeric argument.",
+    };
+  }
+
+  return {
+    category: "Runtime state",
+    confidence: "Possible cause",
+    explanation: sourceLine
+      ? "The program reached this source line with runtime state that violates the operation shown. The original stack identifies the call path, but the exact invalid value must be inspected."
+      : "The program failed at runtime, but the source file or line could not be mapped confidently enough for a narrower diagnosis.",
+    fix: sourceLine
+      ? "Inspect the values used on this line and the preceding stack frame, then handle the unexpected state before repeating the operation."
+      : "Open the original stack trace below, locate the first project-owned frame, and inspect the values entering that function.",
+  };
+}
+
+function renderRuntimeDiagnostic(payload, rawError) {
+  if (!consoleOutput) return;
+  const frames = parseRuntimeStackFrames(payload.stack);
+  const frameWithProjectFile = frames.find((frame) => resolveRuntimeDiagnosticFile(frame.source));
+  const syntaxLocation = String(payload.errorName || "") === "SyntaxError"
+    ? findRuntimeSyntaxSourceLocation()
+    : null;
+  const fileName = syntaxLocation?.fileName ||
+    resolveRuntimeDiagnosticFile(payload.fileName)?.name ||
+    resolveRuntimeDiagnosticFile(frameWithProjectFile?.source)?.name ||
+    String(payload.fileName || "Preview");
+  const line = Math.max(1, Number(syntaxLocation?.line || payload.line || frameWithProjectFile?.line || 1));
+  const col = Math.max(1, Number(syntaxLocation?.col || payload.col || frameWithProjectFile?.col || 1));
+  const repeatKey = [payload.errorName, payload.message, fileName, line, col].join("|");
+  const recent = runtimeDiagnosticRecent.get(repeatKey);
+  if (recent && Date.now() - recent.at < 1500 && recent.node?.isConnected) {
+    recent.at = Date.now();
+    recent.count += 1;
+    const repeat = recent.node.querySelector(".codx-runtime-repeat") || document.createElement("span");
+    repeat.className = "codx-runtime-repeat";
+    repeat.textContent = `Repeated ${recent.count}×`;
+    if (!repeat.parentNode) recent.node.querySelector(".codx-runtime-diagnostic-header")?.appendChild(repeat);
+    const stored = runtimeDiagnosticRawErrors.get(recent.diagnosticId);
+    if (stored) {
+      stored.error = rawError || stored.error;
+      stored.payload = { ...payload };
+    }
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    return;
+  }
+  const context = getRuntimeSourceContext(fileName, line, col);
+  const diagnosis = inferRuntimeRootCause(payload, context);
+  const diagnosticId = `runtime-${Date.now().toString(36)}-${(++runtimeDiagnosticSequence).toString(36)}`;
+  runtimeDiagnosticRawErrors.set(diagnosticId, { error: rawError || null, payload: { ...payload }, diagnosis, context });
+  while (runtimeDiagnosticRawErrors.size > 100) {
+    runtimeDiagnosticRawErrors.delete(runtimeDiagnosticRawErrors.keys().next().value);
+  }
+
+  const root = document.createElement("div");
+  root.className = `error codx-runtime-diagnostic${context ? " has-location" : ""}`;
+  root.dataset.runtimeDiagnosticId = diagnosticId;
+  root.dataset.notificationMessage = `Error: [${fileName}] line ${line}:${col} - ${payload.errorName || "Error"}: ${payload.message}. Likely cause: ${diagnosis.explanation} Fix: ${diagnosis.fix}`;
+  if (context) {
+    root.tabIndex = 0;
+    root.setAttribute("role", "button");
+  }
+  root.title = context ? `Open ${context.fileName} at line ${context.line}, column ${context.col}` : "Runtime diagnostic";
+
+  const header = document.createElement("div");
+  header.className = "codx-runtime-diagnostic-header";
+  const category = document.createElement("span");
+  category.className = "codx-runtime-category";
+  category.textContent = diagnosis.category;
+  const confidence = document.createElement("span");
+  confidence.className = "codx-runtime-confidence";
+  confidence.textContent = diagnosis.confidence;
+  const location = document.createElement("span");
+  location.className = "codx-runtime-location";
+  location.textContent = `[${fileName}] line ${line}:${col}`;
+  header.append(category, confidence, location);
+
+  const title = document.createElement("div");
+  title.className = "codx-runtime-error-title";
+  title.textContent = `${payload.errorName || "Error"}: ${payload.message || "Unknown runtime error"}`;
+
+  const why = document.createElement("div");
+  why.className = "codx-runtime-why";
+  const whyLabel = document.createElement("strong");
+  whyLabel.textContent = "Likely root cause";
+  const whyText = document.createElement("span");
+  whyText.textContent = diagnosis.explanation;
+  why.append(whyLabel, whyText);
+
+  root.append(header, title, why);
+
+  if (context?.excerpt?.length) {
+    const source = document.createElement("pre");
+    source.className = "codx-runtime-source";
+    context.excerpt.forEach((entry) => {
+      const row = document.createElement("span");
+      if (entry.active) row.className = "active";
+      row.textContent = `${String(entry.number).padStart(4, " ")} | ${entry.text || " "}`;
+      source.appendChild(row);
+    });
+    root.appendChild(source);
+  }
+
+  const fix = document.createElement("div");
+  fix.className = "codx-runtime-fix";
+  const fixLabel = document.createElement("strong");
+  fixLabel.textContent = "Suggested remediation";
+  const fixText = document.createElement("span");
+  fixText.textContent = diagnosis.fix;
+  fix.append(fixLabel, fixText);
+  root.appendChild(fix);
+
+  const rawDetails = document.createElement("details");
+  rawDetails.className = "codx-runtime-raw";
+  const rawSummary = document.createElement("summary");
+  rawSummary.textContent = "Original error and full stack trace";
+  const rawOutput = document.createElement("pre");
+  rawOutput.textContent = String(payload.stack || `${payload.errorName || "Error"}: ${payload.message || ""}`);
+  const rawAccess = document.createElement("code");
+  rawAccess.textContent = `Raw object: window.__codxGetRawRuntimeError("${diagnosticId}")`;
+  rawDetails.append(rawSummary, rawOutput, rawAccess);
+  rawDetails.addEventListener("click", (event) => event.stopPropagation());
+  rawDetails.addEventListener("keydown", (event) => event.stopPropagation());
+  root.appendChild(rawDetails);
+
+  if (context) {
+    const openLocation = () => jumpToEditorLocation(context.fileName, context.line, context.col);
+    root.addEventListener("click", (event) => {
+      if (event.target.closest("details")) return;
+      openLocation();
+    });
+    root.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("details")) return;
+      event.preventDefault();
+      openLocation();
+    });
+  }
+
+  consoleOutput.appendChild(root);
+  runtimeDiagnosticRecent.set(repeatKey, {
+    at: Date.now(),
+    count: 1,
+    diagnosticId,
+    node: root,
+  });
+  while (runtimeDiagnosticRecent.size > 100) {
+    runtimeDiagnosticRecent.delete(runtimeDiagnosticRecent.keys().next().value);
+  }
+  consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
+window.__codxReportRuntimeDiagnostic = (payload, rawError = null) => {
+  try {
+    renderRuntimeDiagnostic(payload || {}, rawError);
+  } catch (diagnosticError) {
+    appendConsoleMessage(
+      "error",
+      `Error: [${payload?.fileName || "Preview"}] line ${payload?.line || 1}:${payload?.col || 1} - ${payload?.message || "Unknown runtime error"} | Fix: Review the original stack trace.`,
+    );
+  }
+};
+
+window.__codxGetRawRuntimeError = (diagnosticId) =>
+  runtimeDiagnosticRawErrors.get(String(diagnosticId || ""))?.error || null;
 
 function openPreviewErrorFromNotification(message) {
   const errorMessage = String(message || "").trim();
@@ -8884,7 +9340,9 @@ function openPreviewErrorFromNotification(message) {
   if (location) jumpToEditorLocation(location.fileName, location.line, location.col || 1);
   requestAnimationFrame(() => {
     const matchingLine = Array.from(consoleOutput?.querySelectorAll("div.error") || [])
-      .find((line) => String(line.textContent || "").trim() === errorMessage);
+      .find((line) =>
+        String(line.dataset.notificationMessage || line.textContent || "").trim() === errorMessage,
+      );
     if (!matchingLine) return;
     matchingLine.scrollIntoView({ behavior: "smooth", block: "center" });
     matchingLine.classList.add("notification-target-flash");
@@ -8919,7 +9377,9 @@ const consoleErrorObserver = new MutationObserver((mutations) => {
       const errorLines = [];
       if (node.matches("div.error:not(.codx-diagnostic-line)")) errorLines.push(node);
       node.querySelectorAll?.("div.error:not(.codx-diagnostic-line)").forEach((line) => errorLines.push(line));
-      errorLines.forEach((line) => notifyPreviewRuntimeError(line.textContent));
+      errorLines.forEach((line) =>
+        notifyPreviewRuntimeError(line.dataset.notificationMessage || line.textContent),
+      );
     });
   });
 });
@@ -8932,6 +9392,8 @@ if (consoleOutput) {
 
 function clearConsole() {
   consoleOutput.innerHTML = "";
+  runtimeDiagnosticRawErrors.clear();
+  runtimeDiagnosticRecent.clear();
   resetFileErrorCounts();
   renderFileList();
   showNotification("Console cleared", "info");
@@ -10711,6 +11173,8 @@ function updatePreview() {
     return;
   }
   consoleOutput.innerHTML = "";
+  runtimeDiagnosticRawErrors.clear();
+  runtimeDiagnosticRecent.clear();
   resetFileErrorCounts();
   const diagnostics = [];
   runPreflightDiagnostics(diagnostics);
@@ -11091,95 +11555,11 @@ function updatePreview() {
             }
           }
 
-          function levenshtein(a, b) {
-            a = String(a || '').toLowerCase();
-            b = String(b || '').toLowerCase();
-            const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-            for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-            for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-            for (let i = 1; i <= a.length; i++) {
-              for (let j = 1; j <= b.length; j++) {
-                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-                dp[i][j] = Math.min(
-                  dp[i - 1][j] + 1,
-                  dp[i][j - 1] + 1,
-                  dp[i - 1][j - 1] + cost
-                );
-              }
-            }
-            return dp[a.length][b.length];
-          }
-
-          function closestName(value, list, maxDistance) {
-            const target = String(value || '').trim().toLowerCase();
-            if (!target) return '';
-            let best = '';
-            let bestDistance = Infinity;
-            list.forEach((candidate) => {
-              const safe = String(candidate || '').trim();
-              if (!safe) return;
-              const distance = levenshtein(target, safe);
-              if (distance < bestDistance) {
-                bestDistance = distance;
-                best = safe;
-              }
-            });
-            return bestDistance <= maxDistance ? best : '';
-          }
-
-          function suggestFix(message) {
-            const msg = String(message || '').toLowerCase();
-            const known = [
-              'console',
-              'document',
-              'window',
-              'localStorage',
-              'sessionStorage',
-              'navigator',
-              'location',
-              'history',
-              'fetch',
-              'setTimeout',
-              'setInterval',
-              'clearTimeout',
-              'clearInterval',
-              'requestAnimationFrame',
-              'querySelector',
-              'querySelectorAll',
-              'getElementById',
-              'createElement',
-              'appendChild',
-              'classList',
-              'JSON',
-              'Math',
-              'Promise'
-            ];
-            if (msg.includes('is not defined')) {
-              const match = String(message || '').match(/^([A-Za-z_$][\\w$]*) is not defined/i);
-              const unresolved = match ? match[1] : '';
-              const nearest = closestName(unresolved, known, 4);
-              if (nearest) return 'Did you mean "' + nearest + '"?';
-              return 'Declare the variable or function before use.';
-            }
-            if (msg.includes('is not a function')) {
-              const match = String(message || '').match(/([A-Za-z_$][\\w$]*) is not a function/i);
-              const unresolved = match ? match[1] : '';
-              const nearest = closestName(unresolved, known, 4);
-              if (nearest) return 'Check whether you meant "' + nearest + '".';
-              return 'Check the method name and the value you are calling it on.';
-            }
-            if (msg.includes('unexpected token')) return 'Check missing commas, quotes, or brackets.';
-            if (msg.includes('unexpected end')) return 'Look for an unclosed bracket, string, or block.';
-            if (msg.includes('cannot read properties of')) return 'Guard against null or undefined values.';
-            if (msg.includes('missing')) return 'A closing bracket, brace, or parenthesis may be missing.';
-            return 'Review code around this line.';
-          }
-
           function parseStackLocation(error) {
             if (!error || !error.stack) return null;
             const stack = String(error.stack);
             // Prefer explicit source files (e.g. script.js:8:1)
-            let m = stack.match(/\\b([A-Za-z0-9_.-]+\\.(?:js|mjs|html)):(\\d+):(\\d+)\\b/);
+            let m = stack.match(/\\b([A-Za-z0-9_.-]+\\.(?:js|mjs|cjs|jsx|ts|tsx|html)):(\\d+):(\\d+)\\b/);
             if (m) {
               return { file: m[1], line: Number(m[2]), col: Number(m[3]) };
             }
@@ -11219,19 +11599,91 @@ function updatePreview() {
             return Number(col || 1);
           }
 
+          function serializeConsoleArgument(value) {
+            if (value instanceof Error || (value && typeof value === 'object' && typeof value.stack === 'string')) {
+              return {
+                name: value.name || 'Error',
+                message: value.message || String(value),
+                stack: value.stack || '',
+              };
+            }
+            if (typeof value === 'object' && value !== null) {
+              try {
+                return JSON.parse(JSON.stringify(value));
+              } catch (serializationError) {
+                return String(value);
+              }
+            }
+            return value;
+          }
+
+          function reportRuntimeDiagnostic(kind, message, source, line, col, error, consoleArguments) {
+            const safeMessage = String(
+              kind === 'console-error'
+                ? message || (error && error.message) || 'Unknown runtime error'
+                : (error && error.message) || message || 'Unknown runtime error',
+            );
+            const filename = normalizeFilename(source || '', error);
+            const mappedLine = normalizeLine(source || '', line, error);
+            const mappedCol = normalizeCol(source || '', col, error);
+            const errorName = String((error && error.name) || (kind === 'unhandledrejection' ? 'UnhandledPromiseRejection' : 'Error'));
+            const stack = String((error && error.stack) || (errorName + ': ' + safeMessage));
+            const payload = {
+              kind,
+              message: safeMessage,
+              errorName,
+              stack,
+              source: String(source || ''),
+              fileName: filename,
+              line: mappedLine,
+              col: mappedCol,
+              consoleArguments: Array.isArray(consoleArguments)
+                ? consoleArguments.map(serializeConsoleArgument)
+                : [],
+              timestamp: Date.now(),
+            };
+            try {
+              if (window.parent && typeof window.parent.__codxReportRuntimeDiagnostic === 'function') {
+                window.parent.__codxReportRuntimeDiagnostic(payload, error || null);
+                return;
+              }
+            } catch (parentError) {
+              // Fall through to the plain console output when parent access is unavailable.
+            }
+            appendMessage(
+              'error',
+              'Error: ',
+              ['[' + filename + '] line ' + mappedLine + ':' + mappedCol + ' - ' + errorName + ': ' + safeMessage + '\\n' + stack],
+            );
+          }
+
           // Override console methods IMMEDIATELY
           console.log = function(...args) { appendMessage('log', '> ', args); };
           console.warn = function(...args) { appendMessage('warn', 'WARNING: ', args); };
-          console.error = function(...args) { appendMessage('error', 'ERROR: ', args); };
+          console.error = function(...args) {
+            const error = args.find(arg =>
+              arg instanceof Error ||
+              (arg && typeof arg === 'object' && typeof arg.stack === 'string'),
+            );
+            if (!error) {
+              appendMessage('error', 'ERROR: ', args);
+              return;
+            }
+            const prefix = args
+              .filter(arg => arg !== error)
+              .map(arg => typeof arg === 'string' ? arg : String(arg))
+              .join(' ')
+              .trim();
+            const message = prefix
+              ? prefix + (error.message ? ': ' + error.message : '')
+              : error.message || String(error);
+            reportRuntimeDiagnostic('console-error', message, '', 1, 1, error, args);
+          };
           console.info = function(...args) { appendMessage('info', 'INFO: ', args); };
 
           // Capture runtime errors
           window.onerror = function(msg, source, line, col, error) {
-            const filename = normalizeFilename(source || '', error);
-            const mappedLine = normalizeLine(source || '', line, error);
-            const mappedCol = normalizeCol(source || '', col, error);
-            const fix = suggestFix(msg);
-            appendMessage('error', 'Error: ', ['[' + filename + '] line ' + mappedLine + ':' + mappedCol + ' - ' + msg + ' | Fix: ' + fix]);
+            reportRuntimeDiagnostic('runtime', msg, source || '', line, col, error, []);
             return false;
           };
 
@@ -11242,15 +11694,8 @@ function updatePreview() {
               reason && typeof reason === 'object' && 'message' in reason
                 ? reason.message
                 : String(reason || 'Unknown promise rejection');
-            const filename = normalizeFilename('', reason);
-            const mappedLine = normalizeLine('', 1, reason);
-            const mappedCol = normalizeCol('', 1, reason);
-            const fix = suggestFix(message);
-            appendMessage(
-              'error',
-              'Promise rejected: ',
-              ['[' + filename + '] line ' + mappedLine + ':' + mappedCol + ' - ' + message + ' | Fix: ' + fix],
-            );
+            const error = reason && typeof reason === 'object' ? reason : null;
+            reportRuntimeDiagnostic('unhandledrejection', message, '', 1, 1, error, [reason]);
           });
 
           // Capture resource load errors
