@@ -5019,6 +5019,7 @@ let projectFiles = [
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
@@ -13301,16 +13302,6 @@ function handleSuggestions(e) {
       cssContext.mode,
       cssContext.propertyName,
     );
-    if (
-      cssContext.prefix &&
-      cssSuggestions.some(
-        (entry) =>
-          entry.value.toLowerCase() === cssContext.prefix.toLowerCase(),
-      )
-    ) {
-      hideSuggestions();
-      return;
-    }
     if (!cssSuggestions.length) {
       hideSuggestions();
       return;
@@ -13328,15 +13319,6 @@ function handleSuggestions(e) {
     }
     const jsMatches = getRankedJsSuggestions(jsContext.prefix);
     if (!jsMatches.length) {
-      hideSuggestions();
-      return;
-    }
-    if (
-      jsContext.prefix &&
-      jsMatches.some(
-        (entry) => entry.value.toLowerCase() === jsContext.prefix.toLowerCase(),
-      )
-    ) {
       hideSuggestions();
       return;
     }
@@ -13365,16 +13347,6 @@ function handleSuggestions(e) {
       inlineStyleContext.propertyName,
     );
     if (!cssSuggestions.length) {
-      hideSuggestions();
-      return;
-    }
-    if (
-      inlineStyleContext.prefix &&
-      cssSuggestions.some(
-        (entry) =>
-          entry.value.toLowerCase() === inlineStyleContext.prefix.toLowerCase(),
-      )
-    ) {
       hideSuggestions();
       return;
     }
@@ -14114,16 +14086,21 @@ function getRankedHtmlAttributeValueSuggestions(attr, prefix) {
   ]
     .filter((value) => String(value).startsWith(isClass ? "." : "#"))
     .map((value) => String(value).slice(1));
-  const values = Array.from(new Set([...projectValues, ...jsValues, ...learnedValues, ...cssValues]));
+  const currentValues = getCurrentFileHtmlValues(attr);
+  const values = Array.from(new Set([...currentValues, ...projectValues, ...jsValues, ...learnedValues, ...cssValues]));
   return values
-    .filter((value) => !q || value.toLowerCase().includes(q))
+    .filter((value) => getSuggestionMatchTier(value, q, { allowClose: currentValues.has(value) }) > 0)
     .sort((a, b) => {
-      const aStarts = a.toLowerCase().startsWith(q) ? 1 : 0;
-      const bStarts = b.toLowerCase().startsWith(q) ? 1 : 0;
-      return bStarts - aStarts || a.length - b.length || a.localeCompare(b);
+      const aCurrent = currentValues.has(a) ? 1 : 0;
+      const bCurrent = currentValues.has(b) ? 1 : 0;
+      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+      const aTier = getSuggestionMatchTier(a, q, { allowClose: true });
+      const bTier = getSuggestionMatchTier(b, q, { allowClose: true });
+      if (aTier !== bTier) return bTier - aTier;
+      return a.length - b.length || a.localeCompare(b);
     })
     .slice(0, 40)
-    .map((value) => ({ value, desc: `Learned HTML ${attr}` }));
+    .map((value) => ({ value, desc: currentValues.has(value) ? `Declared in current file` : `Learned HTML ${attr}` }));
 }
 
 function getRankedEnvSuggestions(prefix) {
@@ -14230,6 +14207,168 @@ function getCssColorSwatch(value, propertyName) {
   return rawValue;
 }
 
+function getSuggestionMatchTier(value, prefix, options = {}) {
+  const rawValue = String(value || "").toLowerCase();
+  const rawPrefix = String(prefix || "").toLowerCase();
+  if (!rawPrefix) return 1;
+  if (rawValue === rawPrefix) return 5;
+  if (rawValue.startsWith(rawPrefix)) return 4;
+
+  const stripSigil = options.stripSigil === true;
+  const valueText = stripSigil ? rawValue.replace(/^[.#]/, "") : rawValue;
+  const prefixText = stripSigil ? rawPrefix.replace(/^[.#]/, "") : rawPrefix;
+  if (valueText === prefixText) return 5;
+  if (valueText.startsWith(prefixText)) return 4;
+  if (rawValue.includes(rawPrefix) || valueText.includes(prefixText)) return 3;
+
+  if (options.allowClose && prefixText.length >= 3) {
+    const comparable = valueText.slice(0, Math.max(prefixText.length, Math.min(valueText.length, prefixText.length + 2)));
+    const maxDistance = prefixText.length <= 5 ? 1 : 2;
+    if (getLevenshteinDistance(prefixText, comparable) <= maxDistance) return 2;
+  }
+  return 0;
+}
+
+function collectBindingPatternNames(pattern, names) {
+  if (!pattern || typeof pattern !== "object") return;
+  if (pattern.type === "Identifier") {
+    names.add(pattern.name);
+    return;
+  }
+  if (pattern.type === "RestElement") {
+    collectBindingPatternNames(pattern.argument, names);
+    return;
+  }
+  if (pattern.type === "AssignmentPattern") {
+    collectBindingPatternNames(pattern.left, names);
+    return;
+  }
+  if (pattern.type === "ArrayPattern") {
+    pattern.elements.forEach((entry) => collectBindingPatternNames(entry, names));
+    return;
+  }
+  if (pattern.type === "ObjectPattern") {
+    pattern.properties.forEach((property) =>
+      collectBindingPatternNames(property.type === "RestElement" ? property.argument : property.value, names),
+    );
+  }
+}
+
+function collectDeclaredJavaScriptIdentifiers(source) {
+  const code = String(source || "");
+  const names = new Set();
+  let ast = null;
+  if (window.acorn && typeof window.acorn.parse === "function") {
+    const options = {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      allowHashBang: true,
+      allowAwaitOutsideFunction: true,
+      allowReturnOutsideFunction: true,
+    };
+    try {
+      ast = window.acorn.parse(code, options);
+    } catch (_scriptError) {
+      try {
+        ast = window.acorn.parse(code, { ...options, sourceType: "module" });
+      } catch (_moduleError) {
+        ast = null;
+      }
+    }
+  }
+
+  if (ast) {
+    const visit = (node) => {
+      if (!node || typeof node !== "object") return;
+      if (node.type === "VariableDeclarator") collectBindingPatternNames(node.id, names);
+      if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") {
+        collectBindingPatternNames(node.id, names);
+        (node.params || []).forEach((param) => collectBindingPatternNames(param, names));
+      }
+      if (node.type === "ClassDeclaration" || node.type === "ClassExpression") {
+        collectBindingPatternNames(node.id, names);
+      }
+      if (node.type === "ImportSpecifier" || node.type === "ImportDefaultSpecifier" || node.type === "ImportNamespaceSpecifier") {
+        collectBindingPatternNames(node.local, names);
+      }
+      if (node.type === "CatchClause") collectBindingPatternNames(node.param, names);
+      Object.keys(node).forEach((key) => {
+        if (["type", "start", "end", "loc", "range"].includes(key)) return;
+        const value = node[key];
+        if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === "object" && typeof value.type === "string") visit(value);
+      });
+    };
+    visit(ast);
+  } else {
+    const declarationPatterns = [
+      /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g,
+      /\b(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/g,
+      /\bclass\s+([A-Za-z_$][\w$]*)/g,
+      /\bimport\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)/g,
+    ];
+    declarationPatterns.forEach((pattern) => {
+      let match;
+      while ((match = pattern.exec(code)) !== null) names.add(match[1]);
+    });
+  }
+  return names;
+}
+
+function getCurrentFileJavaScriptIdentifiers() {
+  if (!activeFile) return new Set();
+  if (activeFile.type === "js") {
+    return collectDeclaredJavaScriptIdentifiers(activeFile.content);
+  }
+  if (activeFile.type === "html") {
+    const names = new Set();
+    getHtmlRawTextSegments(activeFile.content, "script").forEach((segment) => {
+      collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name));
+    });
+    return names;
+  }
+  return new Set();
+}
+
+function getCurrentFileCssSelectors() {
+  if (!activeFile || !["css", "html"].includes(activeFile.type)) return new Set();
+  const cssText = activeFile.type === "css"
+    ? String(activeFile.content || "")
+    : getHtmlRawTextSegments(activeFile.content, "style").map((segment) => segment.code).join("\n");
+  const masked = cssText
+    .replace(/\/\*[\s\S]*?\*\//g, (match) => " ".repeat(match.length))
+    .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, (match) => " ".repeat(match.length));
+  const selectors = new Set();
+  let boundary = 0;
+  for (let index = 0; index < masked.length; index++) {
+    const char = masked[index];
+    if (char === "{") {
+      const prelude = masked.slice(boundary, index);
+      const selectorPattern = /[.#][-_A-Za-z][\w-]*/g;
+      let match;
+      while ((match = selectorPattern.exec(prelude)) !== null) selectors.add(match[0]);
+      boundary = index + 1;
+    } else if (char === "}" || char === ";") {
+      boundary = index + 1;
+    }
+  }
+  return selectors;
+}
+
+function getCurrentFileHtmlValues(attr) {
+  if (!activeFile || activeFile.type !== "html") return new Set();
+  const values = new Set();
+  const wanted = String(attr || "").toLowerCase();
+  scanHtmlTagTokens(activeFile.content, () => {}).forEach((token) => {
+    (token.attributes || []).forEach((attribute) => {
+      if (attribute.name !== wanted || !attribute.value) return;
+      const parts = wanted === "class" ? attribute.value.split(/\s+/) : [attribute.value];
+      parts.filter(Boolean).forEach((value) => values.add(value));
+    });
+  });
+  return values;
+}
+
 function getRankedCssSuggestions(prefix, mode, propertyName) {
   const q = (prefix || "").toLowerCase();
   let source = [];
@@ -14269,69 +14408,105 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
       });
     }
   } else {
-    const learnedSelectors = [
+    const currentSelectors = [...getCurrentFileCssSelectors()].map((value) => ({
+      value,
+      desc: "Declared in current file",
+      sourcePriority: 4,
+    }));
+    const projectSelectors = [
       ...__codxProjectSuggestionCache.css.selectorFreq.keys(),
-      ...__codxLearnedSuggestions.css.selectors,
       ...Array.from(__codxProjectSuggestionCache.html.classes).map((value) => `.${value}`),
       ...Array.from(__codxProjectSuggestionCache.html.ids).map((value) => `#${value}`),
+    ].map((value) => ({ value, desc: "Used in this project", sourcePriority: 3 }));
+    const learnedSelectors = [
+      ...__codxLearnedSuggestions.css.selectors,
       ...__codxLearnedSuggestions.html.classes.map((value) => `.${value}`),
       ...__codxLearnedSuggestions.html.ids.map((value) => `#${value}`),
-    ];
-    source = [...learnedSelectors, ...cssSelectorSuggestions].map((value) => ({
+    ].map((value) => ({ value, desc: "Learned selector", sourcePriority: 2 }));
+    const genericSelectors = cssSelectorSuggestions.map((value) => ({
       value,
       desc: "Selector or at-rule",
+      sourcePriority: 1,
     }));
+    source = [...currentSelectors, ...projectSelectors, ...learnedSelectors, ...genericSelectors];
   }
 
-  const deduped = Array.from(
-    new Map(source.map((entry) => [entry.value.toLowerCase(), entry])).values(),
-  );
-  const matches = deduped.filter((entry) =>
-    entry.value.toLowerCase().includes(q),
+  const deduped = new Map();
+  source.forEach((entry) => {
+    const key = entry.value.toLowerCase();
+    const existing = deduped.get(key);
+    if (!existing || Number(entry.sourcePriority || 0) > Number(existing.sourcePriority || 0)) {
+      deduped.set(key, entry);
+    }
+  });
+  const matches = [...deduped.values()].filter((entry) =>
+    getSuggestionMatchTier(entry.value, q, {
+      stripSigil: mode === "css-selector",
+      allowClose: Number(entry.sourcePriority || 0) >= 4,
+    }) > 0,
   );
   matches.sort((a, b) => {
     const aValue = a.value.toLowerCase();
     const bValue = b.value.toLowerCase();
-    const aStarts = aValue.startsWith(q) ? 1 : 0;
-    const bStarts = bValue.startsWith(q) ? 1 : 0;
-    if (aStarts !== bStarts) return bStarts - aStarts;
+    const aSource = Number(a.sourcePriority || 0);
+    const bSource = Number(b.sourcePriority || 0);
+    if (aSource !== bSource) return bSource - aSource;
+    const aTier = getSuggestionMatchTier(aValue, q, { stripSigil: mode === "css-selector", allowClose: true });
+    const bTier = getSuggestionMatchTier(bValue, q, { stripSigil: mode === "css-selector", allowClose: true });
+    if (aTier !== bTier) return bTier - aTier;
     if (aValue.length !== bValue.length) return aValue.length - bValue.length;
     return aValue.localeCompare(bValue);
   });
-  return matches.slice(0, 80);
+  return matches.slice(0, 80).map(({ sourcePriority, ...entry }) => entry);
 }
 
 function getRankedJsSuggestions(prefix) {
   const q = (prefix || "").toLowerCase();
   const runtimeMembers = getRuntimeJsMemberSuggestions(prefix);
-  const learnedEntries = [
+  const currentEntries = [...getCurrentFileJavaScriptIdentifiers()].map((value) => ({
+    value,
+    desc: "Declared in current file",
+    sourcePriority: 4,
+  }));
+  const projectEntries = [
     ...__codxProjectSuggestionCache.js.identFreq.keys(),
     ...__codxProjectSuggestionCache.js.memberKeys,
+  ].map((value) => ({ value, desc: "Used in this project", sourcePriority: 3 }));
+  const learnedEntries = [
     ...__codxLearnedSuggestions.js.identifiers,
     ...__codxLearnedSuggestions.js.members,
-  ].map((value) => ({ value, desc: "Learned JavaScript identifier" }));
+  ].map((value) => ({ value, desc: "Learned JavaScript identifier", sourcePriority: 2 }));
   const envEntries = [
     ...__codxProjectSuggestionCache.env.keys,
     ...__codxLearnedSuggestions.env.keys,
-  ].map((key) => ({ value: `process.env.${key}`, desc: "Learned environment variable" }));
-  const source = Array.from(
-    new Map(
-      [...learnedEntries, ...envEntries, ...jsSuggestions, ...runtimeMembers].map((entry) => [entry.value, entry]),
-    ).values(),
-  );
-  const matches = source.filter((entry) =>
-    entry.value.toLowerCase().includes(q),
+  ].map((key) => ({ value: `process.env.${key}`, desc: "Learned environment variable", sourcePriority: 2 }));
+  const genericEntries = jsSuggestions.map((entry) => ({ ...entry, sourcePriority: 1 }));
+  const runtimeEntries = runtimeMembers.map((entry) => ({ ...entry, sourcePriority: 1 }));
+  const deduped = new Map();
+  [...currentEntries, ...projectEntries, ...learnedEntries, ...envEntries, ...genericEntries, ...runtimeEntries]
+    .forEach((entry) => {
+      const key = entry.value.toLowerCase();
+      const existing = deduped.get(key);
+      if (!existing || Number(entry.sourcePriority || 0) > Number(existing.sourcePriority || 0)) {
+        deduped.set(key, entry);
+      }
+    });
+  const matches = [...deduped.values()].filter((entry) =>
+    getSuggestionMatchTier(entry.value, q, { allowClose: Number(entry.sourcePriority || 0) >= 4 }) > 0,
   );
   matches.sort((a, b) => {
     const aValue = a.value.toLowerCase();
     const bValue = b.value.toLowerCase();
-    const aStarts = aValue.startsWith(q) ? 1 : 0;
-    const bStarts = bValue.startsWith(q) ? 1 : 0;
-    if (aStarts !== bStarts) return bStarts - aStarts;
+    const aSource = Number(a.sourcePriority || 0);
+    const bSource = Number(b.sourcePriority || 0);
+    if (aSource !== bSource) return bSource - aSource;
+    const aTier = getSuggestionMatchTier(aValue, q, { allowClose: true });
+    const bTier = getSuggestionMatchTier(bValue, q, { allowClose: true });
+    if (aTier !== bTier) return bTier - aTier;
     if (aValue.length !== bValue.length) return aValue.length - bValue.length;
     return aValue.localeCompare(bValue);
   });
-  return matches.slice(0, 20);
+  return matches.slice(0, 20).map(({ sourcePriority, ...entry }) => entry);
 }
 
 function getRuntimeJsMemberSuggestions(prefix) {
