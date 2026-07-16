@@ -2635,7 +2635,11 @@ const cssSelectorSuggestions = [
 const jsSuggestions = [
   { value: "const", desc: "Declare a constant", insertText: "const " },
   { value: "let", desc: "Declare a block variable", insertText: "let " },
-  { value: "function", desc: "Create a function", insertText: "function " },
+  {
+    value: "function",
+    desc: "Create an anonymous function block",
+    insertText: "function () {\n" + INDENT_UNIT + "\n}",
+  },
   { value: "return", desc: "Return a value", insertText: "return " },
   { value: "if", desc: "Conditional statement", insertText: "if () {\n" + INDENT_UNIT + "\n}" },
   { value: "else", desc: "Fallback branch", insertText: "else {\n" + INDENT_UNIT + "\n}" },
@@ -5022,6 +5026,7 @@ let projectFiles = [
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
+            <li>Accepting the JavaScript <code>function</code> suggestion inserts an anonymous function block and places the caret between its parameter parentheses</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
