@@ -5010,7 +5010,8 @@ let projectFiles = [
             <li>Run commands with <strong>RUN</strong> or <kbd>Enter</kbd></li>
             <li>Use Stop before starting another command or disabling Node.js</li>
             <li>Open the clickable <code>http://localhost:8000</code> link in a new preview tab</li>
-            <li>If startup fails, CodX restores the normal preview so you can hard-refresh and retry</li>
+            <li>If startup fails, CodX Editor restores the normal preview so you can hard-refresh and retry</li>
+            <li>Interface messages and learning content use the complete CodX Editor name consistently</li>
           </ul>
         </article>
 
@@ -7313,7 +7314,7 @@ function showDeviceTransferCode(data, skippedMedia = 0) {
             <i class="fa-solid fa-spinner fa-spin"></i><span>Preparing QR code&hellip;</span>
           </div>
         </div>
-        <span id="deviceTransferQrStatus"><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX QR scanner</span>
+        <span id="deviceTransferQrStatus"><i class="fa-solid fa-camera"></i> Scan with the phone camera or CodX Editor QR scanner</span>
       </div>
       <p class="device-transfer-instruction">Scan the QR code with the other device, or open CodX Editor there and enter the one-time transfer code.</p>
       ${getDeviceTransferSummaryHtml(data?.summary, skippedMedia ? `${skippedMedia} large or unavailable media file${skippedMedia === 1 ? " was" : "s were"} skipped. Use ZIP export if you need those files.` : "")}
@@ -7505,7 +7506,7 @@ async function scanDeviceTransferQrImage(file, canvas, status) {
     );
     const code = decodeDeviceTransferQrCanvas(canvas);
     if (!completeScannedDeviceTransfer(code)) {
-      status.textContent = "No CodX transfer QR code was found in that image. Try a clearer image.";
+      status.textContent = "No CodX Editor transfer QR code was found in that image. Try a clearer image.";
       status.dataset.state = "error";
     }
   } finally {
@@ -7531,7 +7532,7 @@ async function startDeviceTransferCamera(video, canvas, status, startButton) {
   video.setAttribute("playsinline", "");
   await video.play();
   startButton.innerHTML = '<i class="fa-solid fa-rotate"></i><strong>RESTART CAMERA</strong>';
-  status.textContent = "Point the camera at a CodX Device Transfer QR code.";
+  status.textContent = "Point the camera at a CodX Editor Device Transfer QR code.";
   status.dataset.state = "scanning";
   let lastScanAt = 0;
   const scanFrame = (timestamp) => {
@@ -23647,7 +23648,7 @@ function getTutorialDemo(step) {
     return {
       type: "code",
       label: "SMART CODE EDITOR",
-      markup: '<div class="tutorial-demo-code"><span><b>&lt;main</b> <em>class</em>=<q>"app"</q><b>&gt;</b></span><span>&nbsp;&nbsp;<b>&lt;h1&gt;</b>Hello CodX<b>&lt;/h1&gt;</b></span><span><b>&lt;/main&gt;</b><i></i></span></div>',
+      markup: '<div class="tutorial-demo-code"><span><b>&lt;main</b> <em>class</em>=<q>"app"</q><b>&gt;</b></span><span>&nbsp;&nbsp;<b>&lt;h1&gt;</b>Hello CodX Editor<b>&lt;/h1&gt;</b></span><span><b>&lt;/main&gt;</b><i></i></span></div>',
     };
   }
   if (target === "#undoEditorBtn" || target === "#redoEditorBtn") {

@@ -484,7 +484,7 @@
                 <span class="hero-eyebrow">Operations center</span>
                 <span class="sync-pill"><i></i><span id="liveUpdateLabel">Live data connected</span></span>
               </div>
-              <h1>Everything happening in CodX, <em>right now.</em></h1>
+              <h1>Everything happening in CodX Editor, <em>right now.</em></h1>
               <p id="lastUpdated">Loading private admin data...</p>
             </div>
             <div class="topbar-actions">
@@ -724,7 +724,7 @@
           { label: "Session participants", value: stats.collaboratingUsers ?? 0, note: "People collaborating now", icon: "people", tone: "jade" },
           { label: "Pending / moderation", value: stats.moderationItems ?? 0, note: "Approvals and flagged people", icon: "shield", tone: "amber" },
           { label: "Connected sockets", value: health.connectedSockets ?? 0, note: "All realtime connections", icon: "socket", tone: "teal" },
-          { label: "Published projects", value: stats.publishedProjects ?? 0, note: "Public CodX experiences", icon: "project", tone: "lime" },
+          { label: "Published projects", value: stats.publishedProjects ?? 0, note: "Public CodX Editor experiences", icon: "project", tone: "lime" },
           { label: "Locked rooms", value: stats.lockedRooms ?? 0, note: "Rooms blocking new joins", icon: "lock", tone: "rose" },
           { label: "Server uptime", value: formatUptime(health.uptimeSeconds), note: `${Number(health.uptimeSeconds || 0).toLocaleString()} seconds online`, icon: "uptime", tone: "forest" },
         ];
@@ -835,7 +835,7 @@
           ? "Detailed project catalog waiting for the next normal server restart"
           : `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>·</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
         if (!filtered.length) {
-          projectsEl.innerHTML = `<div class="empty project-empty">${projectApiUnavailable ? "Project details will appear after the CodX server completes its next normal restart." : projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
+          projectsEl.innerHTML = `<div class="empty project-empty">${projectApiUnavailable ? "Project details will appear after the CodX Editor server completes its next normal restart." : projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
           return;
         }
         projectsEl.innerHTML = filtered
