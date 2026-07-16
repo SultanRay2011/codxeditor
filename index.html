@@ -31,7 +31,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="theme.css" />
-    <link rel="stylesheet" href="site-enhancements.css?v=20260713-home-hero3" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260716-home-faq1" />
     <title>Free Online HTML, CSS & JavaScript Editor | CodX Editor</title>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"WebApplication","name":"CodX Editor","url":"https://codxeditor.up.railway.app/","applicationCategory":"DeveloperApplication","operatingSystem":"Any modern web browser","description":"A browser-based workspace for creating, previewing, debugging, saving, sharing, and collaborating on HTML, CSS, JavaScript, JSON, environment, and Node.js projects.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["HTML, CSS and JavaScript editing","Live preview and console","Multi-file projects","Real-time collaboration","GitHub repository workflow","Node.js browser runtime"]}
@@ -1154,6 +1154,7 @@
         </button>
         <nav class="nav-buttons">
           <a href="index.html" class="nav-btn active">Home</a>
+          <a href="#faq" class="nav-btn">FAQ</a>
           <a href="about.html" class="nav-btn">About</a>
           <a href="contact.html" class="nav-btn">Contact</a>
           <a href="help.html" class="nav-btn">Help</a>
@@ -1578,15 +1579,45 @@
           <div class="content-callout"><strong>Know the boundary:</strong> CodX Editor is ideal for learning, demos, prototypes, and shareable web projects. Important production work should also be backed up in a ZIP or version-control repository, and secrets should never be placed in client-side code or a public project.</div>
         </section>
 
-        <section class="seo-section" aria-labelledby="homeFaqTitle">
-          <span class="section-kicker"><i class="fa-solid fa-circle-question"></i> Common questions</span>
-          <h2 id="homeFaqTitle">Before you open the editor</h2>
+        <section class="seo-section homepage-faq" id="faq" aria-labelledby="homeFaqTitle">
+          <span class="section-kicker"><i class="fa-solid fa-circle-question"></i> Frequently asked questions</span>
+          <h2 id="homeFaqTitle">Questions? Start here.</h2>
+          <p>Quick answers about creating, saving, transferring, collaborating, and sharing with CodX Editor.</p>
           <div class="faq-grid">
-            <article class="faq-card"><h3>Do I need to install anything?</h3><p>No installation is required for the standard HTML, CSS, and JavaScript workspace. A current browser with JavaScript and local storage enabled is enough.</p></article>
-            <article class="faq-card"><h3>Where are saved projects kept?</h3><p>Normal saved projects and drafts are stored in your browser. Clearing browser data or changing devices can remove that copy, so export a ZIP or use GitHub for important work.</p></article>
-            <article class="faq-card"><h3>Can other people edit with me?</h3><p>Yes. Collaboration sessions support participants, visible cursors, chat, permissions, and an optional waiting room. Do not share a live session link with people you do not trust.</p></article>
-            <article class="faq-card"><h3>Does it replace a desktop IDE?</h3><p>Not for every project. It deliberately favors immediate browser work. Complex production systems may still need local tooling, testing, deployment controls, and a full version-control workflow.</p></article>
+            <details class="faq-card" open>
+              <summary><span>Do I need to install anything?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>No. The standard HTML, CSS, and JavaScript workspace runs in a current browser with JavaScript and local storage enabled.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>What can I build in CodX Editor?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>You can build multi-file websites, lessons, prototypes, interactive demos, and browser projects. Optional Node.js support is available for projects that need packages or a development server.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Where are my saved projects kept?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Normal saves and drafts are stored in your browser. For important work, export a ZIP or commit to GitHub so you also have a portable backup.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Can I move my projects to another device?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Yes. Device Transfer moves projects and settings using a one-time code, link, or QR code. You can replace the current editor or keep it open while importing.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Can other people code with me?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Yes. Collaboration sessions include visible cursors, chat, roles, host controls, and an optional waiting room. Only share editable session links with people you trust.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Can I publish or connect GitHub?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Yes. You can create a view-only published link or connect GitHub to browse repositories, edit files, upload changes, and create commits.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Does CodX Editor work on phones and tablets?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Yes. Phones and portrait tablets use focused Files, Editor, Preview, and Console tabs, while landscape tablets use the laptop-style split workspace.</p>
+            </details>
+            <details class="faq-card">
+              <summary><span>Where can I learn every feature?</span><i class="fa-solid fa-plus" aria-hidden="true"></i></summary>
+              <p>Open the Help page for the complete handbook, or launch the guided tour inside the editor for a step-by-step introduction.</p>
+            </details>
           </div>
+          <div class="faq-more-help"><span>Still need help?</span><a href="help.html">Open the complete CodX handbook <i class="fa-solid fa-arrow-right"></i></a></div>
         </section>
         <div class="cta-section">
           <p class="cta-text">Ready to revolutionize your coding workflow?</p>
@@ -1626,6 +1657,7 @@
         <div class="footer-section">
           <h3>Quick Links</h3>
           <a href="index.html">Home</a>
+          <a href="#faq">FAQ</a>
           <a href="welcome.html">Launch Editor</a>
           <a href="about.html">About</a>
           <a href="help.html">Help</a>

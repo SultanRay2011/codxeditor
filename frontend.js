@@ -4988,6 +4988,8 @@ let projectFiles = [
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
+            <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
+            <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
@@ -9554,9 +9556,8 @@ function applySettingsToEditors() {
   if (highlightLayer) {
     highlightLayer.style.backgroundColor = selectedBg;
   }
-  lineNumbers.style.fontSize = editorTextSizeInput.value + "px";
-  lineNumbers.style.lineHeight = selectedLineHeight;
   syncSyntaxLayerStyle(editor);
+  syncLineNumberMetrics(editor);
   renderSyntaxHighlight(editor);
   updateThemeColor(themeColorInput.value);
 }
@@ -11332,6 +11333,43 @@ function renderDiagnosticConsoleEntries(entries) {
 }
 
 // Line numbers
+function syncLineNumberMetrics(textarea) {
+  if (!textarea || !lineNumbers) return;
+  const editorStyles = window.getComputedStyle(textarea);
+  const editorBorderHeight =
+    (parseFloat(editorStyles.borderTopWidth) || 0) +
+    (parseFloat(editorStyles.borderBottomWidth) || 0);
+  const horizontalScrollbarHeight = Math.max(
+    0,
+    textarea.offsetHeight - textarea.clientHeight - editorBorderHeight,
+  );
+  const gutterPaddingBottom = `${(parseFloat(editorStyles.paddingBottom) || 0) + horizontalScrollbarHeight}px`;
+  const metricSignature = [
+    editorStyles.fontFamily,
+    editorStyles.fontSize,
+    editorStyles.fontWeight,
+    editorStyles.fontStyle,
+    editorStyles.lineHeight,
+    editorStyles.letterSpacing,
+    editorStyles.paddingTop,
+    gutterPaddingBottom,
+  ].join("|");
+
+  if (lineNumbers.dataset.metricSignature !== metricSignature) {
+    lineNumbers.style.fontFamily = editorStyles.fontFamily;
+    lineNumbers.style.fontSize = editorStyles.fontSize;
+    lineNumbers.style.fontWeight = editorStyles.fontWeight;
+    lineNumbers.style.fontStyle = editorStyles.fontStyle;
+    lineNumbers.style.lineHeight = editorStyles.lineHeight;
+    lineNumbers.style.letterSpacing = editorStyles.letterSpacing;
+    lineNumbers.style.paddingTop = editorStyles.paddingTop;
+    lineNumbers.style.paddingBottom = gutterPaddingBottom;
+    lineNumbers.dataset.metricSignature = metricSignature;
+  }
+
+  lineNumbers.scrollTop = textarea.scrollTop;
+}
+
 function updateLineNumbers(textarea) {
   if (!textarea) textarea = document.getElementById("activeEditor");
   if (!textarea) return;
@@ -11339,6 +11377,7 @@ function updateLineNumbers(textarea) {
   lineNumbers.textContent = Array.from({ length: lines }, (_, i) => i + 1).join(
     "\n",
   );
+  syncLineNumberMetrics(textarea);
   renderSyntaxHighlight(textarea);
   renderErrorHighlights(textarea);
   renderEditorWatermark(textarea);
@@ -15822,6 +15861,7 @@ document.addEventListener("mousedown", (e) => {
 
 window.addEventListener("resize", () => {
   const editor = document.getElementById("activeEditor");
+  if (editor) syncLineNumberMetrics(editor);
   if (editor && suggestionPopup.style.display === "block") {
     positionSuggestionPopup(editor);
   }

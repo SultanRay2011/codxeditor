@@ -477,8 +477,108 @@
 
 .content-callout strong { color: var(--site-accent); }
 
-.faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.faq-card { background: linear-gradient(150deg, #fff, color-mix(in srgb, var(--site-accent) 4%, #fff)); }
+.faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+
+.homepage-faq {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--site-accent) 13%, transparent), transparent 34%),
+    linear-gradient(145deg, #fff, color-mix(in srgb, var(--site-accent) 5%, #fff));
+}
+
+.homepage-faq::after {
+  content: "?";
+  position: absolute;
+  top: -58px;
+  right: 20px;
+  color: color-mix(in srgb, var(--site-accent) 7%, transparent);
+  font-size: 190px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.homepage-faq > * { position: relative; z-index: 1; }
+
+.faq-card {
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(150deg, #fff, color-mix(in srgb, var(--site-accent) 4%, #fff));
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.faq-card:hover,
+.faq-card[open] {
+  border-color: color-mix(in srgb, var(--site-accent) 42%, var(--site-line));
+  box-shadow: 0 14px 32px rgba(17, 50, 29, .1);
+  transform: translateY(-2px);
+}
+
+.faq-card summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 72px;
+  padding: 18px 20px;
+  color: var(--site-ink);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-card summary::-webkit-details-marker { display: none; }
+
+.faq-card summary i {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--site-accent) 12%, #fff);
+  color: var(--site-accent);
+  transition: transform .2s ease, background .2s ease, color .2s ease;
+}
+
+.faq-card[open] summary i {
+  transform: rotate(45deg);
+  background: var(--site-accent);
+  color: #fff;
+}
+
+.faq-card p {
+  margin: 0;
+  padding: 0 20px 20px;
+  color: var(--site-muted);
+  font-size: .92rem;
+  line-height: 1.7;
+}
+
+.faq-more-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 13px;
+  background: var(--site-ink);
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.faq-more-help a {
+  color: #86efac;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.faq-more-help a:hover { color: #fff; }
 
 .page-footer-note {
   padding: 18px;
@@ -529,6 +629,9 @@
   .principle-grid { grid-template-columns: 1fr; }
   .workflow-item { grid-template-columns: 44px 1fr; padding: 13px; }
   .workflow-item::before { width: 38px; height: 38px; }
+  .faq-card summary { min-height: 64px; padding: 16px; }
+  .faq-card p { padding: 0 16px 17px; }
+  .faq-more-help { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
