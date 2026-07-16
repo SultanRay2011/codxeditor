@@ -8,6 +8,7 @@ const divider = document.querySelector(".divider");
 const editorsPanel = document.querySelector(".editors");
 const previewPanel = document.querySelector(".preview");
 const lineNumbers = document.getElementById("lineNumbers");
+const lineNumbersContent = document.getElementById("lineNumbersContent") || lineNumbers;
 const highlightLayer = document.getElementById("highlightLayer");
 const pairSelectionHighlight = document.getElementById("pairSelectionHighlight");
 const remoteCursorLayer = document.getElementById("remoteCursorLayer");
@@ -1033,9 +1034,15 @@ if (!errorHighlightLayer && editorWrapperEl) {
 }
 let activeInlineHtmlCorrection = null;
 const MAX_EDITOR_HISTORY_ENTRIES = 150;
+const LARGE_EDITOR_CHARACTER_THRESHOLD = 80 * 1024;
+const LARGE_EDITOR_LINE_THRESHOLD = 2500;
+const VIRTUAL_LINE_NUMBER_THRESHOLD = 2000;
+const LARGE_EDITOR_CONTEXT_WINDOW = 24 * 1024;
 const fileEditHistory = new Map();
 let pendingHistorySnapshot = null;
 let isRestoringEditorHistory = false;
+let editorDecorationTimer = null;
+let editorScrollFrame = null;
 
 // ADDED: Tag suggestion elements
 const suggestionPopup = document.getElementById("suggestionPopup");
@@ -4715,21 +4722,42 @@ function extractErrorLocationFromConsoleMessage(message) {
   };
 }
 
+function countTextLines(text) {
+  const value = String(text || "");
+  let lines = 1;
+  let cursor = -1;
+  while ((cursor = value.indexOf("\n", cursor + 1)) !== -1) lines += 1;
+  return lines;
+}
+
+function isLargeEditorContent(text, knownLineCount = 0) {
+  const value = String(text || "");
+  if (value.length >= LARGE_EDITOR_CHARACTER_THRESHOLD) return true;
+  const lineCount = knownLineCount || countTextLines(value);
+  return lineCount >= LARGE_EDITOR_LINE_THRESHOLD;
+}
+
+function getBoundedEditorContextBefore(text, index, limit = LARGE_EDITOR_CONTEXT_WINDOW) {
+  const value = String(text || "");
+  const safeIndex = Math.max(0, Math.min(Number(index || 0), value.length));
+  return value.slice(Math.max(0, safeIndex - limit), safeIndex);
+}
+
 function getTextIndexForLineAndColumn(text, line, col) {
-  const lines = String(text || "").split("\n");
+  const value = String(text || "");
   const safeLine = Math.max(1, Number(line || 1));
   const safeCol = Math.max(1, Number(col || 1));
-  let index = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const currentLine = i + 1;
-    if (currentLine === safeLine) {
-      return index + Math.min(safeCol - 1, lines[i].length);
-    }
-    index += lines[i].length + 1;
+  let lineStart = 0;
+  let currentLine = 1;
+  while (currentLine < safeLine) {
+    const nextBreak = value.indexOf("\n", lineStart);
+    if (nextBreak === -1) return value.length;
+    lineStart = nextBreak + 1;
+    currentLine += 1;
   }
-
-  return text.length;
+  const lineEnd = value.indexOf("\n", lineStart);
+  const safeLineEnd = lineEnd === -1 ? value.length : lineEnd;
+  return lineStart + Math.min(safeCol - 1, safeLineEnd - lineStart);
 }
 
 function getLineRangeFromIndex(text, index) {
@@ -4742,9 +4770,12 @@ function getLineRangeFromIndex(text, index) {
 }
 
 function getLineNumberFromIndex(text, index) {
-  return String(text || "")
-    .slice(0, Math.max(0, Number(index || 0)))
-    .split("\n").length;
+  const value = String(text || "");
+  const safeIndex = Math.max(0, Math.min(Number(index || 0), value.length));
+  let lines = 1;
+  let cursor = -1;
+  while ((cursor = value.indexOf("\n", cursor + 1)) !== -1 && cursor < safeIndex) lines += 1;
+  return lines;
 }
 
 function clearInlineHtmlCorrectionDisplay() {
@@ -4763,11 +4794,10 @@ function acceptInlineHtmlCorrection() {
 function getLineAndColumnFromIndex(text, index) {
   const safeText = String(text || "");
   const safeIndex = Math.max(0, Math.min(Number(index || 0), safeText.length));
-  const before = safeText.slice(0, safeIndex);
-  const lines = before.split("\n");
+  const lineStart = safeText.lastIndexOf("\n", Math.max(0, safeIndex - 1)) + 1;
   return {
-    line: lines.length,
-    col: (lines[lines.length - 1] || "").length + 1,
+    line: getLineNumberFromIndex(safeText, safeIndex),
+    col: safeIndex - lineStart + 1,
   };
 }
 
@@ -4827,7 +4857,10 @@ function jumpToFirstErrorInFile(fileName) {
 }
 
 function getErrorTokenLength(text, line, col) {
-  const targetLine = String(text || "").split("\n")[Math.max(0, line - 1)] || "";
+  const value = String(text || "");
+  const lineStart = getTextIndexForLineAndColumn(value, Math.max(1, line), 1);
+  const nextBreak = value.indexOf("\n", lineStart);
+  const targetLine = value.slice(lineStart, nextBreak === -1 ? value.length : nextBreak);
   if (!targetLine) return 1;
 
   let index = Math.max(0, Math.min(targetLine.length - 1, (col || 1) - 1));
@@ -4866,7 +4899,7 @@ function renderErrorHighlights(textarea) {
         String(name || "").trim().toLowerCase() ===
         String(activeFile.name || "").trim().toLowerCase(),
     ) || activeFile.name;
-  const locations = (fileErrorLocations[activeErrorKey] || [])
+  let locations = (fileErrorLocations[activeErrorKey] || [])
     .filter((item) => item && Number(item.line) > 0)
     .sort((a, b) => a.line - b.line || a.col - b.col);
 
@@ -4879,6 +4912,14 @@ function renderErrorHighlights(textarea) {
     parseFloat(computed.lineHeight) ||
     parseFloat(computed.fontSize) * 1.5 ||
     20;
+  if (isLargeEditorContent(content)) {
+    const firstVisibleLine = Math.max(1, Math.floor(textarea.scrollTop / lineHeight) + 1);
+    const lastVisibleLine = firstVisibleLine + Math.ceil(textarea.clientHeight / lineHeight) + 4;
+    locations = locations.filter(
+      (location) => location.line >= firstVisibleLine - 3 && location.line <= lastVisibleLine,
+    );
+    if (!locations.length) return;
+  }
   const wrapperWidth =
     (editorWrapperEl && editorWrapperEl.clientWidth) || textarea.clientWidth || 0;
   const contentWidth = Math.max(0, wrapperWidth - 24);
@@ -4990,6 +5031,7 @@ let projectFiles = [
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
+            <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
             <li>Add images, audio, and video with Add Media</li>
@@ -6455,7 +6497,7 @@ function displayActiveFileInEditor(options = {}) {
     editor.setAttribute("aria-hidden", "true");
     editor.tabIndex = -1;
     editor.blur();
-    if (lineNumbers) lineNumbers.textContent = "";
+    if (lineNumbersContent) lineNumbersContent.textContent = "";
     if (highlightLayer) highlightLayer.innerHTML = "";
     if (undoEditorBtn) undoEditorBtn.disabled = true;
     if (redoEditorBtn) redoEditorBtn.disabled = true;
@@ -6480,7 +6522,7 @@ function displayActiveFileInEditor(options = {}) {
       : editor.value.length;
   const caret = Math.max(0, Math.min(requestedCaret, editor.value.length));
   editor.selectionStart = editor.selectionEnd = caret;
-  updateLineNumbers(editor);
+  updateLineNumbers(editor, { immediate: true, forceLineNumbers: true });
   syncScroll(editor);
   syncSyntaxLayerStyle(editor);
   if (showMediaSource) {
@@ -6491,7 +6533,6 @@ function displayActiveFileInEditor(options = {}) {
     if (undoEditorBtn) undoEditorBtn.disabled = true;
     if (redoEditorBtn) redoEditorBtn.disabled = true;
   } else {
-    renderSyntaxHighlight(editor);
     syncInlineHtmlCorrectionDisplay(editor);
   }
   if (options.resetAllHistory) resetAllEditorHistory(editor);
@@ -6562,6 +6603,13 @@ function formatProjectStatusTime(timestamp) {
 
 function updateProjectStatusUI() {
   if (!projectStatusBadge || !projectStatusMeta) return;
+  const statusSignature = [
+    hasUnsavedChanges ? "unsaved" : "saved",
+    Number(lastAutosaveAt || 0),
+    String(activeSavedProjectName || ""),
+  ].join(":");
+  if (projectStatusBadge.dataset.statusSignature === statusSignature) return;
+  projectStatusBadge.dataset.statusSignature = statusSignature;
   projectStatusBadge.classList.remove("saved", "unsaved");
   if (projectStatusSaveBtn) {
     projectStatusSaveBtn.hidden = true;
@@ -8889,6 +8937,8 @@ function clearConsole() {
 
 function debouncedUpdatePreview() {
   clearTimeout(autoRunTimeout);
+  const activeContent = String(activeFile?.content || "");
+  if (isLargeEditorContent(activeContent)) return;
   autoRunTimeout = setTimeout(updatePreview, 24);
 }
 
@@ -8898,7 +8948,7 @@ function scheduleSessionUpdate() {
     collabLocalSyncRevision += 1;
   }
   clearTimeout(sessionSyncTimeout);
-  const syncInterval = 72;
+  const syncInterval = isLargeEditorContent(activeFile?.content || "") ? 700 : 72;
   const now = performance.now();
   const elapsed = now - lastSessionSyncAt;
   if (elapsed >= syncInterval) {
@@ -9558,7 +9608,7 @@ function applySettingsToEditors() {
     highlightLayer.style.backgroundColor = selectedBg;
   }
   syncSyntaxLayerStyle(editor);
-  syncLineNumberMetrics(editor);
+  renderLineNumberWindow(editor, countTextLines(editor.value), true);
   renderSyntaxHighlight(editor);
   updateThemeColor(themeColorInput.value);
 }
@@ -11334,6 +11384,33 @@ function renderDiagnosticConsoleEntries(entries) {
 }
 
 // Line numbers
+function setLargeFilePerformanceMode(textarea, lineCount = 0, content = null) {
+  if (!textarea) return false;
+  const value = content === null ? textarea.value : String(content);
+  const enabled = isLargeEditorContent(value, lineCount);
+  const nextState = enabled ? "true" : "false";
+  if (textarea.dataset.largeFilePerformance !== nextState) {
+    const container = textarea.closest(".code-container");
+    container?.classList.toggle("large-file-performance", enabled);
+    textarea.dataset.largeFilePerformance = nextState;
+    if (enabled && highlightLayer && highlightLayer.textContent) {
+      highlightLayer.replaceChildren();
+    }
+    if (
+      enabled &&
+      textarea.dataset.largeFileNoticeShown !== "true" &&
+      autoRunCheckbox?.checked
+    ) {
+      textarea.dataset.largeFileNoticeShown = "true";
+      showNotification(
+        "Large File Performance Mode paused Auto-Run. Press Run when you want to refresh the preview.",
+        "info",
+      );
+    }
+  }
+  return enabled;
+}
+
 function syncLineNumberMetrics(textarea) {
   if (!textarea || !lineNumbers) return;
   const editorStyles = window.getComputedStyle(textarea);
@@ -11344,7 +11421,7 @@ function syncLineNumberMetrics(textarea) {
     0,
     textarea.offsetHeight - textarea.clientHeight - editorBorderHeight,
   );
-  const gutterPaddingBottom = `${(parseFloat(editorStyles.paddingBottom) || 0) + horizontalScrollbarHeight}px`;
+  const gutterPaddingBottom = (parseFloat(editorStyles.paddingBottom) || 0) + horizontalScrollbarHeight;
   const metricSignature = [
     editorStyles.fontFamily,
     editorStyles.fontSize,
@@ -11353,7 +11430,8 @@ function syncLineNumberMetrics(textarea) {
     editorStyles.lineHeight,
     editorStyles.letterSpacing,
     editorStyles.paddingTop,
-    gutterPaddingBottom,
+    editorStyles.paddingBottom,
+    horizontalScrollbarHeight,
   ].join("|");
 
   if (lineNumbers.dataset.metricSignature !== metricSignature) {
@@ -11363,32 +11441,107 @@ function syncLineNumberMetrics(textarea) {
     lineNumbers.style.fontStyle = editorStyles.fontStyle;
     lineNumbers.style.lineHeight = editorStyles.lineHeight;
     lineNumbers.style.letterSpacing = editorStyles.letterSpacing;
-    lineNumbers.style.paddingTop = editorStyles.paddingTop;
-    lineNumbers.style.paddingBottom = gutterPaddingBottom;
+    lineNumbers.dataset.editorPaddingTop = String(parseFloat(editorStyles.paddingTop) || 0);
+    lineNumbers.dataset.editorPaddingBottom = String(gutterPaddingBottom);
     lineNumbers.dataset.metricSignature = metricSignature;
+  }
+}
+
+function buildLineNumberText(startLine, endLine) {
+  const count = Math.max(0, endLine - startLine + 1);
+  return Array.from({ length: count }, (_, index) => startLine + index).join("\n");
+}
+
+function renderLineNumberWindow(textarea, lineCount = 0, force = false) {
+  if (!textarea || !lineNumbers || !lineNumbersContent) return;
+  const totalLines = Math.max(1, Number(lineCount || lineNumbers.dataset.totalLines || 1));
+  lineNumbers.dataset.totalLines = String(totalLines);
+  syncLineNumberMetrics(textarea);
+
+  const computed = window.getComputedStyle(textarea);
+  const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) * 1.5 || 20;
+  const paddingTop = Number(lineNumbers.dataset.editorPaddingTop || 0);
+  const paddingBottom = Number(lineNumbers.dataset.editorPaddingBottom || 0);
+  const useVirtualWindow = totalLines >= VIRTUAL_LINE_NUMBER_THRESHOLD;
+  let startIndex = 0;
+  let endIndex = totalLines;
+
+  if (useVirtualWindow) {
+    const firstVisibleIndex = Math.max(0, Math.floor((textarea.scrollTop - paddingTop) / lineHeight));
+    const visibleLineCount = Math.max(1, Math.ceil(textarea.clientHeight / lineHeight));
+    const overscan = 80;
+    const chunkSize = 64;
+    startIndex = Math.max(0, Math.floor(Math.max(0, firstVisibleIndex - overscan) / chunkSize) * chunkSize);
+    endIndex = Math.min(totalLines, startIndex + visibleLineCount + overscan * 2);
+  }
+
+  const rangeKey = `${totalLines}:${startIndex}:${endIndex}:${lineHeight}:${paddingTop}:${paddingBottom}`;
+  if (force || lineNumbersContent.dataset.rangeKey !== rangeKey) {
+    lineNumbersContent.textContent = buildLineNumberText(startIndex + 1, endIndex);
+    lineNumbersContent.style.paddingTop = `${paddingTop + startIndex * lineHeight}px`;
+    lineNumbersContent.style.paddingBottom = `${paddingBottom + (totalLines - endIndex) * lineHeight}px`;
+    lineNumbersContent.dataset.rangeKey = rangeKey;
+    lineNumbers.dataset.virtualized = useVirtualWindow ? "true" : "false";
   }
 
   lineNumbers.scrollTop = textarea.scrollTop;
 }
 
-function updateLineNumbers(textarea) {
-  if (!textarea) textarea = document.getElementById("activeEditor");
+function scheduleEditorDecorations(textarea, options = {}) {
   if (!textarea) return;
-  const lines = textarea.value.split("\n").length;
-  lineNumbers.textContent = Array.from({ length: lines }, (_, i) => i + 1).join(
-    "\n",
-  );
-  syncLineNumberMetrics(textarea);
-  renderSyntaxHighlight(textarea);
-  renderErrorHighlights(textarea);
-  renderEditorWatermark(textarea);
+  clearTimeout(editorDecorationTimer);
+  const lineCount = Number(lineNumbers?.dataset.totalLines || 0) || countTextLines(textarea.value);
+  if (setLargeFilePerformanceMode(textarea, lineCount)) {
+    if (errorHighlightLayer?.childElementCount) errorHighlightLayer.replaceChildren();
+    return;
+  }
+
+  const render = () => {
+    editorDecorationTimer = null;
+    if (textarea !== document.getElementById("activeEditor")) return;
+    renderSyntaxHighlight(textarea);
+    renderErrorHighlights(textarea);
+  };
+  if (options.immediate) {
+    render();
+    return;
+  }
+  const delay = textarea.value.length >= 32 * 1024 ? 90 : 24;
+  editorDecorationTimer = setTimeout(() => requestAnimationFrame(render), delay);
 }
 
-function renderEditorWatermark(textarea) {
+function updateLineNumbers(textarea, options = {}) {
+  if (!textarea) textarea = document.getElementById("activeEditor");
+  if (!textarea) return;
+  const value = options.content === undefined ? textarea.value : String(options.content);
+  const cachedLineCount = Number(lineNumbers?.dataset.totalLines || 0);
+  const lines = options.preserveLineCount && cachedLineCount
+    ? cachedLineCount
+    : countTextLines(value);
+  const largeFileMode = setLargeFilePerformanceMode(textarea, lines, value);
+  if (!options.preserveLineCount || !cachedLineCount) {
+    renderLineNumberWindow(textarea, lines, Boolean(options.forceLineNumbers));
+  }
+  if (largeFileMode && options.preserveLineCount) {
+    if (editorDecorationTimer) {
+      clearTimeout(editorDecorationTimer);
+      editorDecorationTimer = null;
+    }
+  } else {
+    scheduleEditorDecorations(textarea, options);
+  }
+  renderEditorWatermark(textarea, value);
+}
+
+function renderEditorWatermark(textarea, knownValue = null) {
   if (!editorWatermark || !textarea || !activeFile) return;
+  const value = knownValue === null ? String(textarea.value || "") : String(knownValue);
   const shouldShow =
-    activeFile.type === "html" && String(textarea.value || "").trim() === "";
-  editorWatermark.style.display = shouldShow ? "block" : "none";
+    activeFile.type === "html" && value.length < 1024 && value.trim() === "";
+  const nextDisplay = shouldShow ? "block" : "none";
+  if (editorWatermark.style.display !== nextDisplay) {
+    editorWatermark.style.display = nextDisplay;
+  }
 }
 
 function commitEditorMutation(editor) {
@@ -11460,6 +11613,12 @@ function trimHistoryStack(stack) {
 }
 
 function updateEditorHistoryButtons() {
+  const editor = document.getElementById("activeEditor");
+  if (editor && isLargeEditorContent(editor.value)) {
+    if (undoEditorBtn) undoEditorBtn.disabled = false;
+    if (redoEditorBtn) redoEditorBtn.disabled = false;
+    return;
+  }
   const history = activeFile ? getFileHistoryRecord(activeFile.name) : null;
   if (undoEditorBtn) undoEditorBtn.disabled = !history || history.undoStack.length === 0;
   if (redoEditorBtn) redoEditorBtn.disabled = !history || history.redoStack.length === 0;
@@ -11471,6 +11630,20 @@ function syncEditorHistoryState(editor, options = {}) {
     return;
   }
   const { clearStacks = false } = options;
+  if (isLargeEditorContent(editor.value)) {
+    const history = getFileHistoryRecord(activeFile.name);
+    history.current = {
+      content: "",
+      selectionStart: Number(editor.selectionStart || 0),
+      selectionEnd: Number(editor.selectionEnd || 0),
+      nativeLargeFile: true,
+    };
+    history.undoStack = [];
+    history.redoStack = [];
+    pendingHistorySnapshot = null;
+    updateEditorHistoryButtons();
+    return;
+  }
   const snapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, snapshot);
   history.current = cloneEditorSnapshot(snapshot);
@@ -11489,6 +11662,10 @@ function resetAllEditorHistory(editor = document.getElementById("activeEditor"))
 
 function beginEditorHistoryCapture(editor) {
   if (isRestoringEditorHistory || !editor || !activeFile) return;
+  if (isLargeEditorContent(editor.value)) {
+    pendingHistorySnapshot = null;
+    return;
+  }
   pendingHistorySnapshot = createEditorSnapshot(editor);
 }
 
@@ -11496,6 +11673,10 @@ function finalizeEditorHistoryCapture(editor) {
   if (isRestoringEditorHistory || !editor || !activeFile) {
     pendingHistorySnapshot = null;
     updateEditorHistoryButtons();
+    return;
+  }
+  if (isLargeEditorContent(editor.value)) {
+    pendingHistorySnapshot = null;
     return;
   }
   const after = createEditorSnapshot(editor);
@@ -11542,6 +11723,11 @@ function restoreEditorHistorySnapshot(editor, snapshot) {
 
 function undoEditorHistory(editor = document.getElementById("activeEditor")) {
   if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
+  if (isLargeEditorContent(editor.value)) {
+    editor.focus({ preventScroll: true });
+    document.execCommand("undo");
+    return true;
+  }
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -11561,6 +11747,11 @@ function undoEditorHistory(editor = document.getElementById("activeEditor")) {
 
 function redoEditorHistory(editor = document.getElementById("activeEditor")) {
   if (!editor || !activeFile || getProjectMediaKind(activeFile)) return false;
+  if (isLargeEditorContent(editor.value)) {
+    editor.focus({ preventScroll: true });
+    document.execCommand("redo");
+    return true;
+  }
   pendingHistorySnapshot = null;
   const currentSnapshot = createEditorSnapshot(editor);
   const history = getFileHistoryRecord(activeFile.name, currentSnapshot);
@@ -11611,11 +11802,14 @@ function syncScroll(textarea) {
       highlightLayer.scrollTop = textarea.scrollTop;
       highlightLayer.scrollLeft = textarea.scrollLeft;
     }
-    renderErrorHighlights(textarea);
-    renderRemoteCursors();
-    if (suggestionPopup.style.display === "block") {
-      positionSuggestionPopup(textarea);
-    }
+    if (editorScrollFrame) return;
+    editorScrollFrame = requestAnimationFrame(() => {
+      editorScrollFrame = null;
+      renderLineNumberWindow(textarea);
+      renderErrorHighlights(textarea);
+      if (activeSessionId || activePairState) renderRemoteCursors();
+      if (suggestionPopup.style.display === "block") positionSuggestionPopup(textarea);
+    });
   });
   textarea.dataset.scrollSyncBound = "true";
 }
@@ -12223,6 +12417,11 @@ function highlightPlainText(code) {
 function renderSyntaxHighlight(textarea) {
   if (!highlightLayer || !textarea || !activeFile) return;
   const code = textarea.value || "";
+  const lineCount = Number(lineNumbers?.dataset.totalLines || 0) || countTextLines(code);
+  if (setLargeFilePerformanceMode(textarea, lineCount)) {
+    if (highlightLayer.textContent) highlightLayer.replaceChildren();
+    return;
+  }
   let highlighted = "";
 
   const extensionType = getFileType(activeFile.name || "");
@@ -12260,6 +12459,7 @@ function initializeEditor() {
   editor.addEventListener("beforeinput", (e) => {
     lastEditorInputType = String(e.inputType || "");
     if (lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo") {
+      if (isLargeEditorContent(editor.value)) return;
       if (e.cancelable) {
         e.preventDefault();
         if (lastEditorInputType === "historyRedo") {
@@ -12290,14 +12490,35 @@ function initializeEditor() {
       editor.value = activeFile.content;
       return;
     }
+    const currentValue = editor.value;
+    const largeFileInput = isLargeEditorContent(currentValue);
     const isHistoryRestore =
       lastEditorInputType === "historyUndo" || lastEditorInputType === "historyRedo";
     hasUnsavedChanges = true;
-    activeFile.content = editor.value;
+    activeFile.content = currentValue;
     emitPairPresenceSoon();
-    __codxRescanProjectSuggestionCacheSoon();
+    if (!largeFileInput) {
+      __codxRescanProjectSuggestionCacheSoon();
+    }
     updateProjectStatusUI();
-    updateLineNumbers(editor);
+    const preservesLineCount =
+      String(e.inputType || "") === "insertText" &&
+      !String(e.data || "").includes("\n");
+    updateLineNumbers(editor, {
+      content: currentValue,
+      preserveLineCount: preservesLineCount,
+    });
+    if (largeFileInput) {
+      if (activeSessionId) {
+        handleCodeChange();
+        announceTyping(activeFile.type + "Code");
+      }
+      if (suggestionPopup.style.display === "block") hideSuggestions();
+      activeInlineHtmlCorrection = null;
+      pendingHistorySnapshot = null;
+      lastEditorInputType = "";
+      return;
+    }
     if (autoRunCheckbox.checked) debouncedUpdatePreview();
     handleCodeChange({
       target: { id: activeFile.type + "Code", value: editor.value },
@@ -12399,8 +12620,20 @@ function initializeEditor() {
  */
 function handleSuggestions(e) {
   const editor = e.target;
+  if (isLargeEditorContent(editor.value)) {
+    if (suggestionPopup.style.display === "block") hideSuggestions();
+    return;
+  }
   const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
+  const textBefore = getBoundedEditorContextBefore(editor.value, pos);
+  const contextOffset = Math.max(0, pos - textBefore.length);
+  const makeContextAbsolute = (context) => {
+    if (!context || !contextOffset) return context;
+    const next = { ...context };
+    if (Number.isFinite(next.replaceStart)) next.replaceStart += contextOffset;
+    if (Number.isFinite(next.replaceEnd)) next.replaceEnd += contextOffset;
+    return next;
+  };
 
   const isCssFile = activeFile.type === "css";
   const isHtmlStyleContext =
@@ -12428,7 +12661,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = envContext;
+    currentSuggestionContext = makeContextAbsolute(envContext);
     showJsSuggestions(editor, envSuggestions, "env");
     return;
   }
@@ -12444,8 +12677,9 @@ function handleSuggestions(e) {
       codeFileContext.tag,
     );
     if (files.length) {
-      currentSuggestionContext = codeFileContext;
-      showFileSuggestions(editor, files, codeFileContext.valuePrefix, codeFileContext);
+      const absoluteCodeFileContext = makeContextAbsolute(codeFileContext);
+      currentSuggestionContext = absoluteCodeFileContext;
+      showFileSuggestions(editor, files, codeFileContext.valuePrefix, absoluteCodeFileContext);
       return;
     }
   }
@@ -12498,7 +12732,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = cssContext;
+    currentSuggestionContext = makeContextAbsolute(cssContext);
     showCssSuggestions(editor, cssSuggestions, cssContext.mode);
     return;
   }
@@ -12523,7 +12757,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = jsContext;
+    currentSuggestionContext = makeContextAbsolute(jsContext);
     showJsSuggestions(editor, jsMatches);
     return;
   }
@@ -12561,7 +12795,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = inlineStyleContext;
+    currentSuggestionContext = makeContextAbsolute(inlineStyleContext);
     showCssSuggestions(editor, cssSuggestions, inlineStyleContext.mode);
     return;
   }
@@ -12575,7 +12809,7 @@ function handleSuggestions(e) {
       htmlValueContext.prefix,
     );
     if (valueSuggestions.length) {
-      currentSuggestionContext = htmlValueContext;
+      currentSuggestionContext = makeContextAbsolute(htmlValueContext);
       showJsSuggestions(editor, valueSuggestions, "html-value");
       return;
     }
@@ -12598,7 +12832,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    showFileSuggestions(editor, files, fileContext.valuePrefix, fileContext);
+    showFileSuggestions(editor, files, fileContext.valuePrefix, makeContextAbsolute(fileContext));
     return;
   }
 
@@ -12622,7 +12856,7 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = attrContext;
+    currentSuggestionContext = makeContextAbsolute(attrContext);
     showHtmlAttributeSuggestions(editor, attrSuggestions);
     return;
   }
@@ -12762,7 +12996,13 @@ function __codxSaveLearnedSuggestions() {
 function __codxHashProjectFiles(files) {
   try {
     const sig = (files || [])
-      .map((f) => `${f.name}|${f.type}|${String(f.content || "")}`)
+      .map((f) => {
+        const content = String(f.content || "");
+        const sample = content.length > 64 * 1024
+          ? content.slice(0, 32 * 1024) + content.slice(-32 * 1024)
+          : content;
+        return `${f.name}|${f.type}|${content.length}|${sample}`;
+      })
       .join("\n");
     let h = 0;
     for (let i = 0; i < sig.length; i++) {
@@ -13016,8 +13256,20 @@ function __codxLearnFromProjectCache() {
 }
 
 let __codxProjectScannerTimer = null;
+function __codxGetSuggestionScanFiles(files) {
+  return (files || []).map((file) => {
+    const content = String(file?.content || "");
+    if (content.length <= 160 * 1024) return file;
+    return {
+      ...file,
+      content: content.slice(0, 80 * 1024) + "\n" + content.slice(-80 * 1024),
+    };
+  });
+}
+
 function __codxRescanProjectSuggestionCacheSoon() {
   clearTimeout(__codxProjectScannerTimer);
+  const scanDelay = isLargeEditorContent(activeFile?.content || "") ? 1800 : 300;
   __codxProjectScannerTimer = setTimeout(() => {
     const nextHash = __codxHashProjectFiles(projectFiles);
     if (nextHash === __codxProjectSuggestionCache.hash) return;
@@ -13025,18 +13277,26 @@ function __codxRescanProjectSuggestionCacheSoon() {
 
     // Build caches
     try {
-      __codxProjectSuggestionCache.html = __codxTokenizeHtml(projectFiles);
-      __codxProjectSuggestionCache.css = __codxTokenizeCss(projectFiles);
-      __codxProjectSuggestionCache.js = __codxTokenizeJs(projectFiles);
-      __codxProjectSuggestionCache.env = __codxTokenizeEnv(projectFiles);
+      const scanFiles = __codxGetSuggestionScanFiles(projectFiles);
+      __codxProjectSuggestionCache.html = __codxTokenizeHtml(scanFiles);
+      __codxProjectSuggestionCache.css = __codxTokenizeCss(scanFiles);
+      __codxProjectSuggestionCache.js = __codxTokenizeJs(scanFiles);
+      __codxProjectSuggestionCache.env = __codxTokenizeEnv(scanFiles);
       __codxLearnFromProjectCache();
     } catch (e) {
       // fail safe
     }
-  }, 300);
+  }, scanDelay);
 }
 
 function __codxProjectIsReady() {
+  if (
+    projectFiles.some((file) =>
+      isLargeEditorContent(String(file?.content || "")),
+    )
+  ) {
+    return;
+  }
   const nextHash = __codxHashProjectFiles(projectFiles);
   if (!__codxProjectSuggestionCache || nextHash !== __codxProjectSuggestionCache.hash) {
     __codxRescanProjectSuggestionCacheSoon();
@@ -14798,14 +15058,15 @@ function updateSuggestionHighlight(items) {
 function handleAutoCloseAndIndent(e, editor) {
   const fileType = activeFile.type;
   const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
-  const textAfter = editor.value.substring(pos);
-  const isCssContext = fileType === "css" || (fileType === "html" && isInsideStyleTag(textBefore));
-  const isJsContext = fileType === "js" || (fileType === "html" && isInsideScriptTag(textBefore));
+  const editorValue = editor.value;
+  const contextBefore = getBoundedEditorContextBefore(editorValue, pos);
+  const isCssContext = fileType === "css" || (fileType === "html" && isInsideStyleTag(contextBefore));
+  const isJsContext = fileType === "js" || (fileType === "html" && isInsideScriptTag(contextBefore));
 
   // 1. Indent level calculation (Find the indentation of the current line)
-  const lineStart = textBefore.lastIndexOf("\n") + 1;
-  const currentLine = textBefore.substring(lineStart);
+  const lineStart = editorValue.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+  const currentLine = editorValue.slice(lineStart, pos);
+  const nextCharacter = editorValue.charAt(pos);
   const currentIndentMatch = currentLine.match(/^(\s*)/);
   const currentIndent = currentIndentMatch ? currentIndentMatch[1] : "";
 
@@ -14829,16 +15090,16 @@ function handleAutoCloseAndIndent(e, editor) {
     // Check for Enter key press on an opening brace/parenthesis
     else if (
       (e.key === "Enter" &&
-        (textBefore.endsWith("{") || textBefore.endsWith("(")) &&
-        (textAfter.startsWith("}") || textAfter.startsWith(")")))
+        (currentLine.endsWith("{") || currentLine.endsWith("(")) &&
+        (nextCharacter === "}" || nextCharacter === ")"))
     ) {
       // User is inside a pair like {} or () and hits Enter
       isTriggered = true;
       insertNewlines = 2; // Insert two newlines to create space for content
       // Find the appropriate closing character based on what's before/after
-      if (textBefore.endsWith("{") && textAfter.startsWith("}"))
+      if (currentLine.endsWith("{") && nextCharacter === "}")
         closingChar = "}";
-      if (textBefore.endsWith("(") && textAfter.startsWith(")"))
+      if (currentLine.endsWith("(") && nextCharacter === ")")
         closingChar = ")";
     }
   }
@@ -14857,62 +15118,51 @@ function handleAutoCloseAndIndent(e, editor) {
   if (e.key === "Enter") {
     e.preventDefault(); // Stop default new line insertion
 
-    let newContent;
+    let replacement = "\n" + currentIndent;
     let newCursorPos;
-    let indentation = currentIndent;
 
-    if (textBefore.endsWith("{") || textBefore.endsWith("(") || isTriggered) {
+    if (currentLine.endsWith("{") || currentLine.endsWith("(") || isTriggered) {
       // We need to increase indentation for the next line
       const nextIndent = currentIndent + INDENT_UNIT;
 
-      if (textBefore.endsWith("{") || textBefore.endsWith("(")) {
+      if (currentLine.endsWith("{") || currentLine.endsWith("(")) {
         // Case 1: Cursor immediately after { or (
 
         // --- 💡 MODIFICATION START ---
-        const autoClosingBracket = textBefore.endsWith("{") ? "}" : ")";
+        const autoClosingBracket = currentLine.endsWith("{") ? "}" : ")";
 
         // Check if the corresponding closing bracket already exists right after the cursor
-        const closingExists = textAfter.startsWith(autoClosingBracket);
+        const closingExists = nextCharacter === autoClosingBracket;
 
         if (closingExists) {
           // Scenario: { | } -> Newline + Indent + Newline + CurrentIndent + }
           // This is essentially the same logic as 'isTriggered' but applied to the {|} case
-          newContent =
-            textBefore + "\n" + nextIndent + "\n" + currentIndent + textAfter;
+          replacement = "\n" + nextIndent + "\n" + currentIndent;
           newCursorPos = pos + 1 + nextIndent.length; // Pos + \n + newIndent
         } else {
           // Scenario: { | -> Newline + Indent + Newline + CurrentIndent + autoClosingBracket
           // Insert: newline + indent + newline + closing bracket
-          newContent =
-            textBefore +
-            "\n" +
-            nextIndent +
-            "\n" +
-            currentIndent +
-            autoClosingBracket +
-            textAfter;
+          replacement = "\n" + nextIndent + "\n" + currentIndent + autoClosingBracket;
           newCursorPos = pos + 1 + nextIndent.length; // Pos + \n + newIndent
         }
         // --- 💡 MODIFICATION END ---
       } else if (isTriggered) {
         // Case 2: Cursor inside {} or () where Enter was pressed (e.g., body{ | } )
         // Insert: newline + indent + newline
-        newContent =
-          textBefore + "\n" + nextIndent + "\n" + currentIndent + textAfter;
+        replacement = "\n" + nextIndent + "\n" + currentIndent;
         newCursorPos = pos + 1 + nextIndent.length; // Pos + \n + newIndent
       }
     } else {
       // Case 3: Simple Enter press - just maintain current indentation
-      newContent = textBefore + "\n" + currentIndent + textAfter;
       newCursorPos = pos + 1 + currentIndent.length;
     }
 
     // ... (rest of the Enter handler code) ...
     applyEditorMutation(
       editor,
-      0,
-      editor.value.length,
-      newContent,
+      pos,
+      editor.selectionEnd,
+      replacement,
       newCursorPos,
       newCursorPos,
     );
@@ -14927,8 +15177,8 @@ function getMatchingHtmlTagPairAtCaret(editor) {
   if (!editor) return null;
   const selectionStart = Number(editor.selectionStart || 0);
   const selectionEnd = Number(editor.selectionEnd || selectionStart);
-  const textBefore = editor.value.substring(0, selectionStart);
-  const textAfter = editor.value.substring(selectionEnd);
+  const textBefore = getBoundedEditorContextBefore(editor.value, selectionStart, 4096);
+  const textAfter = editor.value.slice(selectionEnd, selectionEnd + 4096);
   const openTagMatch = textBefore.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/);
   if (!openTagMatch) return null;
   const tagName = openTagMatch[1].toLowerCase();
@@ -14946,13 +15196,12 @@ function getMatchingHtmlTagPairAtCaret(editor) {
 function handleHtmlEnterIndentation(e, editor) {
   if (e.key !== "Enter" || activeFile.type !== "html") return false;
   const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
-  const textAfter = editor.value.substring(editor.selectionEnd);
-  const lineStart = textBefore.lastIndexOf("\n") + 1;
-  const currentLine = textBefore.substring(lineStart);
+  const editorValue = editor.value;
+  const lineStart = editorValue.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+  const currentLine = editorValue.slice(lineStart, pos);
   const currentIndentMatch = currentLine.match(/^(\s*)/);
   const currentIndent = currentIndentMatch ? currentIndentMatch[1] : "";
-  const openTagMatch = textBefore.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/);
+  const openTagMatch = currentLine.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/);
 
   if (openTagMatch) {
     const tagName = openTagMatch[1].toLowerCase();
@@ -15002,7 +15251,7 @@ function handleHtmlAttributeValueCompletion(e, editor) {
 
   const start = editor.selectionStart;
   const end = editor.selectionEnd;
-  const textBefore = editor.value.substring(0, start);
+  const textBefore = getBoundedEditorContextBefore(editor.value, start, 4096);
   if (isInsideStyleTag(textBefore) || isInsideScriptTag(textBefore)) return false;
 
   const tagContext = getOpenHtmlTagBeforeCaret(textBefore);
@@ -15058,7 +15307,7 @@ function handleTagClosing(e) {
 
   const editor = e.target;
   const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
+  const textBefore = getBoundedEditorContextBefore(editor.value, pos, 4096);
 
   const tagMatch = textBefore.match(/<([a-zA-Z0-9]+)(?![^>]*\/?>)\s*$/);
 
@@ -15102,9 +15351,8 @@ function expandCxStartShortcut(editor) {
   if (!activeFile || activeFile.type !== "html") return false;
 
   const pos = editor.selectionStart;
-  const textBefore = editor.value.substring(0, pos);
-  const lineStart = textBefore.lastIndexOf("\n") + 1;
-  const currentLine = textBefore.substring(lineStart);
+  const lineStart = editor.value.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+  const currentLine = editor.value.slice(lineStart, pos);
 
   if (currentLine.trim() !== "cxstart") return false;
 
@@ -15542,6 +15790,12 @@ function handleEditorKeyDown(e) {
   const normalizedKey = String(e.key || "").toLowerCase();
 
   if (mod && !e.altKey) {
+    if (
+      isLargeEditorContent(editor.value) &&
+      (normalizedKey === "z" || normalizedKey === "y")
+    ) {
+      return;
+    }
     if (normalizedKey === "z") {
       e.preventDefault();
       if (e.shiftKey) {
@@ -15588,7 +15842,18 @@ function handleEditorKeyDown(e) {
     updateLineNumbers(editor);
   }
 
-  const caretContextBefore = editor.value.substring(0, editor.selectionStart);
+  const contextSensitiveKeys = new Set(["Enter", "Tab", "=", " ", ">", "{", "("]);
+  if (
+    suggestionPopup.style.display !== "block" &&
+    !contextSensitiveKeys.has(e.key)
+  ) {
+    return;
+  }
+
+  const caretContextBefore = getBoundedEditorContextBefore(
+    editor.value,
+    editor.selectionStart,
+  );
   const isHtmlStyleContext =
     activeFile.type === "html" && isInsideStyleTag(caretContextBefore);
   const isHtmlScriptContext =
@@ -15684,8 +15949,7 @@ function handleEditorKeyDown(e) {
   if (activeFile.type === "html" && e.key === "=") {
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
-    const textBefore = editor.value.substring(0, start);
-    const textAfter = editor.value.substring(end);
+    const textBefore = getBoundedEditorContextBefore(editor.value, start);
 
     // Auto-complete HTML attributes: href= -> href=""
     // Trigger only when caret is right after a likely attribute name.
@@ -15862,7 +16126,7 @@ document.addEventListener("mousedown", (e) => {
 
 window.addEventListener("resize", () => {
   const editor = document.getElementById("activeEditor");
-  if (editor) syncLineNumberMetrics(editor);
+  if (editor) renderLineNumberWindow(editor, countTextLines(editor.value), true);
   if (editor && suggestionPopup.style.display === "block") {
     positionSuggestionPopup(editor);
   }
@@ -20821,9 +21085,20 @@ function getCollabDocumentRevision(content) {
   const value = String(content || "");
   if (value === collabRevisionCacheContent) return collabRevisionCacheValue;
   let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+  const hashRange = (start, end) => {
+    for (let index = start; index < end; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  };
+  if (isLargeEditorContent(value)) {
+    const sampleSize = 16 * 1024;
+    const middleStart = Math.max(sampleSize, Math.floor(value.length / 2) - sampleSize / 2);
+    hashRange(0, Math.min(sampleSize, value.length));
+    hashRange(middleStart, Math.min(middleStart + sampleSize, value.length));
+    hashRange(Math.max(0, value.length - sampleSize * 2), value.length);
+  } else {
+    hashRange(0, value.length);
   }
   collabRevisionCacheContent = value;
   collabRevisionCacheValue = `${value.length.toString(36)}-${(hash >>> 0).toString(36)}`;
@@ -22235,7 +22510,7 @@ function promptJoinTheme(name, sid) {
 }
 
 function handleCodeChange() {
-  if (isApplyingRemoteState) return;
+  if (isApplyingRemoteState || !activeSessionId) return;
   scheduleSessionUpdate();
 }
 

@@ -684,7 +684,7 @@ body.zen-mode #zenExitBtn {
 
 .line-numbers {
   width: 56px;
-  padding: 12px 8px;
+  padding: 0;
   background: var(--bg-secondary);
   color: var(--text-muted);
   text-align: right;
@@ -699,6 +699,15 @@ body.zen-mode #zenExitBtn {
     background-color 0.2s ease,
     color 0.2s ease;
   border-right: 1px solid var(--border-color);
+}
+
+.line-numbers-content {
+  min-height: 100%;
+  padding: 12px 8px;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  white-space: pre;
 }
 
 .editor-wrapper {
@@ -1359,6 +1368,18 @@ textarea {
 textarea::selection {
   background: color-mix(in srgb, var(--accent-color) 45%, #ffffff 5%);
   color: transparent;
+}
+
+.code-container.large-file-performance #highlightLayer {
+  display: none;
+}
+
+.code-container.large-file-performance #activeEditor {
+  color: var(--text-primary);
+}
+
+.code-container.large-file-performance #activeEditor::selection {
+  color: var(--text-primary);
 }
 
 textarea.active {
@@ -5750,9 +5771,10 @@ iframe {
 
   .line-numbers {
     width: 48px;
-    padding: 10px 6px;
     font-size: 12px;
   }
+
+  .line-numbers-content { padding: 10px 6px; }
 
   textarea,
   #highlightLayer {
@@ -8193,8 +8215,9 @@ iframe {
 
   .line-numbers {
     width: 44px;
-    padding: 10px 5px;
   }
+
+  .line-numbers-content { padding: 10px 5px; }
 
   #activeEditor,
   #highlightLayer {
