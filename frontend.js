@@ -5051,100 +5051,6 @@ let projectFiles = [
         </svg>
       </section>
 
-      <section class="grid">
-        <article class="card">
-          <h2>Build in the editor</h2>
-          <ul>
-            <li>Create HTML, CSS, JavaScript, JSON, environment, and Node backend files</li>
-            <li>Press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to search files and commands from the Command Palette</li>
-            <li>Use Auto-Run or the Run button to update the preview</li>
-            <li>Inspect preview HTML and adjust preview zoom from its header</li>
-            <li>The workspace adapts by orientation: landscape tablets use the laptop-style split layout, while portrait tablets use the mobile workspace</li>
-            <li>On phones and portrait tablets, use Files, Editor, Preview, and Console tabs; on laptops and landscape tablets, use the full split view and header controls</li>
-            <li>The More button uses a roomier 372px two-column menu on mouse or trackpad laptops, while tablets and phones keep the compact 320px version</li>
-            <li>Zen Mode stays on laptops and desktops, while Get Icons scales into a full-height two-column catalog on phones</li>
-            <li>Zen Mode keeps the cursor and editor scroll position fixed when entering or leaving the focused layout</li>
-            <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
-            <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
-            <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
-            <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
-            <li>Open Developer Tools normally from More or with its keyboard shortcut; all 21 preview and editor buttons provide busy, success, pressed-state, and failure feedback, including verified Custom Size, Screenshot, Fullscreen, formatting, media, and reset actions</li>
-            <li>Suggestions come only from the project as it exists right now: editing or deleting an HTML ID/class, CSS selector/custom property, or JavaScript declaration immediately removes its old value from the list</li>
-            <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
-            <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
-            <li>Typing a single or double quote in JavaScript inserts the matching closing quote and keeps the caret between the pair, including inside <code>console.log()</code></li>
-            <li>Accepting the JavaScript <code>function</code> suggestion inserts an anonymous function block and places the caret between its parameter parentheses</li>
-            <li>JavaScript inside a standard or module <code>&lt;script&gt;</code> block has the same suggestions, declared-identifier ranking, auto-closing, indentation, syntax colors, diagnostics, and Format Code behavior as an external JavaScript file</li>
-            <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
-            <li>Smart JavaScript diagnostics classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes while you type, then show why each issue happened and a suggested fix in the Console without an extra popup</li>
-            <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
-            <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
-            <li>File-name spaces become dashes; dashes and underscores are allowed</li>
-          </ul>
-        </article>
-
-        <article class="card">
-          <h2>Projects & sharing</h2>
-          <ul>
-            <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
-            <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
-            <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
-            <li>Waiting-room join requests stay in the host's approval panel without creating a duplicate "waiting to join" notification</li>
-            <li>Collaboration participant and file checklists use clear green controls with Select All for multi-selection, while Bring To File, Pin Team File, Team Focus, and visibility tools show every project file as a clickable list instead of asking you to type a filename</li>
-            <li>Group Controls use distinct, accessible colors for permissions, participant actions, file focus, session tools, warnings, and destructive actions so controls are easier to recognize</li>
-            <li>Session announcements use a spacious responsive writing field and appear only for participants, so the host and co-host screens stay uninterrupted</li>
-            <li>If a host refreshes while the session is empty, the original device can rejoin with the newly entered name and securely reclaim the host position without letting another device take over</li>
-            <li>The collaboration Session Info modal includes dedicated Copy Link and Copy PIN buttons, so invite details stay easy to share after setup</li>
-            <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
-            <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
-            <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
-            <li>Console errors and code diagnostics stay above logs, warnings, and informational output, and opening the Console focuses the error section first</li>
-            <li>Reorder file tabs by dragging on laptops, using the grip with the arrow, Home, or End keys, or tapping the earlier/later controls on touch devices; the order stays with saved, exported, transferred, and shared projects</li>
-            <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
-            <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
-            <li>HTML, CSS, JavaScript, inline code, JSON, environment files, and plain text stay responsive while you type because Auto-Run, syntax colors, suggestions, project learning, diagnostics, and error highlights use coordinated idle scheduling</li>
-            <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
-            <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
-            <li>Import or export complete projects as ZIP archives</li>
-            <li>Add images, audio, and video with Add Media</li>
-            <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
-            <li>Start a collaboration session for shared files, chat, cursors, roles, and room controls</li>
-            <li>Authorized administrators get a premium Outfit-powered green-and-white control room with eight realtime metrics, complete live-session inspection, live visibility of every newly created Publish / Share link, published-project search, and protected reopening in CodX Editor</li>
-          </ul>
-        </article>
-
-        <article class="card">
-          <h2>Node.js</h2>
-          <ul>
-            <li>Open More and choose Enable Node.js</li>
-            <li>The normal preview closes and the console becomes a command terminal</li>
-            <li>While Node.js is on, the More action turns red, displays an ON badge, and clearly says Disable Node.js</li>
-            <li>Install dependencies with <code>npm install package-name</code></li>
-            <li>Run the starter server with <code>npm start</code></li>
-            <li>Run commands with <strong>RUN</strong> or <kbd>Enter</kbd></li>
-            <li>Use Stop before starting another command or disabling Node.js</li>
-            <li>Open the clickable <code>http://localhost:8000</code> link in a new preview tab</li>
-            <li>If startup fails, CodX Editor restores the normal preview so you can hard-refresh and retry</li>
-            <li>Interface messages and learning content use the complete CodX Editor name consistently</li>
-          </ul>
-        </article>
-
-        <article class="card">
-          <h2>More keyboard controls</h2>
-          <ul>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> Open the Command Palette</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> Open the Command Palette</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> Export your project as a ZIP</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd> Run preview manually</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd> Create a new file</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> Open or close Console</li>
-            <li><kbd>Esc</kbd> Close supported dialogs or exit Zen Mode</li>
-            <li>Type <strong>cxstart</strong> in an empty HTML file and press <kbd>Enter</kbd></li>
-            <li>Type an Emmet abbreviation and press <kbd>Tab</kbd> to expand it</li>
-            <li><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>X</kbd> Open developer tools</li>
-          </ul>
-        </article>
-      </section>
     </main>
 
     <script src="script.js"></script>
@@ -5382,33 +5288,9 @@ h1 {
   text-anchor: middle;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 22px;
-}
-
-.card {
-  background: linear-gradient(180deg, var(--panel), var(--panel-2));
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px;
-}
-
 h2 {
   margin: 0 0 10px;
   font-size: 1.05rem;
-}
-
-ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-li {
-  margin: 8px 0;
-  color: var(--muted);
 }
 
 kbd,
@@ -5432,8 +5314,7 @@ kbd {
   }
 
   .hero-layout,
-  .workflow-card,
-  .grid {
+  .workflow-card {
     grid-template-columns: 1fr;
   }
 
