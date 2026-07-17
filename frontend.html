@@ -1383,72 +1383,40 @@
             <strong>CLOSE</strong>
           </button>
         </div>
-        <div style="padding: 16px 18px; border-bottom: 1px solid var(--border-color);">
-          <div class="collab-pill-row">
+        <div class="developer-console-toolspace">
+          <div class="developer-console-intro">
+            <div>
+              <span class="developer-console-kicker">Click a tool to use it</span>
+              <h4>Preview and editor controls</h4>
+            </div>
             <span class="collab-pill">Shortcut: Ctrl/Cmd + C, then Ctrl/Cmd + X</span>
-            <span class="collab-pill">Use ↑/↓ for history and Tab to complete a command</span>
           </div>
-          <div class="developer-console-shortcuts" aria-label="Developer console shortcuts">
-            <button type="button" data-developer-command="device responsive"><i class="fa-solid fa-arrows-left-right"></i> Responsive</button>
-            <button type="button" data-developer-command="device phone"><i class="fa-solid fa-mobile-screen"></i> Phone</button>
-            <button type="button" data-developer-command="device tablet"><i class="fa-solid fa-tablet-screen-button"></i> Tablet</button>
-            <button type="button" data-developer-command="device laptop"><i class="fa-solid fa-laptop"></i> Laptop</button>
-            <button type="button" data-developer-command="viewport prompt"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> Custom Size</button>
-            <button type="button" data-developer-command="rotate"><i class="fa-solid fa-rotate"></i> Rotate</button>
-            <button type="button" data-developer-command="preview refresh"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
-            <button type="button" data-developer-command="preview screenshot"><i class="fa-solid fa-camera"></i> Screenshot</button>
-            <button type="button" data-developer-command="grid toggle" aria-pressed="false"><i class="fa-solid fa-border-all"></i> Grid</button>
-            <button type="button" data-developer-command="scheme toggle" aria-pressed="false"><i class="fa-solid fa-circle-half-stroke"></i> Color Scheme</button>
-            <button type="button" data-developer-command="breakpoints toggle" aria-pressed="false"><i class="fa-solid fa-ruler-horizontal"></i> Breakpoints</button>
-            <button type="button" data-developer-command="editor format"><i class="fa-solid fa-align-left"></i> Format Code</button>
-            <button type="button" data-developer-command="media source toggle" aria-pressed="false"><i class="fa-solid fa-file-code"></i> Media Source</button>
-            <button type="button" data-developer-command="tools reset"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Tools</button>
+          <div class="developer-console-shortcuts" aria-label="Developer tool controls">
+            <button type="button" data-developer-command="device responsive"><i class="fa-solid fa-arrows-left-right"></i><span>Responsive<small>Fill the preview pane</small></span></button>
+            <button type="button" data-developer-command="device phone"><i class="fa-solid fa-mobile-screen"></i><span>Phone<small>390 × 844 viewport</small></span></button>
+            <button type="button" data-developer-command="device tablet"><i class="fa-solid fa-tablet-screen-button"></i><span>Tablet<small>768 × 1024 viewport</small></span></button>
+            <button type="button" data-developer-command="device laptop"><i class="fa-solid fa-laptop"></i><span>Laptop<small>1366 × 768 viewport</small></span></button>
+            <button type="button" data-developer-command="viewport prompt"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>Custom Size<small>Set width and height</small></span></button>
+            <button type="button" data-developer-command="rotate"><i class="fa-solid fa-rotate"></i><span>Rotate<small>Swap viewport sides</small></span></button>
+            <button type="button" data-developer-command="zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i><span>Zoom Out<small>Reduce preview scale</small></span></button>
+            <button type="button" data-developer-command="zoom reset"><i class="fa-solid fa-expand"></i><span>Reset Zoom<small>Return preview to 100%</small></span></button>
+            <button type="button" data-developer-command="zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i><span>Zoom In<small>Increase preview scale</small></span></button>
+            <button type="button" data-developer-command="preview refresh"><i class="fa-solid fa-rotate-right"></i><span>Refresh<small>Reload the preview</small></span></button>
+            <button type="button" data-developer-command="preview fullscreen"><i class="fa-solid fa-maximize"></i><span>Fullscreen<small>Expand the preview</small></span></button>
+            <button type="button" data-developer-command="preview inspect"><i class="fa-solid fa-crosshairs"></i><span>Inspect<small>Select preview elements</small></span></button>
+            <button type="button" data-developer-command="preview screenshot"><i class="fa-solid fa-camera"></i><span>Screenshot<small>Download the preview</small></span></button>
+            <button type="button" data-developer-command="grid toggle" aria-pressed="false"><i class="fa-solid fa-border-all"></i><span>Grid<small>Show layout guides</small></span></button>
+            <button type="button" data-developer-command="scheme toggle" aria-pressed="false"><i class="fa-solid fa-circle-half-stroke"></i><span>Color Scheme<small>Cycle system, light, dark</small></span></button>
+            <button type="button" data-developer-command="breakpoints toggle" aria-pressed="false"><i class="fa-solid fa-ruler-horizontal"></i><span>Breakpoints<small>Show responsive range</small></span></button>
+            <button type="button" data-developer-command="editor wrap on"><i class="fa-solid fa-arrow-turn-down"></i><span>Wrap Lines<small>Fit long code lines</small></span></button>
+            <button type="button" data-developer-command="editor wrap off"><i class="fa-solid fa-arrow-right-long"></i><span>No Wrap<small>Keep code on one line</small></span></button>
+            <button type="button" data-developer-command="editor format"><i class="fa-solid fa-align-left"></i><span>Format Code<small>Clean active file layout</small></span></button>
+            <button type="button" data-developer-command="media source toggle" aria-pressed="false"><i class="fa-solid fa-file-code"></i><span>Media Source<small>Inspect safe file details</small></span></button>
+            <button type="button" data-developer-command="tools reset"><i class="fa-solid fa-arrow-rotate-left"></i><span>Reset Tools<small>Restore normal defaults</small></span></button>
           </div>
-        </div>
-        <pre
-          id="developerConsoleOutput"
-          style="
-            flex: 1;
-            margin: 0;
-            padding: 16px 18px;
-            overflow: auto;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-word;
-          "
-        ></pre>
-        <div
-          style="
-            display: flex;
-            gap: 10px;
-            padding: 16px 18px 18px;
-            border-top: 1px solid var(--border-color);
-            flex-wrap: wrap;
-          "
-        >
-          <input
-            id="developerConsoleInput"
-            type="text"
-            placeholder="Type a command..."
-            style="
-              flex: 1 1 320px;
-              padding: 11px 12px;
-              border-radius: 8px;
-              border: 1px solid var(--border-color);
-              background: var(--bg-primary);
-              color: var(--text-primary);
-            "
-          />
-          <button id="runDeveloperCommandBtn" class="run-button" type="button">
-            <strong>RUN</strong>
-          </button>
-          <button id="clearDeveloperConsoleBtn" class="run-button" type="button">
-            <strong>CLEAR</strong>
-          </button>
+          <div id="developerToolStatus" class="developer-tool-status" role="status" aria-live="polite">
+            Choose any tool above. Its result will appear here.
+          </div>
         </div>
       </div>
     </div>

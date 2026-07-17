@@ -1451,7 +1451,6 @@ textarea.active {
 #activeEditor,
 #syntaxHighlightLayer,
 #consoleOutput,
-#developerConsoleOutput,
 #nodeTerminal,
 #fileList,
 #suggestionPopup {
@@ -2674,6 +2673,126 @@ iframe {
   color: #ffd6d3;
   font-size: 12px;
   font-weight: 700;
+}
+
+.console-output .codx-smart-js-diagnostic {
+  display: block;
+  margin: 8px 0 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--error-color) 38%, var(--border-color));
+  border-left: 4px solid var(--error-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--error-color) 7%, var(--bg-secondary));
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.console-output .codx-smart-js-diagnostic.warn {
+  border-color: color-mix(in srgb, var(--warning-color) 42%, var(--border-color));
+  border-left-color: var(--warning-color);
+  background: color-mix(in srgb, var(--warning-color) 7%, var(--bg-secondary));
+}
+
+.console-output .codx-smart-js-diagnostic:hover,
+.console-output .codx-smart-js-diagnostic:focus-visible {
+  border-left-color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 11%, var(--bg-secondary));
+}
+
+.console-output .codx-smart-js-diagnostic.warn:hover,
+.console-output .codx-smart-js-diagnostic.warn:focus-visible {
+  border-left-color: var(--warning-color);
+  background: color-mix(in srgb, var(--warning-color) 11%, var(--bg-secondary));
+}
+
+.codx-smart-js-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.codx-smart-js-category {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--error-color);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.warn .codx-smart-js-category {
+  color: #171204;
+  background: var(--warning-color);
+}
+
+.codx-smart-js-location {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: 10px;
+}
+
+.codx-smart-js-title {
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.codx-smart-js-why,
+.codx-smart-js-fix {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 9px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
+}
+
+.codx-smart-js-why strong,
+.codx-smart-js-fix strong {
+  color: var(--text-primary);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.codx-smart-js-why span,
+.codx-smart-js-fix span {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.codx-smart-js-fix {
+  margin-top: 8px;
+  border-color: color-mix(in srgb, var(--success-color) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--success-color) 7%, var(--bg-tertiary));
+}
+
+@media (max-width: 600px) {
+  .codx-smart-js-why,
+  .codx-smart-js-fix {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .codx-smart-js-location {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .console-output .codx-runtime-diagnostic {
@@ -7153,37 +7272,100 @@ iframe {
   .device-transfer-scanner-stage { min-height: 220px; }
 }
 
-#developerConsoleModal > div { border-radius: 18px !important; }
-.developer-console-shortcuts {
+#developerConsoleModal > div {
+  width: min(920px, 96vw) !important;
+  max-height: min(900px, 92vh) !important;
+  border-radius: 18px !important;
+}
+
+.developer-console-toolspace {
+  flex: 1;
+  min-height: 0;
+  padding: clamp(16px, 2.5vw, 26px);
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 88% 4%, color-mix(in srgb, var(--accent-color) 13%, transparent), transparent 34%),
+    var(--bg-primary);
+}
+
+.developer-console-intro {
   display: flex;
-  gap: 7px;
-  margin-top: 11px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.developer-console-intro h4 {
+  margin: 3px 0 0;
+  color: var(--text-primary);
+  font-size: clamp(17px, 2.2vw, 22px);
+}
+
+.developer-console-kicker {
+  color: var(--accent-hover);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.developer-console-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 11px;
 }
 
 .developer-console-shortcuts button {
-  flex: 0 0 auto;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--accent-color) 18%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 94%, var(--accent-color) 6%);
+  color: var(--text-primary);
   font: inherit;
-  font-size: 11px;
-  font-weight: 700;
+  text-align: left;
   cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.developer-console-shortcuts button > i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--accent-hover);
+  background: color-mix(in srgb, var(--accent-color) 13%, var(--bg-tertiary));
+  font-size: 15px;
+}
+
+.developer-console-shortcuts button > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.developer-console-shortcuts button small {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .developer-console-shortcuts button:hover,
 .developer-console-shortcuts button:focus-visible {
   border-color: var(--accent-color);
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--bg-tertiary) 78%, var(--accent-color));
+  background: color-mix(in srgb, var(--bg-secondary) 82%, var(--accent-color) 18%);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent-color) 13%, transparent);
+  transform: translateY(-2px);
 }
 
 .developer-console-shortcuts button:focus-visible {
@@ -7193,9 +7375,52 @@ iframe {
 
 .developer-console-shortcuts button[aria-pressed="true"] {
   border-color: var(--accent-hover);
-  background: var(--accent-color);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--accent-color) 24%, var(--bg-secondary));
+  color: var(--text-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.developer-console-shortcuts button[aria-pressed="true"] > i {
+  color: #ffffff;
+  background: var(--accent-color);
+}
+
+.developer-tool-status {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 10px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-color) 7%, var(--bg-secondary));
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .developer-console-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .developer-console-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .developer-console-shortcuts button {
+    grid-template-columns: 32px minmax(0, 1fr);
+    min-height: 68px;
+    padding: 9px;
+  }
+
+  .developer-console-shortcuts button > i {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 .pair-dock[hidden] { display: none !important; }

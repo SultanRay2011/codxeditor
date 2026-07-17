@@ -27,7 +27,7 @@
     />
     <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-15","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-17","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
     </script>
     <style>
       * {
@@ -626,6 +626,7 @@
               <li><strong>Expanded homepage:</strong> feature, comparison, workflow, use-case, learning, and FAQ content uses a wide responsive page layout instead of being compressed inside one advertisement-style card.</li>
               <li><strong>True editor preview:</strong> the homepage hero now mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, colors, and phone workspace tabs.</li>
               <li><strong>Error-first console:</strong> JavaScript runtime errors and code diagnostics are promoted above logs, warnings, and informational output, and opening the Console focuses the error section first.</li>
+              <li><strong>Smart JavaScript diagnostics:</strong> while you type, the Console uses JavaScript's parsed structure to classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes. Each diagnostic explains why the issue happens, suggests a contextual fix, and opens the exact source location without showing an extra popup notification.</li>
               <li><strong>Reorder files:</strong> drag file tabs into a new position on laptops, focus the grip and use the arrow, Home, or End keys, or use the earlier/later controls on touch devices. The order is retained in project saves, exports, transfers, and collaboration updates.</li>
               <li><strong>Consistent branding:</strong> interface messages, learning content, and administration pages use the complete <strong>CodX Editor</strong> name.</li>
               <li><strong>More:</strong> opens the Command Palette, saving, templates, publishing, GitHub, Node.js, fonts, icons, desktop Zen Mode, and navigation tools.</li>
@@ -887,7 +888,7 @@
                   <li>Media is kept as binary browser data and opened through a lightweight object URL, avoiding the large base64 copies that can exhaust memory when opening a video.</li>
                   <li>Media up to 4 MB can be encoded for live collaboration. Larger media stays local to your browser so it cannot destabilize the session.</li>
                   <li>Direct publishing can prepare up to 12 MB of local media on demand. Use ZIP export for projects containing larger videos.</li>
-                  <li>Developer media information is available only through Developer Tools: use the Media Source shortcut or run <code>media source on</code>. It is read-only; large binary payloads stay hidden for memory safety. Use <code>media source off</code>, Reset Tools, or reload to return to the viewer.</li>
+                  <li>Developer media information is available only through the <strong>Media Source</strong> button in Developer Tools. It is read-only; large binary payloads stay hidden for memory safety. Click Media Source again, Reset Tools, or reload to return to the viewer.</li>
                   <li>Switching back to an HTML, CSS, JavaScript, ENV, TXT, or other text file restores the normal code editor.</li>
                   <li>The preview rewrites local media references so playback and image display work inside the browser preview.</li>
                 </ul>
@@ -1331,18 +1332,19 @@
               <article class="feature-item">
                 <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
                 <ul>
-                  <li>Use Developer Tools as a power-control panel for the preview and code editor.</li>
-                  <li>Emulate a phone, tablet, laptop, or desktop viewport; switch back to a fluid responsive pane; set a custom size with <code>viewport &lt;width&gt; &lt;height&gt;</code>; or use <code>rotate</code> to change orientation.</li>
-                  <li>Control preview zoom, refresh, fullscreen, and element inspection from commands or the device shortcut buttons.</li>
+                  <li>Developer Tools is now a visual power-control panel: the old output transcript and command text field are removed, so every available action is a large, clearly described button.</li>
+                  <li>The responsive grid spreads controls across the space formerly occupied by the output console, then becomes a compact two-column layout on small screens.</li>
+                  <li>Emulate a phone, tablet, or laptop viewport; switch back to a fluid responsive pane; set a custom size; or click Rotate to change orientation.</li>
+                  <li>Control preview zoom, refresh, fullscreen, and element inspection directly from their buttons.</li>
                   <li>Use Custom Size for an exact viewport, save a preview Screenshot, or toggle an 8-pixel Grid Overlay while checking alignment.</li>
                   <li>Color Scheme cycles through system, light, and dark simulation. Breakpoints displays the current viewport category and exact CSS width.</li>
-                  <li>Open a project file, jump to a line and column, toggle editor wrapping, or temporarily change the editor font and tab display size.</li>
+                  <li>Turn editor line wrapping on or off and format the active file without typing a command.</li>
                   <li>Format Code safely reindents supported files and remains undoable. It skips whitespace-sensitive HTML blocks instead of risking their content.</li>
-                  <li>Use Media Source or <code>media source on</code> to inspect safe, read-only details for the active image, video, or audio file. Large encoded or binary payloads are not copied into the editor because doing so can exhaust browser memory.</li>
+                  <li>Click Media Source to inspect safe, read-only details for the active image, video, or audio file. Large encoded or binary payloads are not copied into the editor because doing so can exhaust browser memory.</li>
                   <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, media viewer, wrapping, font, and tab display to normal defaults.</li>
-                  <li>Use <code>state</code> or <code>diagnostics</code> to inspect preview, editor, project, error, connection, and collaboration details without changing project code.</li>
+                  <li>A compact status strip below the controls confirms the latest action without rebuilding a scrolling output transcript.</li>
                   <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
-                  <li>Type <code>help</code> for the complete command list, use <kbd>↑</kbd>/<kbd>↓</kbd> for command history, and press <kbd>Tab</kbd> to complete a command.</li>
+                  <li>Use Tab and Shift+Tab to move through every tool button, then press Enter or Space to activate it.</li>
                 </ul>
               </article>
               <article class="feature-item">

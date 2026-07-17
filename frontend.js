@@ -91,10 +91,7 @@ const appDialogMessage = document.getElementById("appDialogMessage");
 const appDialogInput = document.getElementById("appDialogInput");
 const appDialogActions = document.getElementById("appDialogActions");
 const developerConsoleModal = document.getElementById("developerConsoleModal");
-const developerConsoleOutput = document.getElementById("developerConsoleOutput");
-const developerConsoleInput = document.getElementById("developerConsoleInput");
-const runDeveloperCommandBtn = document.getElementById("runDeveloperCommandBtn");
-const clearDeveloperConsoleBtn = document.getElementById("clearDeveloperConsoleBtn");
+const developerToolStatus = document.getElementById("developerToolStatus");
 const closeDeveloperConsoleBtn = document.getElementById("closeDeveloperConsoleBtn");
 const developerConsoleShortcutButtons = document.querySelectorAll("[data-developer-command]");
 const pairDock = document.getElementById("pairDock");
@@ -931,23 +928,7 @@ if (appDialog) {
     }
   });
 }
-const developerCommandHistory = [];
-let developerCommandHistoryIndex = 0;
 let developerMediaSourceVisible = false;
-const developerCommandSuggestions = [
-  "help", "state", "diagnostics", "files", "file list", "file open ",
-  "participants", "permissions", "errors", "device list", "device responsive",
-  "device phone", "device tablet", "device laptop", "device desktop", "viewport ",
-  "rotate", "zoom reset", "zoom in", "zoom out", "preview status",
-  "preview refresh", "preview fullscreen", "preview inspect", "preview screenshot",
-  "grid toggle", "grid on", "grid off", "scheme toggle", "scheme system",
-  "scheme light", "scheme dark", "breakpoints toggle", "breakpoints on",
-  "breakpoints off", "editor goto ", "editor format",
-  "editor wrap on", "editor wrap off", "editor font ", "editor tabsize ",
-  "media source on", "media source off", "media source toggle",
-  "media code on", "media code off", "media code toggle",
-  "tools reset", "clear", "close",
-];
 if (developerConsoleModal) {
   developerConsoleModal.addEventListener("click", (e) => {
     if (e.target === developerConsoleModal) {
@@ -958,60 +939,12 @@ if (developerConsoleModal) {
 if (closeDeveloperConsoleBtn) {
   closeDeveloperConsoleBtn.onclick = closeDeveloperConsole;
 }
-if (clearDeveloperConsoleBtn) {
-  clearDeveloperConsoleBtn.onclick = clearDeveloperConsoleOutput;
-}
-if (runDeveloperCommandBtn) {
-  runDeveloperCommandBtn.onclick = () => {
-    if (!developerConsoleInput) return;
-    const value = developerConsoleInput.value;
-    developerConsoleInput.value = "";
-    runDeveloperCommand(value);
-    developerConsoleInput.focus();
-  };
-}
 developerConsoleShortcutButtons.forEach((button) => {
   button.addEventListener("click", () => {
     runDeveloperCommand(button.dataset.developerCommand || "");
-    developerConsoleInput?.focus();
+    button.focus({ preventScroll: true });
   });
 });
-if (developerConsoleInput) {
-  developerConsoleInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (runDeveloperCommandBtn) runDeveloperCommandBtn.click();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      closeDeveloperConsole();
-    }
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      e.preventDefault();
-      const direction = e.key === "ArrowUp" ? -1 : 1;
-      developerCommandHistoryIndex = Math.max(
-        0,
-        Math.min(developerCommandHistory.length, developerCommandHistoryIndex + direction),
-      );
-      developerConsoleInput.value = developerCommandHistory[developerCommandHistoryIndex] || "";
-      developerConsoleInput.setSelectionRange(
-        developerConsoleInput.value.length,
-        developerConsoleInput.value.length,
-      );
-    }
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const typed = developerConsoleInput.value.trimStart().toLowerCase();
-      const matches = developerCommandSuggestions.filter((item) => item.startsWith(typed));
-      if (matches.length === 1) {
-        developerConsoleInput.value = matches[0];
-        developerConsoleInput.setSelectionRange(matches[0].length, matches[0].length);
-      } else if (matches.length > 1) {
-        appendDeveloperConsoleLine(`Suggestions: ${matches.join(", ")}`);
-      }
-    }
-  });
-}
 
 const settingsPreviewSampleCode = `function helloWorld() {
   console.log("Hello, World!");
@@ -2702,6 +2635,7 @@ let hasUnsavedChanges = false;
 let activeSavedProjectName = null;
 let autoRunTimeout;
 let latestDiagnostics = [];
+let diagnosticsRefreshTimer = null;
 let sessionData = {};
 let typingTimer;
 let myInfo = {};
@@ -3808,14 +3742,17 @@ function showAnnouncementPopup(message) {
 }
 
 function appendDeveloperConsoleLine(text = "") {
-  if (!developerConsoleOutput) return;
-  developerConsoleOutput.textContent += `${text}\n`;
-  developerConsoleOutput.scrollTop = developerConsoleOutput.scrollHeight;
+  if (!developerToolStatus) return;
+  const message = String(text || "").trim();
+  if (!message || message.startsWith(">")) return;
+  developerToolStatus.textContent = message.length > 260
+    ? `${message.slice(0, 257)}...`
+    : message;
 }
 
 function clearDeveloperConsoleOutput() {
-  if (!developerConsoleOutput) return;
-  developerConsoleOutput.textContent = "";
+  if (!developerToolStatus) return;
+  developerToolStatus.textContent = "Choose any tool above. Its result will appear here.";
 }
 
 function closeDeveloperConsole() {
@@ -3827,14 +3764,7 @@ function openDeveloperConsole() {
   if (!developerConsoleModal) return;
   developerConsoleModal.style.display = "flex";
   clearDeveloperConsoleOutput();
-  appendDeveloperConsoleLine("CodX Editor Developer Tools");
-  appendDeveloperConsoleLine("Type 'help' to see available commands.");
-  appendDeveloperConsoleLine("");
-  runDeveloperCommand("state", false);
-  if (developerConsoleInput) {
-    developerConsoleInput.value = "";
-    developerConsoleInput.focus();
-  }
+  requestAnimationFrame(() => developerConsoleShortcutButtons[0]?.focus({ preventScroll: true }));
 }
 
 function setDeveloperChordArmed(value) {
@@ -3872,16 +3802,10 @@ function getDeveloperStateSummary() {
   };
 }
 
-function runDeveloperCommand(rawCommand, echoCommand = true) {
+function runDeveloperCommand(rawCommand) {
   const raw = String(rawCommand || "").trim();
   const command = raw.toLowerCase();
   if (!command) return;
-  if (echoCommand) {
-    appendDeveloperConsoleLine(`> ${raw}`);
-    if (developerCommandHistory.at(-1) !== raw) developerCommandHistory.push(raw);
-    if (developerCommandHistory.length > 50) developerCommandHistory.shift();
-    developerCommandHistoryIndex = developerCommandHistory.length;
-  }
 
   const printJson = (value) => appendDeveloperConsoleLine(JSON.stringify(value, null, 2));
   const printFiles = () => printJson(
@@ -4075,6 +3999,8 @@ function runDeveloperCommand(rawCommand, echoCommand = true) {
     const enabled = command.endsWith("on");
     editorTextarea.wrap = enabled ? "soft" : "off";
     editorTextarea.style.whiteSpace = enabled ? "pre-wrap" : "pre";
+    setDeveloperShortcutPressed("editor wrap on", enabled);
+    setDeveloperShortcutPressed("editor wrap off", !enabled);
     syncSyntaxLayerStyle(editorTextarea);
     renderSyntaxHighlight(editorTextarea);
     appendDeveloperConsoleLine(`Editor line wrapping ${enabled ? "enabled" : "disabled"}.`);
@@ -5023,11 +4949,13 @@ let projectFiles = [
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>Developer Tools replaces its output transcript and command text field with a spacious responsive grid of one-click preview, viewport, inspection, screenshot, wrapping, formatting, media, and reset controls</li>
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
             <li>Accepting the JavaScript <code>function</code> suggestion inserts an anonymous function block and places the caret between its parameter parentheses</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
+            <li>Smart JavaScript diagnostics classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes while you type, then show why each issue happened and a suggested fix in the Console without an extra popup</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
             <li>Code errors stay in the Console with their file badges and editor highlights instead of creating a separate popup notification</li>
             <li>File-name spaces become dashes; dashes and underscores are allowed</li>
@@ -5567,7 +5495,7 @@ async function promptForCustomPreviewViewport() {
     appendDeveloperConsoleLine(`Custom viewport set to ${match[1]} x ${match[2]}.\n`);
   } finally {
     if (appDialog) appDialog.style.zIndex = previousZIndex;
-    developerConsoleInput?.focus();
+    document.querySelector('[data-developer-command="viewport prompt"]')?.focus({ preventScroll: true });
   }
 }
 
@@ -6083,6 +6011,7 @@ function bindPreviewInspector() {
 
 function setPreviewInspecting(enabled) {
   isPreviewInspecting = Boolean(enabled);
+  setDeveloperShortcutPressed("preview inspect", isPreviewInspecting);
   previewInspectBtn?.setAttribute("aria-pressed", String(isPreviewInspecting));
   if (previewInspectBtn) {
     previewInspectBtn.title = isPreviewInspecting
@@ -11264,6 +11193,604 @@ function getAcornJavaScriptSyntaxError(code) {
   }
 }
 
+const JAVASCRIPT_DIAGNOSTIC_GLOBALS = new Set([
+  "AbortController", "AbortSignal", "AggregateError", "arguments", "Array",
+  "ArrayBuffer", "Atomics", "Audio", "BigInt", "BigInt64Array", "BigUint64Array",
+  "Blob", "Boolean", "BroadcastChannel", "ByteLengthQueuingStrategy",
+  "CanvasRenderingContext2D", "clearImmediate", "clearInterval", "clearTimeout",
+  "ClipboardItem", "CompressionStream", "console", "CountQueuingStrategy", "crypto",
+  "CSS", "CSSStyleSheet", "CustomEvent", "customElements", "DataView", "Date",
+  "DecompressionStream", "decodeURI", "decodeURIComponent", "document", "DOMParser",
+  "Element", "encodeURI", "encodeURIComponent", "Error", "escape", "EvalError",
+  "Event", "EventSource", "EventTarget", "File", "FileList", "FileReader", "fetch",
+  "Float32Array", "Float64Array", "FormData", "global", "globalThis", "Headers",
+  "history", "HTMLElement", "IDBKeyRange", "Image", "ImageBitmap", "ImageData",
+  "indexedDB", "Infinity", "Int16Array", "Int32Array", "Int8Array", "IntersectionObserver",
+  "Intl", "isFinite", "isNaN", "JSON", "localStorage", "location", "Map", "matchMedia",
+  "Math", "MediaQueryList", "MessageChannel", "MessageEvent", "MessagePort",
+  "MutationObserver", "NaN", "navigator", "Node", "NodeList", "Notification", "Number",
+  "Object", "OffscreenCanvas", "parseFloat", "parseInt", "Path2D", "performance",
+  "PerformanceObserver", "Promise", "Proxy", "queueMicrotask", "RangeError", "ReadableStream",
+  "ReferenceError", "Reflect", "RegExp", "Request", "ResizeObserver", "Response", "screen",
+  "sessionStorage", "Set", "setImmediate", "setInterval", "setTimeout", "SharedArrayBuffer",
+  "SharedWorker", "String", "structuredClone", "SubtleCrypto", "Symbol", "SyntaxError",
+  "TextDecoder", "TextEncoder", "TransformStream", "TypeError", "Uint16Array", "Uint32Array",
+  "Uint8Array", "Uint8ClampedArray", "undefined", "unescape", "URIError", "URL",
+  "URLSearchParams", "visualViewport", "WeakMap", "WeakRef", "WeakSet", "WebAssembly",
+  "WebSocket", "window", "Worker", "WritableStream", "XMLHttpRequest", "XMLSerializer",
+  "alert", "atob", "btoa", "cancelAnimationFrame", "getComputedStyle",
+  "requestAnimationFrame", "process", "Buffer", "module", "exports", "require",
+  "__dirname", "__filename",
+]);
+
+function parseJavaScriptAstForDiagnostics(code) {
+  if (!window.acorn || typeof window.acorn.parse !== "function") return null;
+  const source = String(code || "");
+  const options = {
+    ecmaVersion: "latest",
+    locations: true,
+    allowHashBang: true,
+    allowAwaitOutsideFunction: true,
+    allowReturnOutsideFunction: true,
+  };
+  try {
+    return window.acorn.parse(source, { ...options, sourceType: "script" });
+  } catch (_scriptError) {
+    try {
+      return window.acorn.parse(source, { ...options, sourceType: "module" });
+    } catch (_moduleError) {
+      return null;
+    }
+  }
+}
+
+function getJavaScriptSyntaxDiagnosticDetails(parserError, code) {
+  const source = String(code || "");
+  const lineText = source.split(/\r?\n/)[Math.max(0, Number(parserError?.line || 1) - 1)] || "";
+  const beforeError = source.slice(0, Math.max(0, Number(parserError?.pos || 0)));
+  const message = String(parserError?.message || "Invalid JavaScript syntax");
+  let title = "JavaScript grammar is incomplete";
+  let why = message;
+  let fix = getErrorHint(message);
+
+  if (/\belse\s*\([^)]*\)/.test(lineText)) {
+    title = "A condition was added directly to else";
+    why = "JavaScript only allows a condition after if or else if; a plain else cannot have parentheses.";
+    fix = "Change else (condition) to else if (condition), or remove the condition and keep plain else.";
+  } else if (/\b(?:let|const|var)\s+[A-Za-z_$][\w$]*\s+[A-Za-z_$][\w$]*/.test(lineText)) {
+    title = "Variable name contains a space";
+    why = "A JavaScript identifier must be one continuous name, so the second word is parsed as an unexpected token.";
+    fix = "Join the words, usually with camelCase, for example: let isStudent = true;";
+  } else if (/\b(?:let|const|var)\s+\d/.test(lineText)) {
+    title = "Variable name starts with a number";
+    why = "JavaScript identifiers may contain numbers, but their first character cannot be a number.";
+    fix = "Start the name with a letter, $ or _, for example: let name1 = \"test\";";
+  } else if (/\b(?:let|const|var)\s+(?:function|class|return|if|else|for|while|switch|case|new|this|await|yield)\b/.test(lineText)) {
+    title = "Reserved keyword used as a variable name";
+    why = "That word is part of JavaScript's grammar and cannot be used as an identifier here.";
+    fix = "Rename the variable to a non-reserved name, such as functionValue or result.";
+  } else if (/unterminated string|unterminated template/i.test(message) || /["'`]([^"'`]*)$/.test(lineText)) {
+    title = "String is not closed";
+    why = "The parser reached the end of the line or file before finding the matching quote.";
+    fix = "Add the same quote character that opened the string.";
+  } else if (/\[[^\]\n]*\b\d+(?:\.\d+)?\s+\d+(?:\.\d+)?/.test(lineText)) {
+    title = "Array items are missing a comma";
+    why = "Adjacent array values must be separated so JavaScript can tell where one item ends and the next begins.";
+    fix = "Add commas between the values, for example: [1, 2, 3].";
+  } else if (/\b(?:if|for|while|switch|catch)\s*\([^)]*\{/.test(lineText)) {
+    title = "Closing parenthesis is missing";
+    why = "The block started before the condition's opening parenthesis was closed.";
+    fix = "Add ) immediately before the opening {.";
+  } else if ((beforeError.match(/\{/g) || []).length > (beforeError.match(/\}/g) || []).length) {
+    title = "A code block may be missing its closing brace";
+    why = "An opening { has not been paired with a closing } before the parser stopped.";
+    fix = "Close the unfinished block with } at the correct nesting level.";
+  }
+
+  return { language: "JavaScript", category: "Syntax Error", title, why, fix };
+}
+
+function getJavaScriptChildEntries(node) {
+  const children = [];
+  if (!node || typeof node !== "object") return children;
+  Object.keys(node).forEach((key) => {
+    if (["start", "end", "loc", "range", "raw"].includes(key)) return;
+    const value = node[key];
+    if (Array.isArray(value)) {
+      value.forEach((child) => {
+        if (child && typeof child.type === "string") children.push([child, key]);
+      });
+    } else if (value && typeof value.type === "string") {
+      children.push([value, key]);
+    }
+  });
+  return children;
+}
+
+function collectPatternIdentifiers(pattern, result = []) {
+  if (!pattern) return result;
+  if (pattern.type === "Identifier") result.push(pattern);
+  else if (pattern.type === "RestElement") collectPatternIdentifiers(pattern.argument, result);
+  else if (pattern.type === "AssignmentPattern") collectPatternIdentifiers(pattern.left, result);
+  else if (pattern.type === "ArrayPattern") pattern.elements.forEach((item) => collectPatternIdentifiers(item, result));
+  else if (pattern.type === "ObjectPattern") {
+    pattern.properties.forEach((property) => collectPatternIdentifiers(
+      property.type === "RestElement" ? property.argument : property.value,
+      result,
+    ));
+  }
+  return result;
+}
+
+function collectDeclaredJavaScriptIdentifiers(code) {
+  const ast = parseJavaScriptAstForDiagnostics(code);
+  const names = new Set();
+  if (!ast) return names;
+  ast.body.forEach((statement) => {
+    const declaration = statement.type === "ExportNamedDeclaration" || statement.type === "ExportDefaultDeclaration"
+      ? statement.declaration
+      : statement;
+    if (!declaration) return;
+    if ((declaration.type === "FunctionDeclaration" || declaration.type === "ClassDeclaration") && declaration.id) {
+      names.add(declaration.id.name);
+    } else if (declaration.type === "VariableDeclaration") {
+      declaration.declarations.forEach((item) => {
+        collectPatternIdentifiers(item.id).forEach((identifier) => names.add(identifier.name));
+      });
+    } else if (declaration.type === "ImportDeclaration") {
+      declaration.specifiers.forEach((specifier) => names.add(specifier.local.name));
+    }
+  });
+  return names;
+}
+
+function analyzeJavaScriptSemantics(code, fileName, emitDiagnostic, options = {}) {
+  const source = String(code || "");
+  const ast = parseJavaScriptAstForDiagnostics(source);
+  if (!ast) return 0;
+  const lineOffset = Math.max(0, Number(options.lineOffset || 0));
+  const firstLineColumnOffset = Math.max(0, Number(options.firstLineColumnOffset || 0));
+  const externalIdentifiers = new Set(options.externalIdentifiers || []);
+  const nodeScopes = new WeakMap();
+  const allBindings = [];
+  const emitted = new Set();
+  let issueCount = 0;
+
+  const createScope = (parent = null, kind = "block") => ({ parent, kind, bindings: new Map() });
+  const rootScope = createScope(null, "program");
+  const declarationScope = (scope, kind) => {
+    if (kind !== "var") return scope;
+    let target = scope;
+    while (target.parent && !["function", "program"].includes(target.kind)) target = target.parent;
+    return target;
+  };
+  const inferSimpleType = (node) => {
+    if (!node) return "unknown";
+    if (node.type === "Literal") {
+      if (node.value === null) return "null";
+      if (node.regex) return "regexp";
+      return typeof node.value;
+    }
+    if (node.type === "TemplateLiteral") return "string";
+    if (node.type === "ArrayExpression") return "array";
+    if (node.type === "ObjectExpression") return "object";
+    if (["FunctionExpression", "ArrowFunctionExpression"].includes(node.type)) {
+      return node.async ? "asyncFunction" : "function";
+    }
+    if (node.type === "ClassExpression") return "function";
+    if (node.type === "NewExpression") {
+      if (node.callee?.type === "Identifier" && node.callee.name === "Array") return "array";
+      return "object";
+    }
+    if (node.type === "UnaryExpression") {
+      if (node.operator === "!") return "boolean";
+      if (["+", "-", "~"].includes(node.operator)) return "number";
+      if (node.operator === "typeof") return "string";
+    }
+    return "unknown";
+  };
+  const addBinding = (scope, identifier, kind, init = null, forcedType = "") => {
+    if (!identifier?.name) return;
+    const target = declarationScope(scope, kind);
+    const binding = {
+      name: identifier.name,
+      kind,
+      node: identifier,
+      init,
+      scope: target,
+      type: forcedType || inferSimpleType(init),
+      declarationStart: Number(identifier.start || 0),
+    };
+    target.bindings.set(identifier.name, binding);
+    allBindings.push(binding);
+  };
+  const addPatternBindings = (scope, pattern, kind, init = null) => {
+    collectPatternIdentifiers(pattern).forEach((identifier) => addBinding(scope, identifier, kind, init));
+  };
+
+  const buildBindings = (node, scope) => {
+    if (!node) return;
+    nodeScopes.set(node, scope);
+    if (node.type === "FunctionDeclaration") {
+      if (node.id) addBinding(scope, node.id, "function", node, node.async ? "asyncFunction" : "function");
+      const functionScope = createScope(scope, "function");
+      node.params.forEach((param) => addPatternBindings(functionScope, param, "parameter"));
+      buildBindings(node.body, functionScope);
+      return;
+    }
+    if (["FunctionExpression", "ArrowFunctionExpression"].includes(node.type)) {
+      const functionScope = createScope(scope, "function");
+      if (node.id) addBinding(functionScope, node.id, "function", node, node.async ? "asyncFunction" : "function");
+      node.params.forEach((param) => addPatternBindings(functionScope, param, "parameter"));
+      buildBindings(node.body, functionScope);
+      return;
+    }
+    if (node.type === "BlockStatement") {
+      const blockScope = createScope(scope, "block");
+      nodeScopes.set(node, blockScope);
+      node.body.forEach((statement) => buildBindings(statement, blockScope));
+      return;
+    }
+    if (node.type === "CatchClause") {
+      const catchScope = createScope(scope, "block");
+      nodeScopes.set(node, catchScope);
+      addPatternBindings(catchScope, node.param, "let");
+      buildBindings(node.body, catchScope);
+      return;
+    }
+    if (node.type === "VariableDeclaration") {
+      node.declarations.forEach((declaration) => {
+        addPatternBindings(scope, declaration.id, node.kind, declaration.init);
+        buildBindings(declaration.init, scope);
+      });
+      return;
+    }
+    if (node.type === "ClassDeclaration") {
+      if (node.id) addBinding(scope, node.id, "class", node, "function");
+      buildBindings(node.superClass, scope);
+      buildBindings(node.body, scope);
+      return;
+    }
+    if (node.type === "ImportDeclaration") {
+      node.specifiers.forEach((specifier) => addBinding(scope, specifier.local, "import", null, "unknown"));
+      return;
+    }
+    getJavaScriptChildEntries(node).forEach(([child]) => buildBindings(child, scope));
+  };
+  buildBindings(ast, rootScope);
+
+  const resolveBinding = (scope, name) => {
+    let current = scope;
+    while (current) {
+      if (current.bindings.has(name)) return current.bindings.get(name);
+      current = current.parent;
+    }
+    return null;
+  };
+  const mutatedBindings = new Set();
+  const collectMutatedBindings = (node) => {
+    if (!node) return;
+    const target = node.type === "AssignmentExpression"
+      ? node.left
+      : node.type === "UpdateExpression"
+        ? node.argument
+        : null;
+    if (target?.type === "Identifier") {
+      const binding = resolveBinding(nodeScopes.get(node) || rootScope, target.name);
+      if (binding) mutatedBindings.add(binding);
+    }
+    getJavaScriptChildEntries(node).forEach(([child]) => collectMutatedBindings(child));
+  };
+  collectMutatedBindings(ast);
+  const inferType = (node, scope) => {
+    const simple = inferSimpleType(node);
+    if (simple !== "unknown") return simple;
+    if (node?.type === "Identifier") {
+      if (node.name === "undefined") return "undefined";
+      const binding = resolveBinding(scope, node.name);
+      return binding && !mutatedBindings.has(binding) ? binding.type : "unknown";
+    }
+    if (node?.type === "AwaitExpression") return "unknown";
+    if (node?.type === "BinaryExpression") {
+      if (["==", "===", "!=", "!==", "<", "<=", ">", ">=", "in", "instanceof"].includes(node.operator)) return "boolean";
+      if (node.operator === "+" && (inferType(node.left, scope) === "string" || inferType(node.right, scope) === "string")) return "string";
+      return "number";
+    }
+    if (node?.type === "LogicalExpression") return "unknown";
+    if (node?.type === "CallExpression") return "unknown";
+    return "unknown";
+  };
+  allBindings.forEach((binding) => {
+    if (binding.type === "unknown" && binding.init) binding.type = inferType(binding.init, binding.scope);
+  });
+
+  const report = (node, type, category, title, why, fix) => {
+    if (!node || issueCount >= 40) return;
+    const localLine = Math.max(1, Number(node.loc?.start?.line || 1));
+    const line = localLine + lineOffset;
+    const col = Math.max(1, Number(node.loc?.start?.column || 0) + 1 + (localLine === 1 ? firstLineColumnOffset : 0));
+    const key = `${category}:${title}:${Number(node.start || 0)}`;
+    if (emitted.has(key)) return;
+    emitted.add(key);
+    issueCount++;
+    const details = { language: "JavaScript", category, title, why, fix };
+    emitDiagnostic(
+      type,
+      `[${fileName}] ${category} at line ${line}:${col}: ${title}. Why: ${why} Fix: ${fix}`,
+      { fileName, line, col, length: Math.max(1, Number(node.end || 0) - Number(node.start || 0)) },
+      details,
+    );
+  };
+  const visibleNames = (scope) => {
+    const names = new Set([...JAVASCRIPT_DIAGNOSTIC_GLOBALS, ...externalIdentifiers]);
+    let current = scope;
+    while (current) {
+      current.bindings.forEach((_binding, name) => names.add(name));
+      current = current.parent;
+    }
+    return [...names];
+  };
+  const isReferenceIdentifier = (node, parent, key) => {
+    if (!parent) return false;
+    if ((parent.type === "VariableDeclarator" && key === "id") ||
+        (["FunctionDeclaration", "FunctionExpression", "ClassDeclaration", "ClassExpression"].includes(parent.type) && key === "id") ||
+        (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(parent.type) && key === "params") ||
+        (parent.type === "MemberExpression" && key === "property" && !parent.computed) ||
+        (parent.type === "Property" && key === "key" && !parent.computed && !parent.shorthand) ||
+        (parent.type === "MethodDefinition" && key === "key" && !parent.computed) ||
+        (parent.type === "ExportSpecifier" && key === "exported") ||
+        parent.type === "MetaProperty" ||
+        parent.type === "LabeledStatement" ||
+        ((parent.type === "BreakStatement" || parent.type === "ContinueStatement") && key === "label") ||
+        parent.type.startsWith("Import") ||
+        (parent.type === "CatchClause" && key === "param")) return false;
+    return true;
+  };
+  const isInsideControlTest = (node, ancestors) => {
+    let current = node;
+    for (let index = ancestors.length - 1; index >= 0; index--) {
+      const parent = ancestors[index];
+      if (["IfStatement", "WhileStatement", "DoWhileStatement", "ForStatement", "ConditionalExpression"].includes(parent.type)) {
+        return parent.test === current;
+      }
+      current = parent;
+    }
+    return false;
+  };
+  const containsNodeType = (node, wantedTypes) => {
+    if (!node) return false;
+    if (wantedTypes.has(node.type)) return true;
+    return getJavaScriptChildEntries(node).some(([child]) => containsNodeType(child, wantedTypes));
+  };
+  const staticNumber = (node) => {
+    if (node?.type === "Literal" && typeof node.value === "number") return node.value;
+    if (node?.type === "UnaryExpression" && node.operator === "-" && node.argument?.type === "Literal" && typeof node.argument.value === "number") {
+      return -node.argument.value;
+    }
+    return null;
+  };
+  const getAsyncCallbackWrites = (statement) => {
+    const writes = new Map();
+    const collectWrites = (node) => {
+      if (!node) return;
+      if ((node.type === "AssignmentExpression" || node.type === "UpdateExpression")) {
+        const target = node.type === "AssignmentExpression" ? node.left : node.argument;
+        if (target?.type === "Identifier" && !writes.has(target.name)) writes.set(target.name, target);
+      }
+      getJavaScriptChildEntries(node).forEach(([child]) => collectWrites(child));
+    };
+    const findAsyncCallbacks = (node) => {
+      if (!node) return;
+      if (node.type === "CallExpression") {
+        const isTimer = node.callee?.type === "Identifier" &&
+          ["setTimeout", "setInterval", "queueMicrotask", "requestAnimationFrame"].includes(node.callee.name);
+        const isPromiseStep = node.callee?.type === "MemberExpression" && !node.callee.computed &&
+          ["then", "catch", "finally"].includes(node.callee.property?.name);
+        if (isTimer || isPromiseStep) {
+          node.arguments
+            .filter((argument) => ["FunctionExpression", "ArrowFunctionExpression"].includes(argument.type))
+            .forEach((callback) => collectWrites(callback.body));
+        }
+      }
+      getJavaScriptChildEntries(node).forEach(([child]) => findAsyncCallbacks(child));
+    };
+    findAsyncCallbacks(statement);
+    return writes;
+  };
+  const findImmediateIdentifierRead = (node, name, parent = null, key = "") => {
+    if (!node) return null;
+    if (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "ClassDeclaration", "ClassExpression"].includes(node.type)) return null;
+    if (node.type === "Identifier" && node.name === name && isReferenceIdentifier(node, parent, key)) {
+      if (!(parent?.type === "AssignmentExpression" && key === "left") &&
+          !(parent?.type === "UpdateExpression" && key === "argument")) return node;
+    }
+    for (const [child, childKey] of getJavaScriptChildEntries(node)) {
+      const match = findImmediateIdentifierRead(child, name, node, childKey);
+      if (match) return match;
+    }
+    return null;
+  };
+
+  const inspect = (node, parent = null, key = "", ancestors = []) => {
+    if (!node) return;
+    const scope = nodeScopes.get(node) || (parent ? nodeScopes.get(parent) : rootScope) || rootScope;
+
+    if ((node.type === "Program" || node.type === "BlockStatement") && Array.isArray(node.body)) {
+      node.body.forEach((statement, index) => {
+        getAsyncCallbackWrites(statement).forEach((_writeNode, name) => {
+          for (let nextIndex = index + 1; nextIndex < node.body.length; nextIndex++) {
+            const read = findImmediateIdentifierRead(node.body[nextIndex], name);
+            if (!read) continue;
+            report(read, "warn", "Async Warning", `“${name}” may be read before asynchronous code assigns it`,
+              "Promise and timer callbacks run later, so execution can reach this read while the old value is still present.",
+              `Await the asynchronous result, or move the code that reads ${name} into the callback after the assignment.`);
+            break;
+          }
+        });
+      });
+    }
+
+    if (node.type === "Identifier" && isReferenceIdentifier(node, parent, key)) {
+      const binding = resolveBinding(scope, node.name);
+      if (binding && ["let", "const", "class"].includes(binding.kind) && Number(node.start) < binding.declarationStart) {
+        report(node, "error", "Reference Error", `“${node.name}” is used before it is declared`,
+          "let, const and class declarations stay unavailable in the temporal dead zone until execution reaches them.",
+          `Move the declaration of ${node.name} above this use.`);
+      } else if (!binding && !JAVASCRIPT_DIAGNOSTIC_GLOBALS.has(node.name) && !externalIdentifiers.has(node.name)) {
+        const sameName = allBindings.find((item) => item.name === node.name);
+        const caseMatch = [...allBindings.map((item) => item.name), ...externalIdentifiers]
+          .find((name) => name !== node.name && name.toLowerCase() === node.name.toLowerCase());
+        const closest = caseMatch || findClosestSuggestion(node.name, visibleNames(scope), Math.min(4, Math.max(2, Math.ceil(node.name.length / 3))));
+        if (sameName) {
+          report(node, "error", "Reference Error", `“${node.name}” is outside its scope`,
+            "The name exists, but it was declared inside a different function or block.",
+            `Move the declaration into this scope, return the value, or pass ${node.name} as an argument.`);
+        } else if (caseMatch) {
+          report(node, "error", "Reference Error", `Capitalization does not match “${caseMatch}”`,
+            "JavaScript names are case-sensitive, so differently capitalized spellings refer to different variables.",
+            `Change ${node.name} to ${caseMatch}.`);
+        } else {
+          report(node, "error", "Reference Error", `“${node.name}” is not declared`,
+            closest ? `No matching declaration was found; “${closest}” is the closest visible name.` : "No matching variable, function or built-in name is visible in this scope.",
+            closest ? `Change it to ${closest}, or declare ${node.name} before using it.` : `Declare ${node.name} with let, const, var or function before using it.`);
+        }
+      }
+    }
+
+    if (node.type === "AssignmentExpression" && node.left?.type === "Identifier") {
+      const binding = resolveBinding(scope, node.left.name);
+      if (binding?.kind === "const") {
+        report(node.left, "error", "Type Error", `Constant “${node.left.name}” is reassigned`,
+          "A const binding can receive its value only once.",
+          `Use let instead of const if ${node.left.name} must change, or remove this assignment.`);
+      }
+      if (node.operator === "=" && isInsideControlTest(node, ancestors)) {
+        report(node, "warn", "Logic Warning", "Assignment is used as a condition",
+          "A single = changes the variable and tests the assigned value instead of comparing two values.",
+          "Use === for a strict comparison, unless assigning here is intentional." );
+      }
+    }
+    if (node.type === "UpdateExpression" && node.argument?.type === "Identifier") {
+      const binding = resolveBinding(scope, node.argument.name);
+      if (binding?.kind === "const") {
+        report(node.argument, "error", "Type Error", `Constant “${node.argument.name}” is modified`,
+          "Increment and decrement operators reassign their target, which const does not allow.",
+          `Declare ${node.argument.name} with let if it needs to change.`);
+      }
+    }
+
+    if (node.type === "MemberExpression") {
+      const objectType = inferType(node.object, scope);
+      const propertyName = !node.computed && node.property?.type === "Identifier" ? node.property.name : "";
+      if (["null", "undefined"].includes(objectType) && !node.optional) {
+        report(node, "error", "Type Error", `A property is read from ${objectType}`,
+          `${objectType} has no properties, so this access will stop execution.`,
+          "Check the value before reading it, use optional chaining (value?.property), or provide a fallback.");
+      }
+      const invalidMethods = {
+        number: new Set(["toUpperCase", "toLowerCase", "trim", "push", "pop", "map", "filter"]),
+        string: new Set(["toFixed", "push", "pop", "map", "filter"]),
+        boolean: new Set(["toUpperCase", "toLowerCase", "trim", "toFixed", "push", "map"]),
+        array: new Set(["toUpperCase", "toLowerCase", "trim", "toFixed"]),
+      };
+      if (propertyName && invalidMethods[objectType]?.has(propertyName)) {
+        report(node.property, "error", "Type Error", `.${propertyName}() does not exist on ${objectType} values`,
+          `The value's known type is ${objectType}, and that method belongs to another type.`,
+          `Use a ${objectType}-compatible method or convert the value before calling .${propertyName}().`);
+      }
+    }
+
+    if (node.type === "CallExpression") {
+      if (node.callee?.type === "Identifier") {
+        const binding = resolveBinding(scope, node.callee.name);
+        const bindingType = binding && !mutatedBindings.has(binding) ? binding.type : "unknown";
+        if (binding && !["unknown", "function", "asyncFunction"].includes(bindingType)) {
+          report(node.callee, "error", "Type Error", `“${node.callee.name}” is called but is not a function`,
+            `Its known value is a ${bindingType}.`,
+            `Remove the parentheses or assign a function to ${node.callee.name}.`);
+        }
+        if ((bindingType === "asyncFunction" || node.callee.name === "fetch") && parent?.type === "ExpressionStatement") {
+          report(node, "warn", "Async Warning", "Promise starts without await or explicit handling",
+            "The next statement can run before this asynchronous work finishes, and a rejection may go unhandled.",
+            "Use await inside an async function, or return the promise and add .then(...).catch(...)." );
+        }
+      }
+      if (node.callee?.type === "MemberExpression" && !node.callee.computed && node.callee.property?.name === "then" && parent?.type === "ExpressionStatement") {
+        if (node.arguments.length < 2) {
+          report(node, "warn", "Async Warning", "Promise chain has no rejection handler",
+            "If this promise rejects, nothing in the chain handles the failure.",
+            "Add .catch(error => { ... }) or pass a rejection handler as the second argument to .then()." );
+        }
+      }
+    }
+
+    if (node.type === "NewExpression" && node.callee?.type === "Identifier" && node.callee.name === "Array") {
+      const lengthValue = staticNumber(node.arguments[0]);
+      if (lengthValue !== null && (!Number.isInteger(lengthValue) || lengthValue < 0 || lengthValue > 4294967295)) {
+        report(node, "error", "Range Error", "Array length is outside the allowed range",
+          "Array lengths must be whole numbers from 0 through 4,294,967,295.",
+          "Use a non-negative whole-number length, or create an array containing the value with [value]." );
+      }
+    }
+
+    if (node.type === "BinaryExpression" && ["==", "!="].includes(node.operator)) {
+      report(node, "warn", "Beginner Warning", `Loose comparison ${node.operator} can coerce types`,
+        "JavaScript may convert one side before comparing, which can make unrelated-looking values match.",
+        `Prefer ${node.operator === "==" ? "===" : "!=="} unless type coercion is intentional.`);
+    }
+    if (node.type === "BinaryExpression" && node.operator === "<=" && node.right?.type === "MemberExpression" && !node.right.computed && node.right.property?.name === "length") {
+      report(node, "warn", "Logic Warning", "Loop boundary may go one item past the array",
+        "The last valid array index is length - 1, so an index equal to length is already outside the array.",
+        "Use index < array.length for a normal forward loop." );
+    }
+    if (node.type === "LogicalExpression" && node.left?.type === "BinaryExpression" && node.right?.type === "BinaryExpression") {
+      const sameLeft = source.slice(node.left.left.start, node.left.left.end) === source.slice(node.right.left.start, node.right.left.end);
+      if (sameLeft && node.operator === "||" && ["!==", "!="].includes(node.left.operator) && node.left.operator === node.right.operator) {
+        report(node, "warn", "Logic Warning", "This OR condition is always true",
+          "A value cannot equal both alternatives at once, so it will always be unequal to at least one of them.",
+          "Use && between the not-equal comparisons." );
+      } else if (sameLeft && node.operator === "&&" && ["===", "=="].includes(node.left.operator) && node.left.operator === node.right.operator) {
+        report(node, "warn", "Logic Warning", "This AND condition cannot be true",
+          "One value cannot equal two different alternatives at the same time.",
+          "Use || between the equality comparisons." );
+      }
+    }
+
+    if (node.type === "IfStatement" && node.consequent?.type !== "BlockStatement") {
+      report(node.consequent, "warn", "Beginner Warning", "if branch has no braces",
+        "Only the next statement belongs to the branch; later indentation does not change JavaScript's behavior.",
+        "Wrap the branch in { } so added statements remain inside it." );
+    }
+    if (["IfStatement", "WhileStatement", "ForStatement"].includes(node.type) && node.body?.type === "EmptyStatement") {
+      report(node.body, "warn", "Logic Warning", "An extra semicolon creates an empty branch or loop",
+        "The semicolon is treated as the entire body, so the following block runs separately.",
+        "Remove the semicolon immediately after the condition." );
+    }
+    if ((node.type === "WhileStatement" && node.test?.type === "Literal" && node.test.value === true) ||
+        (node.type === "ForStatement" && !node.test)) {
+      if (!containsNodeType(node.body, new Set(["BreakStatement", "ReturnStatement", "ThrowStatement"]))) {
+        report(node, "warn", "Logic Warning", "Loop has no visible exit path",
+          "Its condition never becomes false and the body contains no break, return or throw.",
+          "Update the loop condition or add a reachable exit path." );
+      }
+    }
+    if (node.type === "FunctionDeclaration" && node.id && node.body?.body?.length === 1) {
+      const onlyStatement = node.body.body[0];
+      const expression = onlyStatement.type === "ReturnStatement" ? onlyStatement.argument : onlyStatement.expression;
+      if (expression?.type === "CallExpression" && expression.callee?.type === "Identifier" && expression.callee.name === node.id.name) {
+        report(expression, "error", "Range Error", `“${node.id.name}” calls itself without a base case`,
+          "Every call immediately creates another call, eventually overflowing the maximum call stack.",
+          "Add a condition that returns a result without calling the function again." );
+      }
+    }
+
+    const nextAncestors = [...ancestors, node];
+    getJavaScriptChildEntries(node).forEach(([child, childKey]) => inspect(child, node, childKey, nextAncestors));
+  };
+  inspect(ast);
+  return issueCount;
+}
+
 function analyzeCssSource(code, fileName, emitDiagnostic, options = {}) {
   const source = String(code || "");
   const lineOffset = Math.max(0, Number(options.lineOffset || 0));
@@ -11403,12 +11930,32 @@ function getProjectFilesForAutomaticDiagnostics() {
 
 function runPreflightDiagnostics(targetEntries = null) {
   const diagnosticFiles = getProjectFilesForAutomaticDiagnostics();
-  const emitDiagnostic = (type, message, location = null) => {
+  const emitDiagnostic = (type, message, location = null, details = null) => {
     if (Array.isArray(targetEntries)) {
-      targetEntries.push({ type, message, location });
+      targetEntries.push({ type, message, location, details });
       return;
     }
     appendConsoleMessage(type, message);
+  };
+  const declaredIdentifiersByFile = new Map();
+  diagnosticFiles.forEach((file) => {
+    const names = new Set();
+    if (file.type === "js") {
+      collectDeclaredJavaScriptIdentifiers(file.content).forEach((name) => names.add(name));
+    } else if (file.type === "html") {
+      getHtmlRawTextSegments(file.content || "", "script")
+        .filter((segment) => !segment.attributes.some((attribute) => attribute.name === "src"))
+        .forEach((segment) => collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name)));
+    }
+    declaredIdentifiersByFile.set(file.name, names);
+  });
+  const getExternalIdentifiers = (currentFileName) => {
+    const names = new Set();
+    declaredIdentifiersByFile.forEach((fileNames, fileName) => {
+      if (fileName === currentFileName) return;
+      fileNames.forEach((name) => names.add(name));
+    });
+    return names;
   };
   // Acorn is the syntax authority. Valid JavaScript never falls through to
   // heuristic token checks that can confuse regex literals, decimals, or JSX-like strings.
@@ -11417,16 +11964,24 @@ function runPreflightDiagnostics(targetEntries = null) {
     .forEach((file) => {
       const parserError = getAcornJavaScriptSyntaxError(file.content);
       if (parserError && !parserError.unavailable) {
+        const details = getJavaScriptSyntaxDiagnosticDetails(parserError, file.content);
         emitDiagnostic(
           "error",
-          `[${file.name}] JavaScript SyntaxError at line ${parserError.line}:${parserError.col}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
+          `[${file.name}] Syntax Error at line ${parserError.line}:${parserError.col}: ${details.title}. Why: ${details.why} Fix: ${details.fix}`,
           {
             fileName: file.name,
             line: parserError.line,
             col: parserError.col,
             length: parserError.length,
           },
+          details,
         );
+      } else if (parserError?.unavailable) {
+        analyzeJavaScriptSource(file.content || "", file.name, emitDiagnostic);
+      } else if (!isLargeEditorContent(file.content || "")) {
+        analyzeJavaScriptSemantics(file.content || "", file.name, emitDiagnostic, {
+          externalIdentifiers: getExternalIdentifiers(file.name),
+        });
       }
     });
 
@@ -11455,15 +12010,30 @@ function runPreflightDiagnostics(targetEntries = null) {
         );
         const parserError = getAcornJavaScriptSyntaxError(scriptCode);
         if (parserError && !parserError.unavailable) {
+          const details = getJavaScriptSyntaxDiagnosticDetails(parserError, scriptCode);
           const absLine = scriptContentStart.line + parserError.line - 1;
           const absCol = parserError.line === 1
             ? scriptContentStart.col + parserError.col - 1
             : parserError.col;
           emitDiagnostic(
             "error",
-            `[${htmlFile.name}] Inline JavaScript SyntaxError at line ${absLine}:${absCol}: ${parserError.message}. Fix: ${getErrorHint(parserError.message)}`,
+            `[${htmlFile.name}] Syntax Error at line ${absLine}:${absCol}: ${details.title}. Why: ${details.why} Fix: ${details.fix}`,
             { fileName: htmlFile.name, line: absLine, col: absCol, length: parserError.length },
+            details,
           );
+        } else if (parserError?.unavailable) {
+          analyzeJavaScriptSource(scriptCode, htmlFile.name, emitDiagnostic, {
+            lineOffset: scriptContentStart.line - 1,
+            firstLineColumnOffset: scriptContentStart.col - 1,
+          });
+        } else if (!isLargeEditorContent(scriptCode)) {
+          const inlineExternalIdentifiers = getExternalIdentifiers(htmlFile.name);
+          declaredIdentifiersByFile.get(htmlFile.name)?.forEach((name) => inlineExternalIdentifiers.add(name));
+          analyzeJavaScriptSemantics(scriptCode, htmlFile.name, emitDiagnostic, {
+            lineOffset: scriptContentStart.line - 1,
+            firstLineColumnOffset: scriptContentStart.col - 1,
+            externalIdentifiers: inlineExternalIdentifiers,
+          });
         }
       });
 
@@ -11479,12 +12049,27 @@ function runPreflightDiagnostics(targetEntries = null) {
     });
 }
 
-function refreshDiagnosticsState() {
+function performDiagnosticsRefresh() {
   const diagnostics = [];
   runPreflightDiagnostics(diagnostics);
   latestDiagnostics = diagnostics;
   applyDiagnosticEntriesToFileErrors(diagnostics);
   renderDiagnosticConsoleEntries(diagnostics);
+}
+
+function refreshDiagnosticsState() {
+  if (diagnosticsRefreshTimer) {
+    clearTimeout(diagnosticsRefreshTimer);
+    diagnosticsRefreshTimer = null;
+  }
+  if (activeFile && isLargeEditorContent(activeFile.content || "")) {
+    diagnosticsRefreshTimer = setTimeout(() => {
+      diagnosticsRefreshTimer = null;
+      performDiagnosticsRefresh();
+    }, 420);
+    return;
+  }
+  performDiagnosticsRefresh();
 }
 
 function updatePreview() {
@@ -12129,7 +12714,39 @@ function renderDiagnosticConsoleEntries(entries) {
     if (!entry) return;
     const line = document.createElement("div");
     line.className = `${entry.type || "info"} codx-diagnostic-line`;
-    if (entry.type === "error" && String(entry.message || "").includes("Fix:")) {
+    if (entry.details?.language === "JavaScript") {
+      line.classList.add("codx-smart-js-diagnostic");
+      const header = document.createElement("div");
+      header.className = "codx-smart-js-header";
+      const category = document.createElement("span");
+      category.className = "codx-smart-js-category";
+      category.textContent = entry.details.category || "JavaScript Diagnostic";
+      header.appendChild(category);
+      if (entry.location?.fileName) {
+        const location = document.createElement("span");
+        location.className = "codx-smart-js-location";
+        location.textContent = `${entry.location.fileName}:${entry.location.line || 1}:${entry.location.col || 1}`;
+        header.appendChild(location);
+      }
+      const title = document.createElement("div");
+      title.className = "codx-smart-js-title";
+      title.textContent = entry.details.title || "JavaScript issue";
+      const why = document.createElement("div");
+      why.className = "codx-smart-js-why";
+      const whyLabel = document.createElement("strong");
+      whyLabel.textContent = "Why it happens";
+      const whyText = document.createElement("span");
+      whyText.textContent = entry.details.why || "JavaScript cannot safely evaluate this code.";
+      why.append(whyLabel, whyText);
+      const fix = document.createElement("div");
+      fix.className = "codx-smart-js-fix";
+      const fixLabel = document.createElement("strong");
+      fixLabel.textContent = "Suggested fix";
+      const fixText = document.createElement("span");
+      fixText.textContent = entry.details.fix || "Review the highlighted expression.";
+      fix.append(fixLabel, fixText);
+      line.append(header, title, why, fix);
+    } else if (entry.type === "error" && String(entry.message || "").includes("Fix:")) {
       const parts = String(entry.message).split("Fix:");
       line.innerHTML = `${escapeHtml(parts[0].trim())} <span class="error-fix">Fix: ${escapeHtml(parts.slice(1).join("Fix:").trim())}</span>`;
     } else {
@@ -23830,7 +24447,7 @@ const UI_TRANSLATION_EXCLUDED_SELECTOR = [
   "script", "style", "textarea", "input", "select", "option", "pre", "code", "iframe",
   '[contenteditable="true"]', '[translate="no"]', "[data-no-translate]",
   "#activeEditor", "#syntaxHighlightLayer", "#remoteCursorLayer", "#fileList",
-  "#suggestionPopup", "#consoleOutput", "#developerConsoleOutput", "#nodeTerminal",
+  "#suggestionPopup", "#consoleOutput", "#developerToolStatus", "#nodeTerminal",
   "#githubRepoModalBody", "#collabChatMessages", ".codx-notification",
 ].join(",");
 let activeUiLanguage = "en";
