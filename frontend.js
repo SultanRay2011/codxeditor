@@ -978,11 +978,14 @@ let pendingHistorySnapshot = null;
 let isRestoringEditorHistory = false;
 let editorDecorationTimer = null;
 let editorScrollFrame = null;
+const EDITOR_DECORATION_TYPING_IDLE_MS = 90;
+const EDITOR_SUGGESTION_TYPING_IDLE_MS = 60;
 
 // ADDED: Tag suggestion elements
 const suggestionPopup = document.getElementById("suggestionPopup");
 let activeSuggestion = -1;
 let activeCssColorPicker = null;
+let suggestionRefreshTimer = null;
 
 const selfClosingTags = [
   "img",
@@ -5033,7 +5036,7 @@ let projectFiles = [
             <li>Reorder file tabs by dragging on laptops, using the grip with the arrow, Home, or End keys, or tapping the earlier/later controls on touch devices; the order stays with saved, exported, transferred, and shared projects</li>
             <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
-            <li>Incomplete JavaScript stays responsive while you type because Auto-Run waits for a short pause and diagnostics avoid duplicate Console, file-tab, and error-highlight rendering</li>
+            <li>HTML, CSS, JavaScript, inline code, JSON, environment files, and plain text stay responsive while you type because Auto-Run, syntax colors, suggestions, project learning, diagnostics, and error highlights use coordinated idle scheduling</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
@@ -13129,7 +13132,9 @@ function scheduleEditorDecorations(textarea, options = {}) {
     render();
     return;
   }
-  const delay = textarea.value.length >= 32 * 1024 ? 90 : 24;
+  const delay = textarea.value.length >= 32 * 1024
+    ? EDITOR_DECORATION_TYPING_IDLE_MS * 2
+    : EDITOR_DECORATION_TYPING_IDLE_MS;
   editorDecorationTimer = setTimeout(() => requestAnimationFrame(render), delay);
 }
 
@@ -14147,8 +14152,8 @@ function initializeEditor() {
     } else {
       announceTyping(activeFile.type + "Code");
 
-      // ADDED: Handle suggestions
-      handleSuggestions(e);
+      // Keep suggestion parsing and popup layout outside the keystroke itself.
+      scheduleEditorSuggestions(editor);
     }
     syncInlineHtmlCorrectionDisplay(editor);
     if (isHistoryRestore) {
@@ -14233,6 +14238,29 @@ function initializeEditor() {
 }
 
 // PART 6.5 - TAG SUGGESTIONS
+
+function scheduleEditorSuggestions(editor) {
+  clearTimeout(suggestionRefreshTimer);
+  suggestionRefreshTimer = null;
+  if (suggestionPopup.style.display === "block") hideSuggestions();
+  if (!editor || editor !== document.getElementById("activeEditor")) return;
+  const scheduledFileName = String(activeFile?.name || "");
+  const scheduledValueLength = editor.value.length;
+  const delay = scheduledValueLength >= 32 * 1024
+    ? EDITOR_SUGGESTION_TYPING_IDLE_MS * 2
+    : EDITOR_SUGGESTION_TYPING_IDLE_MS;
+  suggestionRefreshTimer = setTimeout(() => {
+    suggestionRefreshTimer = null;
+    if (
+      editor !== document.getElementById("activeEditor") ||
+      String(activeFile?.name || "") !== scheduledFileName ||
+      editor.value.length !== scheduledValueLength
+    ) {
+      return;
+    }
+    handleSuggestions({ target: editor });
+  }, delay);
+}
 
 /**
  * Handles the editor's 'input' event to show/hide suggestions.
@@ -14511,6 +14539,8 @@ function handleSuggestions(e) {
  * Hides tag suggestion popup and resets active item.
  */
 function hideSuggestions() {
+  clearTimeout(suggestionRefreshTimer);
+  suggestionRefreshTimer = null;
   closeCssColorPicker();
   suggestionPopup.style.display = "none";
   suggestionPopup.innerHTML = "";
@@ -14861,6 +14891,8 @@ function __codxLearnFromProjectCache() {
 }
 
 let __codxProjectScannerTimer = null;
+let __codxProjectScannerIdleCallback = null;
+let __codxProjectScannerFallbackTimer = null;
 function __codxGetSuggestionScanFiles(files) {
   return (files || []).map((file) => {
     const content = String(file?.content || "");
@@ -14874,22 +14906,40 @@ function __codxGetSuggestionScanFiles(files) {
 
 function __codxRescanProjectSuggestionCacheSoon() {
   clearTimeout(__codxProjectScannerTimer);
+  clearTimeout(__codxProjectScannerFallbackTimer);
+  __codxProjectScannerFallbackTimer = null;
+  if (__codxProjectScannerIdleCallback !== null && typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(__codxProjectScannerIdleCallback);
+  }
+  __codxProjectScannerIdleCallback = null;
   const scanDelay = isLargeEditorContent(activeFile?.content || "") ? 1800 : 300;
   __codxProjectScannerTimer = setTimeout(() => {
-    const nextHash = __codxHashProjectFiles(projectFiles);
-    if (nextHash === __codxProjectSuggestionCache.hash) return;
-    __codxProjectSuggestionCache.hash = nextHash;
+    __codxProjectScannerTimer = null;
+    const scanProjectSuggestions = () => {
+      __codxProjectScannerIdleCallback = null;
+      const nextHash = __codxHashProjectFiles(projectFiles);
+      if (nextHash === __codxProjectSuggestionCache.hash) return;
+      __codxProjectSuggestionCache.hash = nextHash;
 
-    // Build caches
-    try {
-      const scanFiles = __codxGetSuggestionScanFiles(projectFiles);
-      __codxProjectSuggestionCache.html = __codxTokenizeHtml(scanFiles);
-      __codxProjectSuggestionCache.css = __codxTokenizeCss(scanFiles);
-      __codxProjectSuggestionCache.js = __codxTokenizeJs(scanFiles);
-      __codxProjectSuggestionCache.env = __codxTokenizeEnv(scanFiles);
-      __codxLearnFromProjectCache();
-    } catch (e) {
-      // fail safe
+      // Build caches only when the browser has breathing room between edits.
+      try {
+        const scanFiles = __codxGetSuggestionScanFiles(projectFiles);
+        __codxProjectSuggestionCache.html = __codxTokenizeHtml(scanFiles);
+        __codxProjectSuggestionCache.css = __codxTokenizeCss(scanFiles);
+        __codxProjectSuggestionCache.js = __codxTokenizeJs(scanFiles);
+        __codxProjectSuggestionCache.env = __codxTokenizeEnv(scanFiles);
+        __codxLearnFromProjectCache();
+      } catch (e) {
+        // fail safe
+      }
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      __codxProjectScannerIdleCallback = window.requestIdleCallback(scanProjectSuggestions, { timeout: 1200 });
+    } else {
+      __codxProjectScannerFallbackTimer = setTimeout(() => {
+        __codxProjectScannerFallbackTimer = null;
+        scanProjectSuggestions();
+      }, 250);
     }
   }, scanDelay);
 }
