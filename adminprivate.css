@@ -1298,6 +1298,105 @@ p {
   line-height: 1.45;
 }
 
+/* Latest user-created publish links */
+.latest-links-panel {
+  margin-top: 20px;
+}
+
+.latest-links-heading {
+  align-items: flex-end;
+}
+
+.latest-links-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 14px;
+}
+
+.latest-link-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px 12px;
+  min-width: 0;
+  border: 1px solid #dce9e0;
+  border-radius: 15px;
+  padding: 13px;
+  background: linear-gradient(145deg, #ffffff, #f7fcf9);
+  box-shadow: 0 8px 20px rgba(15, 78, 39, 0.04);
+}
+
+.latest-link-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  background: #def8e7;
+  color: #0b7939;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.latest-link-copy {
+  min-width: 0;
+}
+
+.latest-link-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.latest-link-title strong {
+  overflow: hidden;
+  color: #173722;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.latest-link-title span {
+  flex: 0 0 auto;
+  color: #8a9b90;
+  font-size: 8px;
+}
+
+.latest-link-copy > a {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #168145;
+  font-size: 9px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.latest-link-copy > a:hover {
+  text-decoration: underline;
+}
+
+.latest-link-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.latest-link-actions .btn,
+.latest-link-actions .project-copy-btn {
+  min-height: 31px;
+  padding: 7px 10px;
+  font-size: 7px;
+}
+
+.latest-links-empty {
+  grid-column: 1 / -1;
+}
+
 /* Published projects */
 .projects-panel {
   margin-top: 20px;
@@ -1673,6 +1772,7 @@ p {
 
   .section-heading,
   .panel-heading,
+  .latest-links-heading,
   .projects-heading {
     align-items: stretch;
     flex-direction: column;
@@ -1683,6 +1783,7 @@ p {
   }
 
   .stats,
+  .latest-links-list,
   .projects-grid,
   .side-stack {
     grid-template-columns: 1fr;
@@ -1695,6 +1796,11 @@ p {
   .panel-card {
     border-radius: 15px;
     padding: 15px;
+  }
+
+  .latest-link-actions .btn,
+  .latest-link-actions .project-copy-btn {
+    flex: 1 1 105px;
   }
 
   .session-head {

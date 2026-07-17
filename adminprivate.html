@@ -387,7 +387,7 @@
       }
     </style>
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/adminprivate.css?v=20260715-premium4" />
+    <link rel="stylesheet" href="/adminprivate.css?v=20260717-created-links1" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
@@ -505,6 +505,18 @@
 
           <section class="grid stats" id="statsGrid" aria-label="System overview"></section>
 
+          <section class="card panel-card latest-links-panel" id="latestLinksPanel">
+            <div class="panel-heading latest-links-heading">
+              <div>
+                <span class="section-label">Freshly published</span>
+                <h2>Latest created links</h2>
+                <p>New Publish / Share links appear here automatically as soon as a user creates them.</p>
+              </div>
+              <a class="btn secondary" href="#projectsPanel">VIEW ALL PROJECTS</a>
+            </div>
+            <div id="latestLinks" class="latest-links-list" aria-live="polite"></div>
+          </section>
+
           <section class="grid main-grid">
             <div class="card panel-card" id="sessionsPanel">
               <div class="panel-heading">
@@ -575,6 +587,7 @@
       const logoutBtn = document.getElementById("logoutBtn");
       const copyAllBtn = document.getElementById("copyAllBtn");
       const projectsEl = document.getElementById("projects");
+      const latestLinksEl = document.getElementById("latestLinks");
       const projectSearch = document.getElementById("projectSearch");
       const projectSummary = document.getElementById("projectSummary");
       const sessionNavCount = document.getElementById("sessionNavCount");
@@ -700,6 +713,7 @@
         renderActivity(activity.activity || []);
         publishedProjects = projectData.projects || [];
         projectApiUnavailable = Boolean(projectData.unavailable);
+        renderLatestLinks(publishedProjects);
         renderProjects(publishedProjects);
         sessionNavCount.textContent = String(overview.sessions.length);
         projectNavCount.textContent = String(publishedProjects.length);
@@ -879,6 +893,35 @@
               </article>
             `;
           })
+          .join("");
+      }
+
+      function renderLatestLinks(projects) {
+        const latest = [...projects]
+          .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+          .slice(0, 4);
+        if (!latest.length) {
+          latestLinksEl.innerHTML = `<div class="empty latest-links-empty">${projectApiUnavailable ? "Created links will appear after the server completes its next normal restart." : "No links have been created yet. A user's first Publish / Share link will appear here live."}</div>`;
+          return;
+        }
+        latestLinksEl.innerHTML = latest
+          .map((project) => `
+            <article class="latest-link-item">
+              <div class="latest-link-icon" aria-hidden="true">↗</div>
+              <div class="latest-link-copy">
+                <div class="latest-link-title">
+                  <strong>${escapeHtml(project.projectName || "Untitled project")}</strong>
+                  <span>${escapeHtml(formatRelativeTime(project.createdAt))}</span>
+                </div>
+                <a href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(project.shareLink)}</a>
+              </div>
+              <div class="latest-link-actions">
+                <button class="project-copy-btn" data-link="${escapeHtml(project.shareLink)}" aria-label="Copy ${escapeHtml(project.projectName || "project")} link">COPY</button>
+                <a class="btn secondary" href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">OPEN LIVE</a>
+                <a class="btn" href="${escapeHtml(project.editorLink)}" target="_blank" rel="noopener noreferrer">OPEN IN EDITOR</a>
+              </div>
+            </article>
+          `)
           .join("");
       }
 

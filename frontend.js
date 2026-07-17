@@ -5049,7 +5049,7 @@ let projectFiles = [
             <li>Add images, audio, and video with Add Media</li>
             <li>Connect GitHub to browse repositories and create, edit, upload, or commit files</li>
             <li>Start a collaboration session for shared files, chat, cursors, roles, and room controls</li>
-            <li>Authorized administrators get a premium Outfit-powered green-and-white control room with eight realtime metrics, complete live-session inspection, published-project search, and protected reopening in CodX Editor</li>
+            <li>Authorized administrators get a premium Outfit-powered green-and-white control room with eight realtime metrics, complete live-session inspection, live visibility of every newly created Publish / Share link, published-project search, and protected reopening in CodX Editor</li>
           </ul>
         </article>
 
