@@ -627,6 +627,7 @@
               <li><strong>True editor preview:</strong> the homepage hero now mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, colors, and phone workspace tabs.</li>
               <li><strong>Error-first console:</strong> JavaScript runtime errors and code diagnostics are promoted above logs, warnings, and informational output, and opening the Console focuses the error section first.</li>
               <li><strong>Smart JavaScript diagnostics:</strong> while you type, the Console uses JavaScript's parsed structure to classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes. Each diagnostic explains why the issue happens, suggests a contextual fix, and opens the exact source location without showing an extra popup notification.</li>
+              <li><strong>Inline JavaScript parity:</strong> JavaScript inside a standard or module <code>&lt;script&gt;</code> block now uses the same suggestions, current-file identifier ranking, auto-closing, indentation, syntax highlighting, diagnostics, and Format Code behavior as an external JavaScript file. JSON, import-map, data, and external-source script tags remain raw or externally linked instead of being treated as editable inline JavaScript.</li>
               <li><strong>Reorder files:</strong> drag file tabs into a new position on laptops, focus the grip and use the arrow, Home, or End keys, or use the earlier/later controls on touch devices. The order is retained in project saves, exports, transfers, and collaboration updates.</li>
               <li><strong>Consistent branding:</strong> interface messages, learning content, and administration pages use the complete <strong>CodX Editor</strong> name.</li>
               <li><strong>More:</strong> opens the Command Palette, saving, templates, publishing, GitHub, Node.js, fonts, icons, desktop Zen Mode, and navigation tools.</li>
@@ -778,6 +779,8 @@
                   <li>Use Emmet-style abbreviations such as <code>div&gt;ul&gt;li*3</code>, then press <kbd>Tab</kbd> to expand them. The caret is placed inside the generated tag, or inside the first editable child when the abbreviation is nested.</li>
                   <li>Brackets, quotes, braces, and common tag patterns are completed for you while typing.</li>
                   <li>In JavaScript, typing <code>(</code> immediately before an existing expression wraps it automatically. For example, <code>console.log|isStudent</code> becomes <code>console.log(|isStudent)</code>, keeping the caret inside the completed call.</li>
+                  <li>Inside a standard or <code>type="module"</code> HTML <code>&lt;script&gt;</code> block, suggestions, declared identifiers, bracket pairing, indentation, syntax colors, diagnostics, and formatting work the same way they do in an external <code>.js</code> file.</li>
+                  <li>Non-executable blocks such as <code>type="application/json"</code> and <code>type="importmap"</code>, plus script tags that use <code>src</code>, are not incorrectly treated as inline JavaScript.</li>
                 </ul>
               </article>
               <article class="feature-item">

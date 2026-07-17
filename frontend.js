@@ -4954,6 +4954,7 @@ let projectFiles = [
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
             <li>Accepting the JavaScript <code>function</code> suggestion inserts an anonymous function block and places the caret between its parameter parentheses</li>
+            <li>JavaScript inside a standard or module <code>&lt;script&gt;</code> block has the same suggestions, declared-identifier ranking, auto-closing, indentation, syntax colors, diagnostics, and Format Code behavior as an external JavaScript file</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
             <li>Smart JavaScript diagnostics classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes while you type, then show why each issue happened and a suggested fix in the Console without an extra popup</li>
             <li>Runtime errors include source-aware root-cause explanations, contextual fixes, the original stack trace, and access to the preserved Error object</li>
@@ -5610,11 +5611,50 @@ function formatBraceCode(content) {
   }).join("\n");
 }
 
+function dedentEmbeddedCode(content) {
+  const lines = String(content || "").replace(/\r\n?/g, "\n").split("\n");
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const indents = lines
+    .filter((line) => line.trim())
+    .map((line) => line.match(/^\s*/)?.[0].length || 0);
+  const commonIndent = indents.length ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(Math.min(commonIndent, line.length))).join("\n");
+}
+
 function formatHtmlCode(content) {
-  if (/<(pre|textarea|script|style)\b[^>]*>[\s\S]*\n[\s\S]*<\/\1>/i.test(content)) return null;
+  if (/<(pre|textarea)\b[^>]*>[\s\S]*\n[\s\S]*<\/\1>/i.test(content)) return null;
+  const tokens = scanHtmlTagTokens(content, () => {});
+  const rawTextStack = [];
+  tokens.forEach((token) => {
+    if (!["script", "style", "pre", "textarea"].includes(token.name) || token.selfClosing) return;
+    if (!token.isClosing) rawTextStack.push(token.name);
+    else {
+      const index = rawTextStack.lastIndexOf(token.name);
+      if (index !== -1) rawTextStack.splice(index, 1);
+    }
+  });
+  if (rawTextStack.length) return null;
+
+  const embeddedBlocks = [];
+  const embeddedSegments = [
+    ...getHtmlRawTextSegments(content, "script"),
+    ...getHtmlRawTextSegments(content, "style"),
+  ].filter((segment) => String(segment.code || "").trim()).sort((a, b) => b.start - a.start);
+  let protectedContent = String(content || "");
+  embeddedSegments.forEach((segment, reverseIndex) => {
+    const placeholder = `CODEXEMBEDDEDBLOCK${reverseIndex}PLACEHOLDER`;
+    const dedented = dedentEmbeddedCode(segment.code);
+    const formattedCode = segment.opening?.name === "style" || isJavaScriptScriptSegment(segment)
+      ? formatBraceCode(dedented)
+      : dedented;
+    embeddedBlocks.push({ placeholder, content: formattedCode });
+    protectedContent = `${protectedContent.slice(0, segment.start)}\n${placeholder}\n${protectedContent.slice(segment.end)}`;
+  });
+
   const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
   let depth = 0;
-  return content.split("\n").map((line) => {
+  let formattedHtml = protectedContent.split("\n").map((line) => {
     const trimmed = line.trim();
     if (!trimmed) return "";
     const leadingClose = /^<\//.test(trimmed) ? 1 : 0;
@@ -5629,6 +5669,17 @@ function formatHtmlCode(content) {
     depth = Math.max(0, depth + delta);
     return formatted;
   }).join("\n");
+
+  embeddedBlocks.forEach((block) => {
+    const placeholderLine = new RegExp(`^(\\s*)${block.placeholder}\\s*$`, "m");
+    formattedHtml = formattedHtml.replace(placeholderLine, (_match, baseIndent) =>
+      block.content
+        .split("\n")
+        .map((line) => line ? `${baseIndent}${line}` : "")
+        .join("\n"),
+    );
+  });
+  return formattedHtml;
 }
 
 function formatActiveEditorCode() {
@@ -5646,7 +5697,7 @@ function formatActiveEditorCode() {
     } else if (["html", "htm", "xml", "svg"].includes(type)) {
       formatted = formatHtmlCode(original);
       if (formatted === null) {
-        return { ok: false, message: "Formatting was skipped to protect whitespace inside a multiline script, style, or preformatted block." };
+        return { ok: false, message: "Formatting was skipped because a preformatted block or embedded code block is incomplete." };
       }
     } else return { ok: false, message: `Formatting is not available for .${type || "text"} files.` };
   } catch (error) {
@@ -11885,23 +11936,111 @@ function analyzeCssSource(code, fileName, emitDiagnostic, options = {}) {
   });
 }
 
-function getHtmlRawTextSegments(htmlText, tagName) {
+function getHtmlRawTextSegments(htmlText, tagName, options = {}) {
   const source = String(htmlText || "");
   const wantedName = String(tagName || "").toLowerCase();
+  const includeUnclosed = options.includeUnclosed === true;
   const tokens = scanHtmlTagTokens(source, () => {});
   const segments = [];
   for (let index = 0; index < tokens.length; index++) {
     const opening = tokens[index];
     if (opening.name !== wantedName || opening.isClosing || opening.selfClosing) continue;
     const closing = tokens.slice(index + 1).find((token) => token.name === wantedName && token.isClosing);
-    if (!closing) continue;
+    if (!closing && !includeUnclosed) continue;
+    const contentEnd = closing ? closing.start : source.length;
     segments.push({
-      code: source.slice(opening.end, closing.start),
+      code: source.slice(opening.end, contentEnd),
       start: opening.end,
+      end: contentEnd,
+      opening,
+      closing: closing || null,
       attributes: opening.attributes || [],
     });
   }
   return segments;
+}
+
+const JAVASCRIPT_SCRIPT_TYPES = new Set([
+  "module",
+  "text/javascript",
+  "application/javascript",
+  "text/ecmascript",
+  "application/ecmascript",
+  "text/jscript",
+]);
+
+function getHtmlAttributeValue(attributes, name) {
+  const wanted = String(name || "").toLowerCase();
+  const attribute = (attributes || []).find((item) => item.name === wanted);
+  return attribute ? String(attribute.value ?? "").trim() : "";
+}
+
+function hasHtmlAttribute(attributes, name) {
+  const wanted = String(name || "").toLowerCase();
+  return (attributes || []).some((item) => item.name === wanted);
+}
+
+function isJavaScriptScriptAttributes(attributes) {
+  if (hasHtmlAttribute(attributes, "src")) return false;
+  const type = getHtmlAttributeValue(attributes, "type").toLowerCase();
+  const language = getHtmlAttributeValue(attributes, "language").toLowerCase();
+  if (type) {
+    return JAVASCRIPT_SCRIPT_TYPES.has(type) || /(?:java|ecma)script$/.test(type);
+  }
+  return !language || ["javascript", "jscript", "ecmascript"].includes(language);
+}
+
+function isJavaScriptScriptSegment(segment) {
+  return Boolean(segment && isJavaScriptScriptAttributes(segment.attributes));
+}
+
+function getHtmlEmbeddedCodeContext(htmlText, position) {
+  const source = String(htmlText || "");
+  const safePosition = Math.max(0, Math.min(Number(position || 0), source.length));
+  const tokens = scanHtmlTagTokens(source, () => {});
+  for (let index = 0; index < tokens.length; index += 1) {
+    const opening = tokens[index];
+    if (opening.isClosing || opening.selfClosing || !["script", "style"].includes(opening.name)) continue;
+    const closing = tokens.slice(index + 1).find((token) => token.name === opening.name && token.isClosing);
+    const contentEnd = closing ? closing.start : source.length;
+    if (safePosition < opening.end || safePosition > contentEnd) continue;
+    const language = opening.name === "style"
+      ? "css"
+      : isJavaScriptScriptAttributes(opening.attributes)
+        ? "js"
+        : "raw";
+    return {
+      language,
+      tagName: opening.name,
+      contentStart: opening.end,
+      contentEnd,
+      opening,
+      closing: closing || null,
+    };
+  }
+  return {
+    language: "html",
+    tagName: "",
+    contentStart: 0,
+    contentEnd: source.length,
+    opening: null,
+    closing: null,
+  };
+}
+
+function getActiveEditorLanguageContext(editor, position = null) {
+  const fileType = String(activeFile?.type || getFileType(activeFile?.name || "") || "").toLowerCase();
+  if (fileType === "html") {
+    const safePosition = position === null ? Number(editor?.selectionStart || 0) : Number(position || 0);
+    return getHtmlEmbeddedCodeContext(editor?.value || activeFile?.content || "", safePosition);
+  }
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) {
+    return { language: "js", tagName: "", contentStart: 0, contentEnd: String(editor?.value || "").length };
+  }
+  if (["css", "scss", "sass", "less"].includes(fileType)) {
+    return { language: "css", tagName: "", contentStart: 0, contentEnd: String(editor?.value || "").length };
+  }
+  return { language: fileType || "text", tagName: "", contentStart: 0, contentEnd: String(editor?.value || "").length };
 }
 
 function getProjectFilesForAutomaticDiagnostics() {
@@ -11944,7 +12083,7 @@ function runPreflightDiagnostics(targetEntries = null) {
       collectDeclaredJavaScriptIdentifiers(file.content).forEach((name) => names.add(name));
     } else if (file.type === "html") {
       getHtmlRawTextSegments(file.content || "", "script")
-        .filter((segment) => !segment.attributes.some((attribute) => attribute.name === "src"))
+        .filter(isJavaScriptScriptSegment)
         .forEach((segment) => collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name)));
     }
     declaredIdentifiersByFile.set(file.name, names);
@@ -12000,7 +12139,7 @@ function runPreflightDiagnostics(targetEntries = null) {
       const htmlText = htmlFile.content || "";
 
       const inlineScripts = getHtmlRawTextSegments(htmlText, "script")
-        .filter((segment) => !segment.attributes.some((attribute) => attribute.name === "src"));
+        .filter(isJavaScriptScriptSegment);
       inlineScripts.forEach((segment) => {
         const scriptCode = segment.code;
         const scriptContentStartIndex = segment.start;
@@ -13340,31 +13479,27 @@ function highlightHtmlSegment(code) {
 }
 
 function highlightHtml(code) {
-  const blockRegex =
-    /(<style\b[^>]*>)([\s\S]*?)(<\/style>)|(<script\b(?![^>]*\bsrc=)[^>]*>)([\s\S]*?)(<\/script>)/gi;
+  const embeddedSegments = [
+    ...getHtmlRawTextSegments(code, "style"),
+    ...getHtmlRawTextSegments(code, "script"),
+  ].sort((a, b) => a.opening.start - b.opening.start);
   let result = "";
   let lastIndex = 0;
-  let match;
 
-  while ((match = blockRegex.exec(code)) !== null) {
-    result += highlightHtmlSegment(code.slice(lastIndex, match.index));
-
-    if (match[1]) {
-      result += highlightHtmlSegment(match[1]);
-      const styleContent = match[2] || "";
-      result += styleContent
-        ? highlightCss(styleContent, match.index + match[1].length)
-        : "";
-      result += highlightHtmlSegment(match[3]);
+  embeddedSegments.forEach((segment) => {
+    if (segment.opening.start < lastIndex) return;
+    result += highlightHtmlSegment(code.slice(lastIndex, segment.opening.start));
+    result += highlightHtmlSegment(segment.opening.raw);
+    if (segment.opening.name === "style") {
+      result += segment.code ? highlightCss(segment.code, segment.start) : "";
+    } else if (isJavaScriptScriptSegment(segment)) {
+      result += segment.code ? highlightJs(segment.code) : "";
     } else {
-      result += highlightHtmlSegment(match[4]);
-      const scriptContent = match[5] || "";
-      result += scriptContent ? highlightJs(scriptContent) : "";
-      result += highlightHtmlSegment(match[6]);
+      result += escapeHtml(segment.code || "");
     }
-
-    lastIndex = match.index + match[0].length;
-  }
+    result += highlightHtmlSegment(segment.closing.raw);
+    lastIndex = segment.closing.end;
+  });
 
   result += highlightHtmlSegment(code.slice(lastIndex));
   return result;
@@ -14026,8 +14161,13 @@ function handleSuggestions(e) {
   }
   const pos = editor.selectionStart;
   const textBefore = getBoundedEditorContextBefore(editor.value, pos);
-  const contextOffset = Math.max(0, pos - textBefore.length);
-  const makeContextAbsolute = (context) => {
+  const htmlContextOffset = Math.max(0, pos - textBefore.length);
+  const languageContext = getActiveEditorLanguageContext(editor, pos);
+  const codeContextStart = ["js", "css"].includes(languageContext.language)
+    ? Math.max(Number(languageContext.contentStart || 0), pos - LARGE_EDITOR_CONTEXT_WINDOW)
+    : htmlContextOffset;
+  const codeTextBefore = editor.value.slice(codeContextStart, pos);
+  const makeContextAbsolute = (context, contextOffset = htmlContextOffset) => {
     if (!context || !contextOffset) return context;
     const next = { ...context };
     if (Number.isFinite(next.replaceStart)) next.replaceStart += contextOffset;
@@ -14035,12 +14175,12 @@ function handleSuggestions(e) {
     return next;
   };
 
-  const isCssFile = activeFile.type === "css";
+  const isCssFile = activeFile.type !== "html" && languageContext.language === "css";
   const isHtmlStyleContext =
-    activeFile.type === "html" && isInsideStyleTag(textBefore);
-  const isJsFile = activeFile.type === "js";
+    activeFile.type === "html" && languageContext.language === "css";
+  const isJsFile = activeFile.type !== "html" && languageContext.language === "js";
   const isHtmlScriptContext =
-    activeFile.type === "html" && isInsideScriptTag(textBefore);
+    activeFile.type === "html" && languageContext.language === "js";
   const isEnvFile = activeFile.type === "env";
 
   const currentLineText = textBefore.slice(textBefore.lastIndexOf("\n") + 1);
@@ -14067,7 +14207,7 @@ function handleSuggestions(e) {
   }
 
   const codeFileContext = getCodeFileSuggestionContext(
-    textBefore,
+    codeTextBefore,
     isCssFile || isHtmlStyleContext ? "css" : isJsFile || isHtmlScriptContext ? "js" : "",
   );
   if (codeFileContext) {
@@ -14077,7 +14217,7 @@ function handleSuggestions(e) {
       codeFileContext.tag,
     );
     if (files.length) {
-      const absoluteCodeFileContext = makeContextAbsolute(codeFileContext);
+      const absoluteCodeFileContext = makeContextAbsolute(codeFileContext, codeContextStart);
       currentSuggestionContext = absoluteCodeFileContext;
       showFileSuggestions(editor, files, codeFileContext.valuePrefix, absoluteCodeFileContext);
       return;
@@ -14101,7 +14241,7 @@ function handleSuggestions(e) {
   }
 
   if (isCssFile || isHtmlStyleContext) {
-    const cssContext = getCssSuggestionContext(textBefore);
+    const cssContext = getCssSuggestionContext(codeTextBefore);
     if (!cssContext) {
       hideSuggestions();
       return;
@@ -14122,13 +14262,13 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = makeContextAbsolute(cssContext);
+    currentSuggestionContext = makeContextAbsolute(cssContext, codeContextStart);
     showCssSuggestions(editor, cssSuggestions, cssContext.mode);
     return;
   }
 
   if (isJsFile || isHtmlScriptContext) {
-    const jsContext = getJsSuggestionContext(textBefore);
+    const jsContext = getJsSuggestionContext(codeTextBefore);
     if (!jsContext) {
       hideSuggestions();
       return;
@@ -14138,12 +14278,17 @@ function handleSuggestions(e) {
       hideSuggestions();
       return;
     }
-    currentSuggestionContext = makeContextAbsolute(jsContext);
+    currentSuggestionContext = makeContextAbsolute(jsContext, codeContextStart);
     showJsSuggestions(editor, jsMatches);
     return;
   }
 
   if (activeFile.type !== "html") {
+    hideSuggestions();
+    return;
+  }
+
+  if (languageContext.language === "raw") {
     hideSuggestions();
     return;
   }
@@ -14537,8 +14682,9 @@ function __codxTokenizeJs(projectFiles) {
     if (file.type !== "js" && file.type !== "html") continue;
     let text = String(file.content || "");
     if (file.type === "html") {
-      text = Array.from(text.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))
-        .map((match) => match[1] || "")
+      text = getHtmlRawTextSegments(text, "script")
+        .filter(isJavaScriptScriptSegment)
+        .map((segment) => segment.code || "")
         .join("\n");
     }
 
@@ -14760,15 +14906,11 @@ function getRankedTagSuggestions(prefix, options = {}) {
 
 
 function isInsideStyleTag(textBefore) {
-  const opens = (textBefore.match(/<style\b[^>]*>/gi) || []).length;
-  const closes = (textBefore.match(/<\/style>/gi) || []).length;
-  return opens > closes;
+  return getHtmlEmbeddedCodeContext(textBefore, String(textBefore || "").length).tagName === "style";
 }
 
 function isInsideScriptTag(textBefore) {
-  const opens = (textBefore.match(/<script\b[^>]*>/gi) || []).length;
-  const closes = (textBefore.match(/<\/script>/gi) || []).length;
-  return opens > closes;
+  return getHtmlEmbeddedCodeContext(textBefore, String(textBefore || "").length).tagName === "script";
 }
 
 function stripQuotedContent(text) {
@@ -15138,7 +15280,7 @@ function getCurrentFileJavaScriptIdentifiers() {
   }
   if (activeFile.type === "html") {
     const names = new Set();
-    getHtmlRawTextSegments(activeFile.content, "script").forEach((segment) => {
+    getHtmlRawTextSegments(activeFile.content, "script", { includeUnclosed: true }).filter(isJavaScriptScriptSegment).forEach((segment) => {
       collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name));
     });
     return names;
@@ -16655,13 +16797,12 @@ function getJavaScriptExpressionEndForAutoWrap(source, start) {
  * Handles auto-closing of brackets/parentheses and indentation on 'Enter'.
  * This is specific for CSS and JS files.
  */
-function handleAutoCloseAndIndent(e, editor) {
-  const fileType = activeFile.type;
+function handleAutoCloseAndIndent(e, editor, providedLanguageContext = null) {
   const pos = editor.selectionStart;
   const editorValue = editor.value;
-  const contextBefore = getBoundedEditorContextBefore(editorValue, pos);
-  const isCssContext = fileType === "css" || (fileType === "html" && isInsideStyleTag(contextBefore));
-  const isJsContext = fileType === "js" || (fileType === "html" && isInsideScriptTag(contextBefore));
+  const languageContext = providedLanguageContext || getActiveEditorLanguageContext(editor, pos);
+  const isCssContext = languageContext.language === "css";
+  const isJsContext = languageContext.language === "js";
 
   // 1. Indent level calculation (Find the indentation of the current line)
   const lineStart = editorValue.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
@@ -17479,26 +17620,24 @@ function handleEditorKeyDown(e) {
     return;
   }
 
-  const caretContextBefore = getBoundedEditorContextBefore(
-    editor.value,
-    editor.selectionStart,
-  );
+  const editorLanguageContext = getActiveEditorLanguageContext(editor, editor.selectionStart);
   const isHtmlStyleContext =
-    activeFile.type === "html" && isInsideStyleTag(caretContextBefore);
+    activeFile.type === "html" && editorLanguageContext.language === "css";
   const isHtmlScriptContext =
-    activeFile.type === "html" && isInsideScriptTag(caretContextBefore);
+    activeFile.type === "html" && editorLanguageContext.tagName === "script";
+  const isHtmlJavaScriptContext =
+    activeFile.type === "html" && editorLanguageContext.language === "js";
   const matchingHtmlTagPair =
-    activeFile.type === "html" && e.key === "Enter"
+    activeFile.type === "html" && editorLanguageContext.language === "html" && e.key === "Enter"
       ? getMatchingHtmlTagPairAtCaret(editor)
       : null;
-  const isCssEditorContext = activeFile.type === "css" || isHtmlStyleContext;
-  const isCodeEditorContext =
-    isCssEditorContext || activeFile.type === "js" || isHtmlScriptContext;
+  const isCssEditorContext = editorLanguageContext.language === "css";
+  const isCodeEditorContext = ["css", "js"].includes(editorLanguageContext.language);
 
   if (
     activeFile.type === "html" &&
     e.key === "Enter" &&
-    ((!isHtmlStyleContext && !isHtmlScriptContext) || matchingHtmlTagPair) &&
+    (editorLanguageContext.language === "html" || matchingHtmlTagPair) &&
     suggestionPopup.style.display !== "block"
   ) {
     hideSuggestions();
@@ -17571,11 +17710,11 @@ function handleEditorKeyDown(e) {
   }
 
   // --- 2. Auto-Closing & Indentation (CSS and JS) ---
-  if (activeFile.type === "html" && handleHtmlAttributeValueCompletion(e, editor)) {
+  if (activeFile.type === "html" && editorLanguageContext.language === "html" && handleHtmlAttributeValueCompletion(e, editor)) {
     return;
   }
 
-  if (activeFile.type === "html" && e.key === "=") {
+  if (activeFile.type === "html" && editorLanguageContext.language === "html" && e.key === "=") {
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
     const textBefore = getBoundedEditorContextBefore(editor.value, start);
@@ -17589,7 +17728,7 @@ function handleEditorKeyDown(e) {
     }
   }
 
-  if (activeFile.type === "html" && e.key === "Tab" && !isHtmlStyleContext && !isHtmlScriptContext) {
+  if (activeFile.type === "html" && e.key === "Tab" && editorLanguageContext.language === "html") {
     if (expandEmmetAbbreviation(editor)) {
       e.preventDefault();
       return;
@@ -17599,17 +17738,17 @@ function handleEditorKeyDown(e) {
   // --- 3. Auto-Closing & Indentation (CSS and JS) ---
   if (
     isCssEditorContext ||
-    activeFile.type === "js" ||
+    editorLanguageContext.language === "js" ||
     isHtmlStyleContext ||
-    isHtmlScriptContext
+    isHtmlJavaScriptContext
   ) {
-    if (handleAutoCloseAndIndent(e, editor)) {
+    if (handleAutoCloseAndIndent(e, editor, editorLanguageContext)) {
       return; // If auto-closing/indentation was handled, stop here
     }
   }
 
   // --- 4. HTML Tag Closing (If popup was not visible) ---
-  if (activeFile.type === "html" && e.key === ">") {
+  if (activeFile.type === "html" && editorLanguageContext.language === "html" && e.key === ">") {
     handleTagClosing(e);
     return;
   }
