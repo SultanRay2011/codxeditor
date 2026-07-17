@@ -5024,7 +5024,7 @@ let projectFiles = [
         <div class="section-heading">
           <p class="eyebrow">Quick orientation</p>
           <h2 id="quickGuideTitle">The controls you will use first</h2>
-          <p>Use these shortcuts while your cursor is inside the editor. On macOS, use Command wherever Ctrl is shown.</p>
+          <p>Use these shortcuts while your cursor is inside the editor. On macOS, use Command wherever Ctrl is shown. Code suggestions stay open and update their matches smoothly as you type.</p>
         </div>
         <div class="shortcut-grid">
           <article class="shortcut"><span>Command palette</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></strong></article>
@@ -14382,7 +14382,6 @@ function initializeEditor() {
 function scheduleEditorSuggestions(editor) {
   clearTimeout(suggestionRefreshTimer);
   suggestionRefreshTimer = null;
-  if (suggestionPopup.style.display === "block") hideSuggestions();
   if (!editor || editor !== document.getElementById("activeEditor")) return;
   const scheduledFileName = String(activeFile?.name || "");
   const scheduledValueLength = editor.value.length;
