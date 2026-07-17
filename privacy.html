@@ -91,7 +91,8 @@
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        gap: 5px;
+        gap: 0;
+        position: relative;
         background: none;
         border: none;
         cursor: pointer;
@@ -105,15 +106,31 @@
 
       .menu-toggle span {
         display: block;
+        position: absolute;
+        top: 50%;
+        left: 50%;
         width: 25px;
         height: 3px;
         background: #333;
         border-radius: 3px;
-        transition: all 0.3s ease;
+        transform-origin: center;
+        transition: transform 0.24s ease, opacity 0.18s ease, background-color 0.2s ease;
+      }
+
+      .menu-toggle span:nth-child(1) {
+        transform: translate(-50%, calc(-50% - 8px));
+      }
+
+      .menu-toggle span:nth-child(2) {
+        transform: translate(-50%, -50%);
+      }
+
+      .menu-toggle span:nth-child(3) {
+        transform: translate(-50%, calc(-50% + 8px));
       }
 
       .menu-toggle.active span:nth-child(1) {
-        transform: rotate(45deg) translate(8px, 8px);
+        transform: translate(-50%, -50%) rotate(45deg);
       }
 
       .menu-toggle.active span:nth-child(2) {
@@ -121,7 +138,7 @@
       }
 
       .menu-toggle.active span:nth-child(3) {
-        transform: rotate(-45deg) translate(7px, -7px);
+        transform: translate(-50%, -50%) rotate(-45deg);
       }
 
       .nav-buttons {

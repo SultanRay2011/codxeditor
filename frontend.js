@@ -5043,6 +5043,7 @@ let projectFiles = [
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview now matches the real CodX Editor workspace on desktop and mobile</li>
+            <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
