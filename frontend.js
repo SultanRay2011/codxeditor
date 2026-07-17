@@ -4983,13 +4983,72 @@ let projectFiles = [
 </head>
 <body>
     <main class="shell">
-      <section class="hero">
-        <img class="brand-logo" src="cx.png" alt="CodX Editor logo">
-        <p class="eyebrow">CodX Editor Starter</p>
-        <h1>Build and preview web apps instantly</h1>
-        <p class="lead">
-          Write HTML, CSS, and JavaScript in separate files and see updates live in the preview panel.
-        </p>
+      <section class="hero hero-layout">
+        <div class="hero-copy">
+          <img class="brand-logo" src="cx.png" alt="CodX Editor logo">
+          <p class="eyebrow">CodX Editor Starter</p>
+          <h1>Build and preview web apps instantly</h1>
+          <p class="lead">
+            CodX Editor is a browser-based coding workspace where you can write, run, debug, save, collaborate on, and publish complete web projects without leaving the page.
+          </p>
+        </div>
+        <div class="drawing-card" aria-label="Illustration of code becoming a live website">
+          <svg class="hero-drawing" viewBox="0 0 420 280" role="img" aria-labelledby="editorDrawingTitle editorDrawingDesc">
+            <title id="editorDrawingTitle">Code to live preview</title>
+            <desc id="editorDrawingDesc">A hand-drawn code editor connected to a browser preview with collaboration cursors.</desc>
+            <path class="sketch-line faint" d="M45 236C100 259 321 258 378 232" />
+            <rect class="sketch-surface" x="28" y="36" width="225" height="168" rx="16" />
+            <path class="sketch-line" d="M28 69H253" />
+            <circle class="sketch-dot coral" cx="50" cy="53" r="5" />
+            <circle class="sketch-dot gold" cx="67" cy="53" r="5" />
+            <circle class="sketch-dot green" cx="84" cy="53" r="5" />
+            <path class="code-stroke green-stroke" d="M53 96H116M53 119H158M72 142H188M72 165H139" />
+            <path class="code-stroke soft-stroke" d="M172 96H222M174 119H215M154 165H214" />
+            <path class="connector" d="M260 112C282 104 291 99 311 105" />
+            <path class="connector-arrow" d="m300 96 13 9-12 10" />
+            <rect class="sketch-surface preview-surface" x="302" y="70" width="92" height="118" rx="14" />
+            <path class="sketch-line" d="M302 94H394" />
+            <circle class="sketch-dot green" cx="319" cy="82" r="4" />
+            <rect class="preview-block" x="319" y="110" width="58" height="13" rx="6" />
+            <path class="preview-line" d="M319 139H365M319 151H375" />
+            <rect class="preview-button" x="319" y="164" width="36" height="10" rx="5" />
+            <path class="cursor-one" d="m115 184 2 34 8-10 8 15 7-4-8-14 13-1Z" />
+            <path class="cursor-two" d="m342 42 2 31 7-9 7 13 6-4-7-12 12-1Z" />
+            <text class="cursor-label" x="91" y="238">You</text>
+            <text class="cursor-label second" x="334" y="33">Friend</text>
+          </svg>
+        </div>
+      </section>
+
+      <section class="quick-guide" aria-labelledby="quickGuideTitle">
+        <div class="section-heading">
+          <p class="eyebrow">Quick orientation</p>
+          <h2 id="quickGuideTitle">The controls you will use first</h2>
+          <p>Use these shortcuts while your cursor is inside the editor. On macOS, use Command wherever Ctrl is shown.</p>
+        </div>
+        <div class="shortcut-grid">
+          <article class="shortcut"><span>Command palette</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></strong></article>
+          <article class="shortcut"><span>Run preview</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>Enter</kbd></strong></article>
+          <article class="shortcut"><span>New file</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>Q</kbd></strong></article>
+          <article class="shortcut"><span>Export project</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>S</kbd></strong></article>
+          <article class="shortcut"><span>Toggle console</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>Shift</kbd><b>+</b><kbd>C</kbd></strong></article>
+          <article class="shortcut"><span>Close or exit</span><strong><kbd>Esc</kbd></strong></article>
+        </div>
+      </section>
+
+      <section class="workflow-card" aria-labelledby="workflowTitle">
+        <div>
+          <p class="eyebrow">One simple flow</p>
+          <h2 id="workflowTitle">Write, run, improve, share</h2>
+          <p>Edit a file, run the preview, use the Console to understand problems, then save, collaborate, publish, or send the project to another device.</p>
+        </div>
+        <svg class="workflow-drawing" viewBox="0 0 480 150" role="img" aria-label="Illustrated CodX Editor workflow">
+          <path class="flow-path" d="M58 76C115 18 175 130 238 73S360 22 422 74" />
+          <g class="flow-node"><circle cx="58" cy="76" r="26"/><path d="m48 76 8 8 14-18"/><text x="58" y="121">Write</text></g>
+          <g class="flow-node"><circle cx="178" cy="88" r="26"/><path d="m171 76 18 12-18 12Z"/><text x="178" y="133">Run</text></g>
+          <g class="flow-node"><circle cx="300" cy="60" r="26"/><path d="M289 60h22M300 49v22"/><text x="300" y="105">Improve</text></g>
+          <g class="flow-node"><circle cx="422" cy="74" r="26"/><path d="M411 79c13-2 19-9 22-18M423 58h12v12"/><text x="422" y="119">Share</text></g>
+        </svg>
       </section>
 
       <section class="grid">
@@ -5071,7 +5130,7 @@ let projectFiles = [
         </article>
 
         <article class="card">
-          <h2>Keyboard controls</h2>
+          <h2>More keyboard controls</h2>
           <ul>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> Open the Command Palette</li>
             <li><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> Open the Command Palette</li>
@@ -5154,6 +5213,173 @@ h1 {
   margin: 12px 0 0;
   color: var(--muted);
   max-width: 65ch;
+  line-height: 1.7;
+}
+
+.hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  align-items: center;
+  gap: 32px;
+}
+
+.drawing-card {
+  overflow: hidden;
+  border: 1px solid #dfe9e6;
+  border-radius: 18px;
+  padding: 8px;
+  background: #fbfefc;
+}
+
+.hero-drawing,
+.workflow-drawing {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sketch-surface {
+  fill: #ffffff;
+  stroke: #1f3b35;
+  stroke-width: 3;
+}
+
+.preview-surface {
+  fill: #f4fbf8;
+}
+
+.sketch-line,
+.connector,
+.connector-arrow {
+  fill: none;
+  stroke: #1f3b35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.sketch-line.faint {
+  stroke: #dceae5;
+  stroke-width: 5;
+}
+
+.sketch-dot.coral { fill: #fb7185; }
+.sketch-dot.gold { fill: #fbbf24; }
+.sketch-dot.green { fill: #16a34a; }
+
+.code-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 8;
+}
+
+.green-stroke { stroke: #48b878; }
+.soft-stroke { stroke: #cddbd6; }
+.preview-block { fill: #86d7a6; }
+.preview-line { fill: none; stroke: #b8ccc4; stroke-linecap: round; stroke-width: 5; }
+.preview-button { fill: #0f766e; }
+
+.cursor-one,
+.cursor-two {
+  stroke: #ffffff;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.cursor-one { fill: #2563eb; }
+.cursor-two { fill: #e11d48; }
+.cursor-label { fill: #2563eb; font: 700 13px "Segoe UI", sans-serif; }
+.cursor-label.second { fill: #e11d48; }
+
+.quick-guide,
+.workflow-card {
+  margin-top: 22px;
+  border: 1px solid #e2e8e5;
+  border-radius: 16px;
+  padding: 22px;
+  background: #ffffff;
+}
+
+.section-heading h2,
+.workflow-card h2 {
+  margin-bottom: 7px;
+}
+
+.section-heading > p:last-child,
+.workflow-card p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.shortcut {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.shortcut span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.shortcut strong {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #94a3b8;
+}
+
+.shortcut strong b {
+  font-size: 0.7rem;
+}
+
+.workflow-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(330px, 1.1fr);
+  align-items: center;
+  gap: 22px;
+}
+
+.flow-path {
+  fill: none;
+  stroke: #cfe7dc;
+  stroke-dasharray: 7 8;
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+
+.flow-node circle {
+  fill: #ffffff;
+  stroke: #0f766e;
+  stroke-width: 3;
+}
+
+.flow-node path {
+  fill: none;
+  stroke: #0f766e;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.flow-node text {
+  fill: #334155;
+  font: 700 13px "Segoe UI", sans-serif;
+  text-anchor: middle;
 }
 
 .grid {
@@ -5205,8 +5431,29 @@ kbd {
     padding: 20px;
   }
 
+  .hero-layout,
+  .workflow-card,
   .grid {
     grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 12px;
+  }
+
+  .shell {
+    padding: 16px;
+  }
+
+  .shortcut-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-card {
+    padding: 18px;
   }
 }`,
     active: false,
