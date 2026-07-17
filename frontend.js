@@ -2636,6 +2636,7 @@ const existingJsSuggestionValues = new Set(jsSuggestions.map((entry) => entry.va
 let hasUnsavedChanges = false;
 let activeSavedProjectName = null;
 let autoRunTimeout;
+const AUTO_RUN_TYPING_IDLE_MS = 180;
 let latestDiagnostics = [];
 let diagnosticsRefreshTimer = null;
 let sessionData = {};
@@ -4949,12 +4950,21 @@ function updateFileErrorCountsFromConsole() {
     }
     locations[location.fileName].push(location);
   });
+  const countsChanged = haveFileErrorCountsChanged(fileErrorCounts, next);
   fileErrorCounts = next;
   fileErrorLocations = locations;
-  renderFileList();
+  if (countsChanged) renderFileList();
   const editor = document.getElementById("activeEditor");
   if (editor) renderErrorHighlights(editor);
 }
+
+function haveFileErrorCountsChanged(previous = {}, next = {}) {
+  const previousKeys = Object.keys(previous);
+  const nextKeys = Object.keys(next);
+  if (previousKeys.length !== nextKeys.length) return true;
+  return nextKeys.some((key) => Number(previous[key] || 0) !== Number(next[key] || 0));
+}
+
 let projectFiles = [
   {
     name: "index.html",
@@ -5023,6 +5033,7 @@ let projectFiles = [
             <li>Reorder file tabs by dragging on laptops, using the grip with the arrow, Home, or End keys, or tapping the earlier/later controls on touch devices; the order stays with saved, exported, transferred, and shared projects</li>
             <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
+            <li>Incomplete JavaScript stays responsive while you type because Auto-Run waits for a short pause and diagnostics avoid duplicate Console, file-tab, and error-highlight rendering</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
             <li>When importing from another device, use the Replace current editor toggle to either open the incoming workspace or keep your current code open while saving the incoming workspace to Saved Projects</li>
             <li>Import or export complete projects as ZIP archives</li>
@@ -9393,8 +9404,13 @@ window.__codxReportRuntimeDiagnostic = (payload, rawError = null) => {
 window.__codxGetRawRuntimeError = (diagnosticId) =>
   runtimeDiagnosticRawErrors.get(String(diagnosticId || ""))?.error || null;
 
-const consoleErrorObserver = new MutationObserver(() => {
-  updateFileErrorCountsFromConsole();
+const consoleErrorObserver = new MutationObserver((mutations) => {
+  const hasNonDiagnosticMutation = mutations.some((mutation) =>
+    [...mutation.addedNodes, ...mutation.removedNodes].some((node) =>
+      !(node instanceof HTMLElement) || !node.classList.contains("codx-diagnostic-line"),
+    ),
+  );
+  if (hasNonDiagnosticMutation) updateFileErrorCountsFromConsole();
 });
 if (consoleOutput) {
   consoleErrorObserver.observe(consoleOutput, {
@@ -9416,7 +9432,7 @@ function debouncedUpdatePreview() {
   clearTimeout(autoRunTimeout);
   const activeContent = String(activeFile?.content || "");
   if (isLargeEditorContent(activeContent)) return;
-  autoRunTimeout = setTimeout(updatePreview, 24);
+  autoRunTimeout = setTimeout(updatePreview, AUTO_RUN_TYPING_IDLE_MS);
 }
 
 function scheduleSessionUpdate() {
@@ -10680,9 +10696,10 @@ function applyDiagnosticEntriesToFileErrors(entries) {
     }
     locations[location.fileName].push(location);
   });
+  const countsChanged = haveFileErrorCountsChanged(fileErrorCounts, next);
   fileErrorCounts = next;
   fileErrorLocations = locations;
-  renderFileList();
+  if (countsChanged) renderFileList();
   const editor = document.getElementById("activeEditor");
   if (editor) renderErrorHighlights(editor);
 }
@@ -13105,7 +13122,8 @@ function scheduleEditorDecorations(textarea, options = {}) {
     editorDecorationTimer = null;
     if (textarea !== document.getElementById("activeEditor")) return;
     renderSyntaxHighlight(textarea);
-    renderErrorHighlights(textarea);
+    // Diagnostic refreshes own error-marker positioning. Recalculating caret
+    // geometry here on every keystroke makes incomplete code visibly stutter.
   };
   if (options.immediate) {
     render();
