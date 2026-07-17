@@ -5044,6 +5044,7 @@ let projectFiles = [
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
             <li>Console errors and code diagnostics stay above logs, warnings, and informational output, and opening the Console focuses the error section first</li>
+            <li>Reorder file tabs by dragging on laptops, using the grip with the arrow, Home, or End keys, or tapping the earlier/later controls on touch devices; the order stays with saved, exported, transferred, and shared projects</li>
             <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
@@ -9411,6 +9412,88 @@ function scheduleSessionUpdate() {
   }, syncInterval - elapsed);
 }
 
+let draggedProjectFileName = "";
+
+function canReorderProjectFiles() {
+  return projectFiles.length > 1 && (!activeSessionId || !isReadOnlyParticipant());
+}
+
+function clearFileReorderDragState() {
+  draggedProjectFileName = "";
+  fileList?.querySelectorAll(".file-item").forEach((item) => {
+    item.classList.remove("is-dragging", "drop-before", "drop-after");
+  });
+}
+
+function updateFileReorderControlAvailability() {
+  if (!fileList) return;
+  const canReorderFiles = canReorderProjectFiles();
+  const items = [...fileList.querySelectorAll(".file-item")];
+  items.forEach((item, index) => {
+    item.draggable = canReorderFiles;
+    const handle = item.querySelector(".file-reorder-handle");
+    const earlier = item.querySelector(".file-move-earlier");
+    const later = item.querySelector(".file-move-later");
+    if (handle) {
+      handle.draggable = canReorderFiles;
+      handle.disabled = !canReorderFiles;
+      handle.title = canReorderFiles
+        ? "Drag to reorder. When focused, use the arrow keys, Home, or End."
+        : activeSessionId
+          ? "Only the collaboration host or co-host can reorder shared files."
+          : "Add another file to enable reordering.";
+    }
+    if (earlier) earlier.disabled = !canReorderFiles || index === 0;
+    if (later) later.disabled = !canReorderFiles || index === items.length - 1;
+  });
+}
+
+function focusFileReorderControl(fileName) {
+  requestAnimationFrame(() => {
+    const control = [...fileList.querySelectorAll(".file-reorder-handle")].find(
+      (button) => button.dataset.file === fileName,
+    );
+    control?.focus({ preventScroll: true });
+  });
+}
+
+function reorderProjectFile(fileName, targetIndex, { focusHandle = false } = {}) {
+  if (!canReorderProjectFiles()) return false;
+  const normalizedName = String(fileName || "").trim().toLowerCase();
+  const currentIndex = projectFiles.findIndex(
+    (file) => String(file.name || "").trim().toLowerCase() === normalizedName,
+  );
+  if (currentIndex < 0) return false;
+  const nextIndex = Math.max(0, Math.min(projectFiles.length - 1, Number(targetIndex)));
+  if (!Number.isFinite(nextIndex) || nextIndex === currentIndex) return false;
+
+  const [movedFile] = projectFiles.splice(currentIndex, 1);
+  projectFiles.splice(nextIndex, 0, movedFile);
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
+  renderFileList({ skipNameNormalization: true });
+  scheduleProjectAutosave();
+  syncProjectWithSession();
+  if (focusHandle) focusFileReorderControl(movedFile.name);
+  return true;
+}
+
+function reorderProjectFileRelativeTo(fileName, targetFileName, placeAfter) {
+  const normalizedDraggedName = String(fileName || "").trim().toLowerCase();
+  const normalizedTargetName = String(targetFileName || "").trim().toLowerCase();
+  if (!normalizedDraggedName || !normalizedTargetName || normalizedDraggedName === normalizedTargetName) {
+    return false;
+  }
+  const remainingFiles = projectFiles.filter(
+    (file) => String(file.name || "").trim().toLowerCase() !== normalizedDraggedName,
+  );
+  const targetIndex = remainingFiles.findIndex(
+    (file) => String(file.name || "").trim().toLowerCase() === normalizedTargetName,
+  );
+  if (targetIndex < 0) return false;
+  return reorderProjectFile(fileName, targetIndex + (placeAfter ? 1 : 0));
+}
+
 function renderFileList(options = {}) {
   const normalizedLegacyNames = options.skipNameNormalization
     ? false
@@ -9428,9 +9511,51 @@ function renderFileList(options = {}) {
   const visibilityParticipants = canManageFileVisibility
     ? getModeratableCollabParticipants()
     : [];
-  projectFiles.forEach((file) => {
+  const canReorderFiles = canReorderProjectFiles();
+  projectFiles.forEach((file, fileIndex) => {
     const fileItem = document.createElement("div");
     fileItem.className = `file-item ${file.active ? "active" : ""}`;
+    fileItem.dataset.file = file.name;
+    fileItem.draggable = canReorderFiles;
+
+    const reorderHandle = document.createElement("button");
+    reorderHandle.className = "file-reorder-handle";
+    reorderHandle.dataset.file = file.name;
+    reorderHandle.type = "button";
+    reorderHandle.draggable = canReorderFiles;
+    reorderHandle.disabled = !canReorderFiles;
+    reorderHandle.title = canReorderFiles
+      ? "Drag to reorder. When focused, use the arrow keys, Home, or End."
+      : activeSessionId
+        ? "Only the collaboration host or co-host can reorder shared files."
+        : "Add another file to enable reordering.";
+    reorderHandle.setAttribute("aria-label", `Reorder ${file.name}`);
+    const gripIcon = document.createElement("i");
+    gripIcon.className = "fa-solid fa-grip-vertical";
+    gripIcon.setAttribute("aria-hidden", "true");
+    reorderHandle.appendChild(gripIcon);
+
+    const moveEarlierBtn = document.createElement("button");
+    moveEarlierBtn.className = "file-move-control file-move-earlier";
+    moveEarlierBtn.type = "button";
+    moveEarlierBtn.disabled = !canReorderFiles || fileIndex === 0;
+    moveEarlierBtn.title = `Move ${file.name} earlier`;
+    moveEarlierBtn.setAttribute("aria-label", `Move ${file.name} earlier`);
+    const moveEarlierIcon = document.createElement("i");
+    moveEarlierIcon.className = "fa-solid fa-chevron-left";
+    moveEarlierIcon.setAttribute("aria-hidden", "true");
+    moveEarlierBtn.appendChild(moveEarlierIcon);
+
+    const moveLaterBtn = document.createElement("button");
+    moveLaterBtn.className = "file-move-control file-move-later";
+    moveLaterBtn.type = "button";
+    moveLaterBtn.disabled = !canReorderFiles || fileIndex === projectFiles.length - 1;
+    moveLaterBtn.title = `Move ${file.name} later`;
+    moveLaterBtn.setAttribute("aria-label", `Move ${file.name} later`);
+    const moveLaterIcon = document.createElement("i");
+    moveLaterIcon.className = "fa-solid fa-chevron-right";
+    moveLaterIcon.setAttribute("aria-hidden", "true");
+    moveLaterBtn.appendChild(moveLaterIcon);
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "file-name";
@@ -9546,16 +9671,95 @@ function renderFileList(options = {}) {
       visibilityBtn.appendChild(eyeIcon);
     }
 
+    fileItem.appendChild(reorderHandle);
     fileItem.appendChild(nameSpan);
     if (visibilityBtn) fileItem.appendChild(visibilityBtn);
+    fileItem.appendChild(moveEarlierBtn);
+    fileItem.appendChild(moveLaterBtn);
     fileItem.appendChild(renameBtn);
     fileItem.appendChild(deleteBtn);
 
     fileItem.addEventListener("click", (e) => {
-      if (e.target.closest(".delete-file") || e.target.closest(".rename-file") || e.target.closest(".file-visibility-action"))
+      if (
+        e.target.closest(".delete-file") ||
+        e.target.closest(".rename-file") ||
+        e.target.closest(".file-visibility-action") ||
+        e.target.closest(".file-reorder-handle") ||
+        e.target.closest(".file-move-control")
+      )
         return;
       switchFile(file.name);
       if (isCompactWorkspaceLayout()) setMobileWorkspacePane("editor", { focus: true });
+    });
+    const beginFileDrag = (event) => {
+      if (!canReorderProjectFiles()) {
+        event.preventDefault();
+        return;
+      }
+      if (event.target.closest("button:not(.file-reorder-handle)")) {
+        event.preventDefault();
+        return;
+      }
+      draggedProjectFileName = file.name;
+      fileItem.classList.add("is-dragging");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/x-codx-file", file.name);
+        event.dataTransfer.setData("text/plain", file.name);
+      }
+    };
+    fileItem.addEventListener("dragstart", beginFileDrag);
+    fileItem.addEventListener("dragover", (event) => {
+      const draggedName = draggedProjectFileName || event.dataTransfer?.getData("text/x-codx-file");
+      if (!draggedName || draggedName === file.name || !canReorderProjectFiles()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      fileList.querySelectorAll(".file-item").forEach((item) => {
+        item.classList.remove("drop-before", "drop-after");
+      });
+      const bounds = fileItem.getBoundingClientRect();
+      const placeAfter = isCompactWorkspaceLayout()
+        ? event.clientY > bounds.top + bounds.height / 2
+        : event.clientX > bounds.left + bounds.width / 2;
+      fileItem.classList.add(placeAfter ? "drop-after" : "drop-before");
+    });
+    fileItem.addEventListener("dragleave", (event) => {
+      if (!fileItem.contains(event.relatedTarget)) {
+        fileItem.classList.remove("drop-before", "drop-after");
+      }
+    });
+    fileItem.addEventListener("drop", (event) => {
+      const draggedName = draggedProjectFileName || event.dataTransfer?.getData("text/x-codx-file");
+      if (!draggedName || !canReorderProjectFiles()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const bounds = fileItem.getBoundingClientRect();
+      const placeAfter = isCompactWorkspaceLayout()
+        ? event.clientY > bounds.top + bounds.height / 2
+        : event.clientX > bounds.left + bounds.width / 2;
+      reorderProjectFileRelativeTo(draggedName, file.name, placeAfter);
+      clearFileReorderDragState();
+    });
+    fileItem.addEventListener("dragend", clearFileReorderDragState);
+    reorderHandle.addEventListener("keydown", (event) => {
+      let targetIndex = fileIndex;
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") targetIndex = fileIndex - 1;
+      else if (event.key === "ArrowRight" || event.key === "ArrowDown") targetIndex = fileIndex + 1;
+      else if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = projectFiles.length - 1;
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+      reorderProjectFile(file.name, targetIndex, { focusHandle: true });
+    });
+    moveEarlierBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      reorderProjectFile(file.name, fileIndex - 1);
+    });
+    moveLaterBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      reorderProjectFile(file.name, fileIndex + 1);
     });
     renameBtn.addEventListener("click", () => renameFile(file.name));
     deleteBtn.addEventListener("click", () => deleteFile(file.name));
@@ -17796,6 +18000,7 @@ function canCurrentUserEditFile(fileName) {
 }
 
 function enforceCollabPermissionsUI() {
+  updateFileReorderControlAvailability();
   updateCollabButtonState();
   if (!activeSessionId) {
     if (newFileBtn) {

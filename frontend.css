@@ -521,6 +521,7 @@ body.zen-mode #zenExitBtn {
 }
 
 .file-item {
+  position: relative;
   padding: 8px 12px;
   cursor: pointer;
   color: var(--text-secondary);
@@ -531,6 +532,43 @@ body.zen-mode #zenExitBtn {
   transition: all 0.2s ease;
   border-radius: 6px;
   font-weight: 500;
+}
+
+.file-item[draggable="true"] { cursor: grab; }
+.file-item.is-dragging {
+  opacity: 0.46;
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+.file-item.drop-before::after,
+.file-item.drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--accent-color);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-color) 62%, transparent);
+  pointer-events: none;
+}
+.file-item.drop-before::after { left: -2px; }
+.file-item.drop-after::after { right: -2px; }
+
+.file-item .file-reorder-handle {
+  margin: 0 5px 0 0;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.file-item .file-reorder-handle:active { cursor: grabbing; }
+.file-item.active .file-reorder-handle { color: rgba(255,255,255,.82); }
+.file-item .file-move-control { display: none; }
+.file-item .file-reorder-handle:focus-visible,
+.file-item .file-move-control:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 .file-name {
@@ -640,6 +678,7 @@ body.zen-mode #zenExitBtn {
 }
 
 .file-item.active .file-visibility-action,
+.file-item.active .file-move-control,
 .file-item.active .rename-file,
 .file-item.active .delete-file {
   color: rgba(255, 255, 255, 0.84);
@@ -671,6 +710,29 @@ body.zen-mode #zenExitBtn {
 
 #fileList::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .file-item .file-reorder-handle { display: none; }
+  .file-item .file-move-control { display: inline-grid; place-items: center; }
+  .file-item .file-move-earlier i,
+  .file-item .file-move-later i { transform: rotate(90deg); }
+}
+
+@media (max-width: 699px), (max-width: 1100px) and (orientation: portrait), (max-width: 950px) and (max-height: 500px) {
+  .file-item .file-reorder-handle { display: none; }
+  .file-item .file-move-control { display: inline-grid; place-items: center; }
+  .file-item .file-move-earlier i,
+  .file-item .file-move-later i { transform: rotate(90deg); }
+  .file-item.drop-before::after,
+  .file-item.drop-after::after {
+    right: 5px;
+    left: 5px;
+    width: auto;
+    height: 3px;
+  }
+  .file-item.drop-before::after { top: -2px; bottom: auto; }
+  .file-item.drop-after::after { top: auto; bottom: -2px; }
 }
 
 .code-container {
