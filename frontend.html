@@ -867,6 +867,44 @@
           />
         </div>
 
+        <!-- Suggestion Options -->
+        <div
+          class="tag-suggestions-setting"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+          "
+        >
+          <div>
+            <strong style="color: var(--text-primary)">Tag suggestions</strong>
+            <p id="tagSuggestionsDescription" style="margin: 6px 0 0; color: var(--text-muted); font-size: 12px">
+              Show automatic HTML, CSS, JavaScript, identifier, and file suggestions while typing.
+            </p>
+          </div>
+          <label
+            class="switch"
+            for="tagSuggestions"
+            title="Show suggestions while typing"
+            style="flex: 0 0 44px"
+          >
+            <input
+              type="checkbox"
+              id="tagSuggestions"
+              checked
+              aria-label="Show tag suggestions while typing"
+              aria-describedby="tagSuggestionsDescription"
+            />
+            <span class="slider"></span>
+          </label>
+        </div>
+
         <!-- Zen Mode Options -->
         <div
           class="zen-mode-setting"
@@ -1799,7 +1837,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260717-inline-script-parity1"></script>
+    <script src="/frontend.js?v=20260717-tag-suggestions-setting1"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>

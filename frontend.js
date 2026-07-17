@@ -27,6 +27,7 @@ const themeColorText = document.getElementById("themeColorText");
 const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
 const editorTextSizeInput = document.getElementById("editorTextSize");
 const textSizeValue = document.getElementById("textSizeValue");
+const tagSuggestionsCheckbox = document.getElementById("tagSuggestions");
 const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
@@ -4949,6 +4950,7 @@ let projectFiles = [
             <li>Settings uses your browser or device's normal color picker for editor background and theme colors</li>
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
+            <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
             <li>Developer Tools replaces its output transcript and command text field with a spacious responsive grid of one-click preview, viewport, inspection, screenshot, wrapping, formatting, media, and reset controls</li>
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
@@ -6720,6 +6722,7 @@ const defaultSettings = {
   fontLetterSpacing: "0",
   fontLineHeight: "1.5",
   themeColor: "#238636",
+  tagSuggestions: true,
   zenShowFiles: true,
   fullscreenPreviewPanel: true,
 };
@@ -9979,6 +9982,12 @@ function loadSettings() {
       themeColorText.value = settings.themeColor || defaultSettings.themeColor;
       editorTextSizeInput.value = settings.textSize || defaultSettings.textSize;
       textSizeValue.textContent = (settings.textSize || defaultSettings.textSize) + "px";
+      if (tagSuggestionsCheckbox) {
+        tagSuggestionsCheckbox.checked =
+          settings.tagSuggestions !== undefined
+            ? Boolean(settings.tagSuggestions)
+            : defaultSettings.tagSuggestions;
+      }
       editorFontFamilySelect.value = settings.fontFamily || defaultSettings.fontFamily;
       if (!editorFontFamilySelect.value) {
         editorFontFamilySelect.value = defaultSettings.fontFamily;
@@ -10018,6 +10027,7 @@ function loadSettings() {
   updateThemeColor(themeColorInput.value);
   updatePreviewBox();
   applyZenFileVisibilitySetting();
+  if (tagSuggestionsCheckbox && !tagSuggestionsCheckbox.checked) hideSuggestions();
   applySettingsToEditors();
 }
 
@@ -10028,6 +10038,7 @@ function resetToDefaultSettings() {
   themeColorText.value = defaultSettings.themeColor;
   editorTextSizeInput.value = defaultSettings.textSize;
   textSizeValue.textContent = defaultSettings.textSize + "px";
+  if (tagSuggestionsCheckbox) tagSuggestionsCheckbox.checked = defaultSettings.tagSuggestions;
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
   if (editorFontWeightInput) editorFontWeightInput.value = defaultSettings.fontWeight;
@@ -10388,6 +10399,9 @@ applySettingsBtn.addEventListener("click", () => {
     fontItalic: Boolean(editorFontItalicInput?.checked),
     fontLetterSpacing: editorFontLetterSpacingInput?.value || defaultSettings.fontLetterSpacing,
     fontLineHeight: editorFontLineHeightInput?.value || defaultSettings.fontLineHeight,
+    tagSuggestions: tagSuggestionsCheckbox
+      ? tagSuggestionsCheckbox.checked
+      : defaultSettings.tagSuggestions,
     zenShowFiles: zenShowFilesCheckbox ? zenShowFilesCheckbox.checked : defaultSettings.zenShowFiles,
     fullscreenPreviewPanel: fullscreenPreviewPanelCheckbox
       ? fullscreenPreviewPanelCheckbox.checked
@@ -10423,6 +10437,12 @@ resetSettingsBtn.addEventListener("click", () => {
 if (zenShowFilesCheckbox) {
   zenShowFilesCheckbox.addEventListener("change", () => {
     applyZenFileVisibilitySetting(zenShowFilesCheckbox.checked);
+  });
+}
+
+if (tagSuggestionsCheckbox) {
+  tagSuggestionsCheckbox.addEventListener("change", () => {
+    if (!tagSuggestionsCheckbox.checked) hideSuggestions();
   });
 }
 
@@ -14155,6 +14175,10 @@ function initializeEditor() {
  */
 function handleSuggestions(e) {
   const editor = e.target;
+  if (tagSuggestionsCheckbox && !tagSuggestionsCheckbox.checked) {
+    hideSuggestions();
+    return;
+  }
   if (isLargeEditorContent(editor.value)) {
     if (suggestionPopup.style.display === "block") hideSuggestions();
     return;
