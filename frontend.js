@@ -5010,7 +5010,7 @@ let projectFiles = [
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
             <li>Open Developer Tools normally from More or with its keyboard shortcut; all 21 preview and editor buttons provide busy, success, pressed-state, and failure feedback, including verified Custom Size, Screenshot, Fullscreen, formatting, media, and reset actions</li>
-            <li>JavaScript variables, functions, and classes become priority suggestions only after you press Run with valid code, and remain available only while their declarations still exist; JavaScript can also suggest HTML IDs/classes and CSS selectors/custom properties from the project</li>
+            <li>Suggestions come only from the project as it exists right now: editing or deleting an HTML ID/class, CSS selector/custom property, or JavaScript declaration immediately removes its old value from the list</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
             <li>Typing a single or double quote in JavaScript inserts the matching closing quote and keeps the caret between the pair, including inside <code>console.log()</code></li>
@@ -6804,6 +6804,11 @@ function safeLocalStorage(method, key, value = null) {
     return null;
   }
 }
+
+// Suggestions are derived from the current project, so discard obsolete
+// suggestion-history data created by older CodX Editor versions.
+safeLocalStorage("remove", "codxLearnedSuggestionsV1");
+safeLocalStorage("remove", "codxLearnedSuggestionsV2");
 
 function getOrCreateDeviceId() {
   const existing = safeLocalStorage("get", DEVICE_ID_KEY);
@@ -9436,7 +9441,7 @@ function debouncedUpdatePreview() {
   clearTimeout(autoRunTimeout);
   const activeContent = String(activeFile?.content || "");
   if (isLargeEditorContent(activeContent)) return;
-  autoRunTimeout = setTimeout(() => updatePreview({ commitSuggestions: false }), AUTO_RUN_TYPING_IDLE_MS);
+  autoRunTimeout = setTimeout(updatePreview, AUTO_RUN_TYPING_IDLE_MS);
 }
 
 function scheduleSessionUpdate() {
@@ -12298,7 +12303,7 @@ function refreshDiagnosticsState() {
   performDiagnosticsRefresh();
 }
 
-function updatePreview(options = {}) {
+function updatePreview() {
   if (
     activeSessionId && !isHost() && collabPermissions.disableRunCode
   ) {
@@ -12913,9 +12918,6 @@ function updatePreview(options = {}) {
 
   iframe.removeAttribute("src");
   iframe.srcdoc = html;
-  if (options.commitSuggestions === true) {
-    commitExecutedJavaScriptSuggestions();
-  }
   setTimeout(bindPreviewNavigationHandlers, 0);
 }
 
@@ -14580,62 +14582,6 @@ let __codxProjectSuggestionCache = {
   },
 };
 
-let __codxExecutedJavaScriptSuggestions = {
-  byFile: new Map(),
-  memberKeys: new Set(),
-};
-
-const CODEX_LEARNED_SUGGESTIONS_KEY = "codxLearnedSuggestionsV2";
-const CODEX_LEARNED_SUGGESTION_LIMIT = 600;
-const __codxLearnedSuggestionDefaults = {
-  html: { tags: [], attrs: [], ids: [], classes: [] },
-  css: { selectors: [], properties: [], values: [], vars: [], colors: [] },
-  js: { identifiers: [], members: [] },
-  env: { keys: [] },
-  files: { names: [] },
-};
-
-function __codxLoadLearnedSuggestions() {
-  const saved = safeLocalStorage("get", CODEX_LEARNED_SUGGESTIONS_KEY);
-  if (!saved) return structuredClone(__codxLearnedSuggestionDefaults);
-  try {
-    const parsed = JSON.parse(saved);
-    const normalized = structuredClone(__codxLearnedSuggestionDefaults);
-    Object.keys(normalized).forEach((language) => {
-      Object.keys(normalized[language]).forEach((category) => {
-        const values = parsed?.[language]?.[category];
-        normalized[language][category] = Array.isArray(values)
-          ? values.filter((value) => typeof value === "string" && value.trim()).slice(-CODEX_LEARNED_SUGGESTION_LIMIT)
-          : [];
-      });
-    });
-    return normalized;
-  } catch (_err) {
-    return structuredClone(__codxLearnedSuggestionDefaults);
-  }
-}
-
-let __codxLearnedSuggestions = __codxLoadLearnedSuggestions();
-
-function __codxRememberLearnedValues(language, category, values) {
-  const target = __codxLearnedSuggestions?.[language]?.[category];
-  if (!Array.isArray(target)) return;
-  const seen = new Set(target.map((value) => value.toLowerCase()));
-  for (const rawValue of values || []) {
-    const value = String(rawValue || "").trim();
-    if (!value || value.length > 160 || seen.has(value.toLowerCase())) continue;
-    seen.add(value.toLowerCase());
-    target.push(value);
-  }
-  if (target.length > CODEX_LEARNED_SUGGESTION_LIMIT) {
-    target.splice(0, target.length - CODEX_LEARNED_SUGGESTION_LIMIT);
-  }
-}
-
-function __codxSaveLearnedSuggestions() {
-  safeLocalStorage("set", CODEX_LEARNED_SUGGESTIONS_KEY, JSON.stringify(__codxLearnedSuggestions));
-}
-
 function __codxHashProjectFiles(files) {
   try {
     const sig = (files || [])
@@ -14871,26 +14817,6 @@ function __codxTokenizeEnv(projectFiles) {
   return { keys };
 }
 
-function __codxLearnFromProjectCache() {
-  const cache = __codxProjectSuggestionCache;
-  __codxRememberLearnedValues("html", "tags", cache.html.tagFreq.keys());
-  __codxRememberLearnedValues("html", "attrs", cache.html.attrFreq.keys());
-  __codxRememberLearnedValues("html", "ids", cache.html.ids);
-  __codxRememberLearnedValues("html", "classes", cache.html.classes);
-  __codxRememberLearnedValues("css", "selectors", cache.css.selectorFreq.keys());
-  __codxRememberLearnedValues("css", "properties", cache.css.propertyFreq.keys());
-  __codxRememberLearnedValues("css", "values", cache.css.valueFreq.keys());
-  __codxRememberLearnedValues("css", "vars", cache.css.vars);
-  __codxRememberLearnedValues("css", "colors", cache.css.colors);
-  __codxRememberLearnedValues("env", "keys", cache.env.keys);
-  __codxRememberLearnedValues(
-    "files",
-    "names",
-    projectFiles.map((file) => file.name),
-  );
-  __codxSaveLearnedSuggestions();
-}
-
 let __codxProjectScannerTimer = null;
 let __codxProjectScannerIdleCallback = null;
 let __codxProjectScannerFallbackTimer = null;
@@ -14903,6 +14829,17 @@ function __codxGetSuggestionScanFiles(files) {
       content: content.slice(0, 80 * 1024) + "\n" + content.slice(-80 * 1024),
     };
   });
+}
+
+function __codxRefreshProjectSuggestionCache() {
+  const nextHash = __codxHashProjectFiles(projectFiles);
+  if (nextHash === __codxProjectSuggestionCache.hash) return;
+  const scanFiles = __codxGetSuggestionScanFiles(projectFiles);
+  __codxProjectSuggestionCache.hash = nextHash;
+  __codxProjectSuggestionCache.html = __codxTokenizeHtml(scanFiles);
+  __codxProjectSuggestionCache.css = __codxTokenizeCss(scanFiles);
+  __codxProjectSuggestionCache.js = __codxTokenizeJs(scanFiles);
+  __codxProjectSuggestionCache.env = __codxTokenizeEnv(scanFiles);
 }
 
 function __codxRescanProjectSuggestionCacheSoon() {
@@ -14918,18 +14855,9 @@ function __codxRescanProjectSuggestionCacheSoon() {
     __codxProjectScannerTimer = null;
     const scanProjectSuggestions = () => {
       __codxProjectScannerIdleCallback = null;
-      const nextHash = __codxHashProjectFiles(projectFiles);
-      if (nextHash === __codxProjectSuggestionCache.hash) return;
-      __codxProjectSuggestionCache.hash = nextHash;
-
       // Build caches only when the browser has breathing room between edits.
       try {
-        const scanFiles = __codxGetSuggestionScanFiles(projectFiles);
-        __codxProjectSuggestionCache.html = __codxTokenizeHtml(scanFiles);
-        __codxProjectSuggestionCache.css = __codxTokenizeCss(scanFiles);
-        __codxProjectSuggestionCache.js = __codxTokenizeJs(scanFiles);
-        __codxProjectSuggestionCache.env = __codxTokenizeEnv(scanFiles);
-        __codxLearnFromProjectCache();
+        __codxRefreshProjectSuggestionCache();
       } catch (e) {
         // fail safe
       }
@@ -14955,7 +14883,11 @@ function __codxProjectIsReady() {
   }
   const nextHash = __codxHashProjectFiles(projectFiles);
   if (!__codxProjectSuggestionCache || nextHash !== __codxProjectSuggestionCache.hash) {
-    __codxRescanProjectSuggestionCacheSoon();
+    try {
+      __codxRefreshProjectSuggestionCache();
+    } catch (_error) {
+      __codxRescanProjectSuggestionCacheSoon();
+    }
   }
 }
 
@@ -14971,7 +14903,7 @@ function getRankedTagSuggestions(prefix, options = {}) {
 
   const projectTags = __codxProjectSuggestionCache.html.tagFreq;
   const projectTagEntries = Array.from(
-    new Set([...projectTags.keys(), ...__codxLearnedSuggestions.html.tags]),
+    new Set(projectTags.keys()),
   )
     .filter((t) => t && t.includes(q))
     .slice(0, 300);
@@ -15174,17 +15106,11 @@ function getRankedHtmlAttributeValueSuggestions(attr, prefix) {
   const jsValues = isClass
     ? __codxProjectSuggestionCache.js.domClasses
     : __codxProjectSuggestionCache.js.domIds;
-  const learnedValues = isClass
-    ? __codxLearnedSuggestions.html.classes
-    : __codxLearnedSuggestions.html.ids;
-  const cssValues = [
-    ...__codxProjectSuggestionCache.css.selectorFreq.keys(),
-    ...__codxLearnedSuggestions.css.selectors,
-  ]
+  const cssValues = [...__codxProjectSuggestionCache.css.selectorFreq.keys()]
     .filter((value) => String(value).startsWith(isClass ? "." : "#"))
     .map((value) => String(value).slice(1));
   const currentValues = getCurrentFileHtmlValues(attr);
-  const values = Array.from(new Set([...currentValues, ...projectValues, ...jsValues, ...learnedValues, ...cssValues]));
+  const values = Array.from(new Set([...currentValues, ...projectValues, ...jsValues, ...cssValues]));
   return values
     .filter((value) => getSuggestionMatchTier(value, q, { allowClose: currentValues.has(value) }) > 0)
     .sort((a, b) => {
@@ -15197,15 +15123,13 @@ function getRankedHtmlAttributeValueSuggestions(attr, prefix) {
       return a.length - b.length || a.localeCompare(b);
     })
     .slice(0, 40)
-    .map((value) => ({ value, desc: currentValues.has(value) ? `Declared in current file` : `Learned HTML ${attr}` }));
+    .map((value) => ({ value, desc: currentValues.has(value) ? "Declared in current file" : `Present in current project HTML ${attr}` }));
 }
 
 function getRankedEnvSuggestions(prefix) {
   __codxProjectIsReady();
   const q = String(prefix || "").toLowerCase();
-  const values = Array.from(
-    new Set([...__codxProjectSuggestionCache.env.keys, ...__codxLearnedSuggestions.env.keys]),
-  );
+  const values = Array.from(__codxProjectSuggestionCache.env.keys);
   return values
     .filter((value) => value.toLowerCase().includes(q))
     .sort((a, b) => {
@@ -15214,7 +15138,7 @@ function getRankedEnvSuggestions(prefix) {
       return bStarts - aStarts || a.length - b.length || a.localeCompare(b);
     })
     .slice(0, 40)
-    .map((value) => ({ value, desc: "Learned environment variable name" }));
+    .map((value) => ({ value, desc: "Environment variable in current project" }));
 }
 
 function getHtmlInlineStyleSuggestionContext(textBefore) {
@@ -15434,39 +15358,6 @@ function getCurrentFileJavaScriptIdentifiers(options = {}) {
   return new Set();
 }
 
-function getJavaScriptSuggestionSourcesForFile(file) {
-  if (!file) return [];
-  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(String(file.type || "").toLowerCase())) {
-    return [String(file.content || "")];
-  }
-  if (file.type === "html") {
-    return getHtmlRawTextSegments(file.content, "script", { includeUnclosed: true })
-      .filter(isJavaScriptScriptSegment)
-      .map((segment) => String(segment.code || ""));
-  }
-  return [];
-}
-
-function commitExecutedJavaScriptSuggestions() {
-  const byFile = new Map();
-  const memberKeys = new Set();
-
-  projectFiles.forEach((file) => {
-    const names = new Set();
-    getJavaScriptSuggestionSourcesForFile(file).forEach((source) => {
-      if (!canParseJavaScriptForSuggestions(source)) return;
-      collectDeclaredJavaScriptIdentifiers(source, { allowFallback: false })
-        .forEach((name) => names.add(name));
-      const memberPattern = /\.([$A-Z_][0-9A-Z_$]*)\b/gim;
-      let match;
-      while ((match = memberPattern.exec(source)) !== null) memberKeys.add(match[1]);
-    });
-    if (names.size) byFile.set(file.name, names);
-  });
-
-  __codxExecutedJavaScriptSuggestions = { byFile, memberKeys };
-}
-
 function getCurrentFileCssSelectors() {
   if (!activeFile || !["css", "html"].includes(activeFile.type)) return new Set();
   const cssText = activeFile.type === "css"
@@ -15507,13 +15398,13 @@ function getCurrentFileHtmlValues(attr) {
 }
 
 function getRankedCssSuggestions(prefix, mode, propertyName) {
+  __codxProjectIsReady();
   const q = (prefix || "").toLowerCase();
   let source = [];
   if (mode === "css-property" || mode === "css-inline-property") {
     const properties = [
       ...cssPropertySuggestions,
       ...__codxProjectSuggestionCache.css.propertyFreq.keys(),
-      ...__codxLearnedSuggestions.css.properties,
     ];
     source = properties.map((value) => ({
       value,
@@ -15522,14 +15413,12 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
   } else if (mode === "css-value" || mode === "css-inline-value") {
     const propertyValues = cssValueSuggestionsByProperty[propertyName] || [];
     const rememberedValues = isCssColorProperty(propertyName)
-      ? [...__codxProjectSuggestionCache.css.colors, ...__codxLearnedSuggestions.css.colors]
-      : [...__codxProjectSuggestionCache.css.valueFreq.keys(), ...__codxLearnedSuggestions.css.values];
+      ? [...__codxProjectSuggestionCache.css.colors]
+      : [...__codxProjectSuggestionCache.css.valueFreq.keys()];
     const learnedValues = [
       ...rememberedValues,
       ...__codxProjectSuggestionCache.css.vars,
-      ...__codxLearnedSuggestions.css.vars,
       ...Array.from(__codxProjectSuggestionCache.css.vars).map((value) => `var(${value})`),
-      ...__codxLearnedSuggestions.css.vars.map((value) => `var(${value})`),
     ];
     source = [...propertyValues, ...learnedValues, ...cssGenericValueSuggestions].map((value) => ({
       value,
@@ -15555,17 +15444,12 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
       ...Array.from(__codxProjectSuggestionCache.html.classes).map((value) => `.${value}`),
       ...Array.from(__codxProjectSuggestionCache.html.ids).map((value) => `#${value}`),
     ].map((value) => ({ value, desc: "Used in this project", sourcePriority: 3 }));
-    const learnedSelectors = [
-      ...__codxLearnedSuggestions.css.selectors,
-      ...__codxLearnedSuggestions.html.classes.map((value) => `.${value}`),
-      ...__codxLearnedSuggestions.html.ids.map((value) => `#${value}`),
-    ].map((value) => ({ value, desc: "Learned selector", sourcePriority: 2 }));
     const genericSelectors = cssSelectorSuggestions.map((value) => ({
       value,
       desc: "Selector or at-rule",
       sourcePriority: 1,
     }));
-    source = [...currentSelectors, ...projectSelectors, ...learnedSelectors, ...genericSelectors];
+    source = [...currentSelectors, ...projectSelectors, ...genericSelectors];
   }
 
   const deduped = new Map();
@@ -15598,24 +15482,15 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
 }
 
 function getRankedJsSuggestions(prefix) {
+  __codxProjectIsReady();
   const q = (prefix || "").toLowerCase();
   const runtimeMembers = getRuntimeJsMemberSuggestions(prefix);
-  const currentValidNames = getCurrentFileJavaScriptIdentifiers({ allowFallback: false });
-  const activeFileName = String(activeFile?.name || "").toLowerCase();
-  const executedEntries = [];
-  __codxExecutedJavaScriptSuggestions.byFile.forEach((names, fileName) => {
-    const isCurrentFile = String(fileName || "").toLowerCase() === activeFileName;
-    names.forEach((value) => {
-      if (isCurrentFile && !currentValidNames.has(value)) return;
-      executedEntries.push({
-        value,
-        desc: isCurrentFile ? "Declared in current file and run" : `Declared in ${fileName} and run`,
-        sourcePriority: isCurrentFile ? 5 : 4,
-      });
-    });
-  });
-  const executedMemberEntries = [...__codxExecutedJavaScriptSuggestions.memberKeys]
-    .map((value) => ({ value, desc: "JavaScript member used in the last run", sourcePriority: 3 }));
+  const currentEntries = [...getCurrentFileJavaScriptIdentifiers({ allowFallback: false })]
+    .map((value) => ({ value, desc: "Declared in current file", sourcePriority: 5 }));
+  const projectEntries = [
+    ...__codxProjectSuggestionCache.js.identFreq.keys(),
+    ...__codxProjectSuggestionCache.js.memberKeys,
+  ].map((value) => ({ value, desc: "Present in current project code", sourcePriority: 4 }));
   const crossLanguageEntries = [
     ...Array.from(__codxProjectSuggestionCache.html.ids).flatMap((value) => [
       { value, desc: "HTML id in this project", sourcePriority: 3 },
@@ -15632,14 +15507,12 @@ function getRankedJsSuggestions(prefix) {
       { value: `var(${value})`, desc: "CSS custom property value", sourcePriority: 3 },
     ]),
   ];
-  const envEntries = [
-    ...__codxProjectSuggestionCache.env.keys,
-    ...__codxLearnedSuggestions.env.keys,
-  ].map((key) => ({ value: `process.env.${key}`, desc: "Learned environment variable", sourcePriority: 2 }));
+  const envEntries = [...__codxProjectSuggestionCache.env.keys]
+    .map((key) => ({ value: `process.env.${key}`, desc: "Environment variable in current project", sourcePriority: 2 }));
   const genericEntries = jsSuggestions.map((entry) => ({ ...entry, sourcePriority: 1 }));
   const runtimeEntries = runtimeMembers.map((entry) => ({ ...entry, sourcePriority: 1 }));
   const deduped = new Map();
-  [...executedEntries, ...executedMemberEntries, ...crossLanguageEntries, ...envEntries, ...genericEntries, ...runtimeEntries]
+  [...currentEntries, ...projectEntries, ...crossLanguageEntries, ...envEntries, ...genericEntries, ...runtimeEntries]
     .forEach((entry) => {
       const key = entry.value.toLowerCase();
       const existing = deduped.get(key);
@@ -15792,11 +15665,11 @@ function getHtmlAttributeSuggestionContext(textBefore) {
 }
 
 function getRankedHtmlAttributeSuggestions(tagName, prefix, usedAttributes) {
+  __codxProjectIsReady();
   const meta = htmlTagMetaMap.get(tagName) || { attrs: [] };
   const used = new Set((usedAttributes || []).map((value) => value.toLowerCase()));
   const source = [
     ...__codxProjectSuggestionCache.html.attrFreq.keys(),
-    ...__codxLearnedSuggestions.html.attrs,
     ...globalHtmlAttributes,
     ...(meta.attrs || []),
   ];
@@ -15852,12 +15725,7 @@ function matchesExtensionByContext(fileName, attr, tag) {
 function getRankedFileSuggestions(prefix, attr, tag) {
   __codxProjectIsReady();
   const q = (prefix || "").toLowerCase().replace(/^\.?\//, "");
-  const candidates = Array.from(
-    new Set([
-      ...projectFiles.map((file) => file.name),
-      ...__codxLearnedSuggestions.files.names,
-    ]),
-  )
+  const candidates = Array.from(new Set(projectFiles.map((file) => file.name)))
     .filter((name) => matchesExtensionByContext(name, attr, tag));
 
   const matches = candidates.filter((name) =>
@@ -18137,7 +18005,7 @@ document.addEventListener("keydown", (e) => {
       showNotification("The host disabled running code for participants.", "error");
       return;
     }
-    updatePreview({ commitSuggestions: true });
+    updatePreview();
   }
   if (mod && key === "q") {
     e.preventDefault();
