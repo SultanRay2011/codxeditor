@@ -5010,7 +5010,7 @@ let projectFiles = [
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
             <li>Open Developer Tools normally from More or with its keyboard shortcut; all 21 preview and editor buttons provide busy, success, pressed-state, and failure feedback, including verified Custom Size, Screenshot, Fullscreen, formatting, media, and reset actions</li>
-            <li>JavaScript variables, functions, and classes become priority suggestions after valid code runs and remain available only while their declarations still exist; JavaScript can also suggest HTML IDs/classes and CSS selectors/custom properties from the project</li>
+            <li>JavaScript variables, functions, and classes become priority suggestions only after you press Run with valid code, and remain available only while their declarations still exist; JavaScript can also suggest HTML IDs/classes and CSS selectors/custom properties from the project</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
             <li>Typing a single or double quote in JavaScript inserts the matching closing quote and keeps the caret between the pair, including inside <code>console.log()</code></li>
@@ -9436,7 +9436,7 @@ function debouncedUpdatePreview() {
   clearTimeout(autoRunTimeout);
   const activeContent = String(activeFile?.content || "");
   if (isLargeEditorContent(activeContent)) return;
-  autoRunTimeout = setTimeout(updatePreview, AUTO_RUN_TYPING_IDLE_MS);
+  autoRunTimeout = setTimeout(() => updatePreview({ commitSuggestions: false }), AUTO_RUN_TYPING_IDLE_MS);
 }
 
 function scheduleSessionUpdate() {
@@ -12298,7 +12298,7 @@ function refreshDiagnosticsState() {
   performDiagnosticsRefresh();
 }
 
-function updatePreview() {
+function updatePreview(options = {}) {
   if (
     activeSessionId && !isHost() && collabPermissions.disableRunCode
   ) {
@@ -12913,7 +12913,9 @@ function updatePreview() {
 
   iframe.removeAttribute("src");
   iframe.srcdoc = html;
-  commitExecutedJavaScriptSuggestions();
+  if (options.commitSuggestions === true) {
+    commitExecutedJavaScriptSuggestions();
+  }
   setTimeout(bindPreviewNavigationHandlers, 0);
 }
 
@@ -18135,7 +18137,7 @@ document.addEventListener("keydown", (e) => {
       showNotification("The host disabled running code for participants.", "error");
       return;
     }
-    updatePreview();
+    updatePreview({ commitSuggestions: true });
   }
   if (mod && key === "q") {
     e.preventDefault();
