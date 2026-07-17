@@ -2717,7 +2717,8 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "Room is locked." });
         return;
       }
-      const joinedName = reclaimingHost ? String(session.hostName || name).trim() : name;
+      const previousHostName = String(session.hostName || "").trim();
+      const joinedName = name;
       const taken = session.participants.some(
         (p) => p.name.toLowerCase() === joinedName.toLowerCase(),
       );
@@ -2780,9 +2781,13 @@ io.on("connection", (socket) => {
       session.participants.push(joinedParticipant);
       if (reclaimingHost) {
         session.hostSocketId = socket.id;
-        session.hostName = joinedName;
         session.hostDeviceId = deviceId || hostDeviceId;
         session.lastEmptyAt = null;
+        if (previousHostName && normalizeName(previousHostName) !== normalizeName(joinedName)) {
+          migrateParticipantNameState(session, joinedParticipant, previousHostName, joinedName);
+        } else {
+          session.hostName = joinedName;
+        }
       }
       socket.join(sessionId);
       socketMeta.set(socket.id, { sessionId, name: joinedName, theme, cursorStyle, deviceId });

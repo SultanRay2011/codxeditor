@@ -5034,7 +5034,7 @@ let projectFiles = [
             <li>Collaboration participant and file checklists use clear green controls with Select All for multi-selection, while Bring To File, Pin Team File, Team Focus, and visibility tools show every project file as a clickable list instead of asking you to type a filename</li>
             <li>Group Controls use distinct, accessible colors for permissions, participant actions, file focus, session tools, warnings, and destructive actions so controls are easier to recognize</li>
             <li>Session announcements use a spacious responsive writing field and appear only for participants, so the host and co-host screens stay uninterrupted</li>
-            <li>If a host refreshes while the session is empty, the original device can rejoin and securely reclaim the host position without letting another device take over</li>
+            <li>If a host refreshes while the session is empty, the original device can rejoin with the newly entered name and securely reclaim the host position without letting another device take over</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
