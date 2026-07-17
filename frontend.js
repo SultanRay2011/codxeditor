@@ -138,6 +138,7 @@ const headerMorePanel = document.getElementById("headerMorePanel");
 const undoEditorBtn = document.getElementById("undoEditorBtn");
 const redoEditorBtn = document.getElementById("redoEditorBtn");
 const commandPaletteBtn = document.getElementById("commandPaletteBtn");
+const developerToolsBtn = document.getElementById("developerToolsBtn");
 const commandPaletteModal = document.getElementById("commandPaletteModal");
 const commandPaletteInput = document.getElementById("commandPaletteInput");
 const commandPaletteResults = document.getElementById("commandPaletteResults");
@@ -467,6 +468,7 @@ function closeCommandPalette(restoreFocus = true) {
 }
 
 commandPaletteBtn?.addEventListener("click", () => openCommandPalette());
+developerToolsBtn?.addEventListener("click", openDeveloperConsole);
 commandPaletteModal?.addEventListener("click", (event) => {
   if (event.target === commandPaletteModal) closeCommandPalette();
 });
@@ -942,8 +944,7 @@ if (closeDeveloperConsoleBtn) {
 }
 developerConsoleShortcutButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    runDeveloperCommand(button.dataset.developerCommand || "");
-    button.focus({ preventScroll: true });
+    executeDeveloperToolButton(button);
   });
 });
 
@@ -3756,6 +3757,49 @@ function clearDeveloperConsoleOutput() {
   developerToolStatus.textContent = "Choose any tool above. Its result will appear here.";
 }
 
+function syncDeveloperToolButtonStates() {
+  const activeDeviceCommand = `device ${previewDeviceState.key}`;
+  ["device responsive", "device phone", "device tablet", "device laptop"].forEach((command) => {
+    setDeveloperShortcutPressed(command, command === activeDeviceCommand);
+  });
+  setDeveloperShortcutPressed("preview fullscreen", Boolean(document.fullscreenElement));
+  setDeveloperShortcutPressed("preview inspect", isPreviewInspecting);
+  setDeveloperShortcutPressed("grid toggle", previewGridEnabled);
+  setDeveloperShortcutPressed("scheme toggle", previewColorSchemeMode !== "system");
+  setDeveloperShortcutPressed("breakpoints toggle", previewBreakpointIndicatorEnabled);
+  const wrappingEnabled = editorTextarea.wrap !== "off" || editorTextarea.style.whiteSpace === "pre-wrap";
+  setDeveloperShortcutPressed("editor wrap on", wrappingEnabled);
+  setDeveloperShortcutPressed("editor wrap off", !wrappingEnabled);
+  setDeveloperShortcutPressed("media source toggle", developerMediaSourceVisible);
+}
+
+async function executeDeveloperToolButton(button) {
+  if (!(button instanceof HTMLButtonElement) || button.dataset.developerBusy === "true") return;
+  const command = String(button.dataset.developerCommand || "").trim();
+  if (!command) {
+    appendDeveloperConsoleLine("This Developer Tool button is missing its command.");
+    return;
+  }
+  const label = button.querySelector("span")?.childNodes?.[0]?.textContent?.trim() || command;
+  button.dataset.developerBusy = "true";
+  button.setAttribute("aria-busy", "true");
+  button.disabled = true;
+  if (developerToolStatus) developerToolStatus.textContent = `Running ${label}...`;
+  try {
+    await runDeveloperCommand(command);
+  } catch (error) {
+    const message = `${label} failed: ${String(error?.message || "Unexpected Developer Tool error.")}`;
+    appendDeveloperConsoleLine(message);
+    showNotification(message, "error");
+  } finally {
+    delete button.dataset.developerBusy;
+    button.removeAttribute("aria-busy");
+    button.disabled = false;
+    syncDeveloperToolButtonStates();
+    button.focus({ preventScroll: true });
+  }
+}
+
 function closeDeveloperConsole() {
   if (!developerConsoleModal) return;
   developerConsoleModal.style.display = "none";
@@ -3765,6 +3809,7 @@ function openDeveloperConsole() {
   if (!developerConsoleModal) return;
   developerConsoleModal.style.display = "flex";
   clearDeveloperConsoleOutput();
+  syncDeveloperToolButtonStates();
   requestAnimationFrame(() => developerConsoleShortcutButtons[0]?.focus({ preventScroll: true }));
 }
 
@@ -3803,7 +3848,7 @@ function getDeveloperStateSummary() {
   };
 }
 
-function runDeveloperCommand(rawCommand) {
+async function runDeveloperCommand(rawCommand) {
   const raw = String(rawCommand || "").trim();
   const command = raw.toLowerCase();
   if (!command) return;
@@ -3842,7 +3887,7 @@ function runDeveloperCommand(rawCommand) {
 
   if (command.startsWith("viewport ")) {
     if (command === "viewport prompt") {
-      promptForCustomPreviewViewport();
+      await promptForCustomPreviewViewport();
       return;
     }
     const match = command.match(/^viewport\s+(\d+)\s*(?:x|×|\s)\s*(\d+)$/);
@@ -3883,28 +3928,28 @@ function runDeveloperCommand(rawCommand) {
   }
 
   if (command === "preview refresh") {
-    refreshPreviewPane();
-    appendDeveloperConsoleLine("Preview refreshed.");
+    const refreshed = refreshPreviewPane();
+    appendDeveloperConsoleLine(refreshed ? "Preview refreshed." : "Preview refresh is already running.");
     appendDeveloperConsoleLine("");
     return;
   }
   if (command === "preview screenshot") {
     appendDeveloperConsoleLine("Capturing the current preview...");
-    capturePreviewScreenshot()
-      .then((message) => {
-        appendDeveloperConsoleLine(`${message}\n`);
-        showNotification(message, "success");
-      })
-      .catch((error) => {
-        const message = String(error?.message || "The preview screenshot failed.");
-        appendDeveloperConsoleLine(`${message}\n`);
-        showNotification(message, "error");
-      });
+    const message = await capturePreviewScreenshot();
+    appendDeveloperConsoleLine(`${message}\n`);
+    showNotification(message, "success");
     return;
   }
   if (command === "preview fullscreen") {
-    togglePreviewFullscreen();
-    appendDeveloperConsoleLine("Fullscreen preview toggled.");
+    const wasFullscreen = Boolean(document.fullscreenElement);
+    const fullscreenChanged = await togglePreviewFullscreen();
+    appendDeveloperConsoleLine(
+      fullscreenChanged
+        ? wasFullscreen
+          ? "Fullscreen preview closed."
+          : "Fullscreen preview requested."
+        : "Fullscreen preview was not changed.",
+    );
     appendDeveloperConsoleLine("");
     return;
   }
@@ -4951,7 +4996,7 @@ let projectFiles = [
             <li>Google Font customization keeps the original link, embed snippet, or <code>@import</code> text exactly as you pasted it</li>
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
-            <li>Developer Tools replaces its output transcript and command text field with a spacious responsive grid of one-click preview, viewport, inspection, screenshot, wrapping, formatting, media, and reset controls</li>
+            <li>Open Developer Tools normally from More or with its keyboard shortcut; all 21 preview and editor buttons provide busy, success, pressed-state, and failure feedback, including verified Custom Size, Screenshot, Fullscreen, formatting, media, and reset actions</li>
             <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
@@ -6076,7 +6121,7 @@ function setPreviewInspecting(enabled) {
 }
 
 function refreshPreviewPane() {
-  if (!previewRefreshBtn || previewRefreshBtn.disabled) return;
+  if (!previewRefreshBtn || previewRefreshBtn.disabled) return false;
   const originalTitle = "Refresh preview";
   let completed = false;
   const finishRefresh = () => {
@@ -6097,6 +6142,7 @@ function refreshPreviewPane() {
 
   updatePreview();
   setTimeout(finishRefresh, 1400);
+  return true;
 }
 
 function applyPreviewZoom() {
@@ -18445,24 +18491,40 @@ zenModeBtn.addEventListener("click", toggleZenMode);
 if (zenExitBtn) zenExitBtn.addEventListener("click", () => toggleZenMode(false));
 document.addEventListener("fullscreenchange", updateFullscreenButtonState);
 
-function togglePreviewFullscreen() {
-  if (!document.fullscreenElement) {
-    const fullscreenTarget = fullscreenPreviewPanelCheckbox?.checked === false
-      ? iframe
-      : previewPanel;
-    if (fullscreenTarget.requestFullscreen) {
-      fullscreenTarget.requestFullscreen();
-    } else if (fullscreenTarget.webkitRequestFullscreen) {
-      fullscreenTarget.webkitRequestFullscreen();
-    } else if (fullscreenTarget.msRequestFullscreen) {
-      fullscreenTarget.msRequestFullscreen();
+async function togglePreviewFullscreen() {
+  try {
+    const enteringFullscreen = !document.fullscreenElement;
+    if (enteringFullscreen) {
+      const fullscreenTarget = fullscreenPreviewPanelCheckbox?.checked === false
+        ? iframe
+        : previewPanel;
+      const request = fullscreenTarget?.requestFullscreen
+        || fullscreenTarget?.webkitRequestFullscreen
+        || fullscreenTarget?.msRequestFullscreen;
+      if (!request) throw new Error("Fullscreen is not supported by this browser.");
+      await Promise.resolve(request.call(fullscreenTarget));
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (!exit) throw new Error("The browser cannot exit fullscreen mode.");
+      await Promise.resolve(exit.call(document));
     }
-  } else {
-    document.exitFullscreen();
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const changed = enteringFullscreen
+      ? Boolean(document.fullscreenElement)
+      : !document.fullscreenElement;
+    if (!changed && enteringFullscreen) {
+      showNotification("The browser closed or blocked fullscreen mode.", "error");
+    }
+    return changed;
+  } catch (error) {
+    const message = String(error?.message || "Fullscreen preview could not be changed.");
+    showNotification(message, "error");
+    return false;
   }
 }
 
 function updateFullscreenButtonState() {
+  syncDeveloperToolButtonStates();
   if (document.fullscreenElement === previewPanel || document.fullscreenElement === iframe) {
     previewFullscreenBtn.innerHTML = `
       <svg class="btn-icon" viewBox="0 0 24 24">

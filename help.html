@@ -627,6 +627,7 @@
               <li><strong>True editor preview:</strong> the homepage hero now mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, colors, and phone workspace tabs.</li>
               <li><strong>Error-first console:</strong> JavaScript runtime errors and code diagnostics are promoted above logs, warnings, and informational output, and opening the Console focuses the error section first.</li>
               <li><strong>Smart JavaScript diagnostics:</strong> while you type, the Console uses JavaScript's parsed structure to classify Syntax, Reference, Type, Range, Logic, Async, and beginner mistakes. Each diagnostic explains why the issue happens, suggests a contextual fix, and opens the exact source location without showing an extra popup notification.</li>
+              <li><strong>Verified Developer Tools:</strong> open the panel from More or its keyboard shortcut. All 21 buttons now use guarded execution, accurate busy and result messages, synchronized pressed states, and visible failure feedback; asynchronous Custom Size, Screenshot, and Fullscreen actions wait for their real result.</li>
               <li><strong>Tag suggestions setting:</strong> open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, current-file identifier, and file-path suggestion menus. The switch is on by default, is saved with your editor settings, and is included in Device Transfer.</li>
               <li><strong>Inline JavaScript parity:</strong> JavaScript inside a standard or module <code>&lt;script&gt;</code> block now uses the same suggestions, current-file identifier ranking, auto-closing, indentation, syntax highlighting, diagnostics, and Format Code behavior as an external JavaScript file. JSON, import-map, data, and external-source script tags remain raw or externally linked instead of being treated as editable inline JavaScript.</li>
               <li><strong>Reorder files:</strong> drag file tabs into a new position on laptops, focus the grip and use the arrow, Home, or End keys, or use the earlier/later controls on touch devices. The order is retained in project saves, exports, transfers, and collaboration updates.</li>
@@ -1337,6 +1338,8 @@
                 <h3><i class="fa-solid fa-screwdriver-wrench"></i> Developer Inspection Panel</h3>
                 <ul>
                   <li>Developer Tools is now a visual power-control panel: the old output transcript and command text field are removed, so every available action is a large, clearly described button.</li>
+                  <li>Open Developer Tools directly from <strong>More → Developer Tools</strong>, or use the keyboard shortcut.</li>
+                  <li>Every one of the 21 controls is connected to guarded execution. A running asynchronous action temporarily shows a busy state, failures appear in the status strip, and toggle/device/wrapping buttons keep their pressed state synchronized with the editor.</li>
                   <li>The responsive grid spreads controls across the space formerly occupied by the output console, then becomes a compact two-column layout on small screens.</li>
                   <li>Emulate a phone, tablet, or laptop viewport; switch back to a fluid responsive pane; set a custom size; or click Rotate to change orientation.</li>
                   <li>Control preview zoom, refresh, fullscreen, and element inspection directly from their buttons.</li>
@@ -1347,7 +1350,7 @@
                   <li>Click Media Source to inspect safe, read-only details for the active image, video, or audio file. Large encoded or binary payloads are not copied into the editor because doing so can exhaust browser memory.</li>
                   <li>Reset Tools returns the device, zoom, inspector, grid, breakpoint indicator, color scheme, media viewer, wrapping, font, and tab display to normal defaults.</li>
                   <li>A compact status strip below the controls confirms the latest action without rebuilding a scrolling output transcript.</li>
-                  <li>Open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
+                  <li>Alternatively, open it with <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>, then <kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd>. You may release Ctrl/Cmd between the two shortcuts.</li>
                   <li>Use Tab and Shift+Tab to move through every tool button, then press Enter or Space to activate it.</li>
                 </ul>
               </article>

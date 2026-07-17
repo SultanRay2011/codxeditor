@@ -7385,6 +7385,12 @@ iframe {
   background: var(--accent-color);
 }
 
+.developer-console-shortcuts button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.7;
+  transform: none;
+}
+
 .developer-tool-status {
   display: flex;
   align-items: center;
