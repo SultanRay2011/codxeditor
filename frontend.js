@@ -5033,6 +5033,7 @@ let projectFiles = [
             <li>Waiting-room join requests stay in the host's approval panel without creating a duplicate "waiting to join" notification</li>
             <li>Collaboration participant and file checklists use clear green controls with Select All for multi-selection, while Bring To File, Pin Team File, Team Focus, and visibility tools show every project file as a clickable list instead of asking you to type a filename</li>
             <li>Session announcements use a spacious responsive writing field and appear only for participants, so the host and co-host screens stay uninterrupted</li>
+            <li>If a host refreshes while the session is empty, the original device can rejoin and securely reclaim the host position without letting another device take over</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
@@ -24229,8 +24230,9 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
       }
 
       const resolvedSessionId = res.sessionId || sid;
+      const resolvedName = String(res.name || name).trim() || name;
       activeSessionId = resolvedSessionId;
-      myInfo = { name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
+      myInfo = { name: resolvedName, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
       collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${resolvedSessionId}`;
       collabSessionPin = res.sessionPin || sid;
       collabParticipants = res.participants || [];
@@ -24246,7 +24248,13 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
       window.history.replaceState({}, "", `/frontend.html/${resolvedSessionId}`);
       applyRemoteSessionState(res.files, res.activeFileName, true);
       enforceCollabPermissionsUI();
-      showNotification(`Welcome, ${name}!`, "success");
+      showNotification(
+        res.reclaimedHost ? `Host access restored, ${resolvedName}.` : `Welcome, ${resolvedName}!`,
+        "success",
+      );
+      if (res.reclaimedHost) {
+        addTimelineEntry(`${resolvedName} reclaimed the host position after reconnecting.`, "role");
+      }
       startSyncing();
       closeModal();
       if (collabPermissions.announcementBar) {

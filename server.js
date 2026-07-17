@@ -2640,6 +2640,7 @@ io.on("connection", (socket) => {
         participants,
         hostSocketId: socket.id,
         hostName: name,
+        hostDeviceId: deviceId,
         pin,
         baseUrl,
         permissions: normalizePermissions(payload?.permissions, files),
@@ -2694,6 +2695,17 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "This device is banned from the session." });
         return;
       }
+      const roomIsEmpty = session.participants.length === 0;
+      const hostDeviceId = String(session.hostDeviceId || "").trim();
+      const matchesStoredHostDevice = Boolean(deviceId && hostDeviceId && deviceId === hostDeviceId);
+      const matchesLegacyHostName = Boolean(
+        !hostDeviceId && session.hostName && normalizeName(session.hostName) === normalizeName(name),
+      );
+      const reclaimingHost = roomIsEmpty && (matchesStoredHostDevice || matchesLegacyHostName);
+      if (roomIsEmpty && hostDeviceId && !reclaimingHost) {
+        ack?.({ ok: false, error: "The original host must return before this empty session can continue." });
+        return;
+      }
       const reconnectingPair = findPairForName(session, name);
       const reconnectKey = normalizeName(name);
       const reconnectDeviceId = String(reconnectingPair?._reconnectDevices?.[reconnectKey] || "").trim();
@@ -2701,12 +2713,13 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "Pair reconnection must come from the original device." });
         return;
       }
-      if (session.permissions?.roomLocked) {
+      if (session.permissions?.roomLocked && !reclaimingHost) {
         ack?.({ ok: false, error: "Room is locked." });
         return;
       }
+      const joinedName = reclaimingHost ? String(session.hostName || name).trim() : name;
       const taken = session.participants.some(
-        (p) => p.name.toLowerCase() === name.toLowerCase(),
+        (p) => p.name.toLowerCase() === joinedName.toLowerCase(),
       );
       if (taken) {
         ack?.({ ok: false, error: "Name already taken." });
@@ -2719,7 +2732,7 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "Color already taken." });
         return;
       }
-      if (session.permissions?.requireJoinApproval) {
+      if (session.permissions?.requireJoinApproval && !reclaimingHost) {
         const alreadyPending = (session.pendingJoins || []).some(
           (entry) => entry.name.toLowerCase() === name.toLowerCase(),
         );
@@ -2748,37 +2761,51 @@ io.on("connection", (socket) => {
         return;
       }
 
-      session.participants.push({
+      const joinedParticipant = {
         socketId: socket.id,
-        name,
+        name: joinedName,
         theme,
         cursorStyle,
-        role: "participant",
+        role: reclaimingHost ? "host" : "participant",
         mutedChat: false,
         frozenEditing: false,
         renameDisabled: false,
         priority: false,
         currentFile: session.activeFileName || null,
         joinedAt: Date.now(),
-        allowedFiles: getStoredParticipantFileAccess(session, name),
+        allowedFiles: getStoredParticipantFileAccess(session, joinedName),
         disabledFeatures: [],
         deviceId,
-      });
+      };
+      session.participants.push(joinedParticipant);
+      if (reclaimingHost) {
+        session.hostSocketId = socket.id;
+        session.hostName = joinedName;
+        session.hostDeviceId = deviceId || hostDeviceId;
+        session.lastEmptyAt = null;
+      }
       socket.join(sessionId);
-      socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
+      socketMeta.set(socket.id, { sessionId, name: joinedName, theme, cursorStyle, deviceId });
 
       ack?.({
         ok: true,
         sessionId,
         sessionPin: session.pin || "",
-        files: getFilesForParticipant(session, session.participants.at(-1)),
-        activeFileName: getActiveFileForParticipant(session, session.participants.at(-1)),
+        files: getFilesForParticipant(session, joinedParticipant),
+        activeFileName: getActiveFileForParticipant(session, joinedParticipant),
         hostName: session.hostName,
         permissions: session.permissions,
         participants: session.participants.map(sanitizeParticipant),
         shareLink: buildShareLink(session.baseUrl || "", sessionId),
+        name: joinedName,
+        role: joinedParticipant.role,
+        reclaimedHost: reclaimingHost,
       });
-      logAdminEvent("Participant joined", `${name} joined session ${sessionId}.`, sessionId);
+      logAdminEvent(
+        reclaimingHost ? "Host reclaimed" : "Participant joined",
+        `${joinedName} ${reclaimingHost ? "reclaimed host access to" : "joined"} session ${sessionId}.`,
+        sessionId,
+      );
       emitParticipants(sessionId);
       emitSessionMeta(sessionId);
       emitPairingState(sessionId);
@@ -2825,6 +2852,14 @@ io.on("connection", (socket) => {
         ack?.({ ok: false, error: "This device is banned from the session." });
         return;
       }
+      const resumingStoredHost = Boolean(
+        session.hostName && normalizeName(session.hostName) === normalizeName(name),
+      );
+      const storedHostDeviceId = String(session.hostDeviceId || "").trim();
+      if (resumingStoredHost && storedHostDeviceId && storedHostDeviceId !== deviceId) {
+        ack?.({ ok: false, error: "Host reconnection must come from the original host device." });
+        return;
+      }
       const reconnectingPair = findPairForName(session, name);
       const reconnectKey = normalizeName(name);
       const reconnectDeviceId = String(reconnectingPair?._reconnectDevices?.[reconnectKey] || "").trim();
@@ -2864,6 +2899,7 @@ io.on("connection", (socket) => {
 
       if (session.hostName && session.hostName.toLowerCase() === name.toLowerCase()) {
         session.hostSocketId = socket.id;
+        session.hostDeviceId = deviceId || session.hostDeviceId || "";
         participant.role = "host";
       }
 
@@ -3602,6 +3638,7 @@ io.on("connection", (socket) => {
       target.role = "host";
       session.hostSocketId = target.socketId;
       session.hostName = target.name;
+      session.hostDeviceId = String(target.deviceId || socketMeta.get(target.socketId)?.deviceId || "").trim();
       io.to(target.socketId).emit("collab:role-notice", {
         role: "host",
         by: currentHost?.name || "Host",
@@ -4258,6 +4295,7 @@ io.on("connection", (socket) => {
         session.participants[Math.floor(Math.random() * session.participants.length)];
       session.hostSocketId = nextHost.socketId;
       session.hostName = nextHost.name;
+      session.hostDeviceId = String(nextHost.deviceId || socketMeta.get(nextHost.socketId)?.deviceId || "").trim();
       nextHost.role = "host";
       logAdminEvent("Host reassigned", `${nextHost.name} became host of session ${meta.sessionId} after a disconnect.`, meta.sessionId);
     }
