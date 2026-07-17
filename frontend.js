@@ -5010,9 +5010,10 @@ let projectFiles = [
             <li>Use syntax colors, suggestions, CSS color pickers, errors, undo, and redo</li>
             <li>Open Settings and use the Tag suggestions switch to enable or disable automatic HTML, CSS, JavaScript, identifier, and file suggestion menus; the choice is saved with your editor settings</li>
             <li>Open Developer Tools normally from More or with its keyboard shortcut; all 21 preview and editor buttons provide busy, success, pressed-state, and failure feedback, including verified Custom Size, Screenshot, Fullscreen, formatting, media, and reset actions</li>
-            <li>Current-file variables, functions, classes, CSS selectors, IDs, and HTML class names appear above generic suggestions as soon as their exact, prefix, or close match is typed</li>
+            <li>JavaScript variables, functions, and classes become priority suggestions after valid code runs and remain available only while their declarations still exist; JavaScript can also suggest HTML IDs/classes and CSS selectors/custom properties from the project</li>
             <li>Partial HTML tag names stay in tag mode, so typing <code>&lt;if</code> immediately suggests <code>&lt;iframe&gt;</code> instead of being mistaken for an attribute</li>
             <li>Typing an opening parenthesis before existing JavaScript text wraps the complete expression, turning <code>console.log|isStudent</code> into <code>console.log(|isStudent)</code></li>
+            <li>Typing a single or double quote in JavaScript inserts the matching closing quote and keeps the caret between the pair, including inside <code>console.log()</code></li>
             <li>Accepting the JavaScript <code>function</code> suggestion inserts an anonymous function block and places the caret between its parameter parentheses</li>
             <li>JavaScript inside a standard or module <code>&lt;script&gt;</code> block has the same suggestions, declared-identifier ranking, auto-closing, indentation, syntax colors, diagnostics, and Format Code behavior as an external JavaScript file</li>
             <li>Syntax-aware diagnostics understand self-closing HTML/SVG, quoted special characters, same-line elements, CSS decimals, and SVG path values, so valid code is not marked red</li>
@@ -12912,6 +12913,7 @@ function updatePreview() {
 
   iframe.removeAttribute("src");
   iframe.srcdoc = html;
+  commitExecutedJavaScriptSuggestions();
   setTimeout(bindPreviewNavigationHandlers, 0);
 }
 
@@ -14576,7 +14578,12 @@ let __codxProjectSuggestionCache = {
   },
 };
 
-const CODEX_LEARNED_SUGGESTIONS_KEY = "codxLearnedSuggestionsV1";
+let __codxExecutedJavaScriptSuggestions = {
+  byFile: new Map(),
+  memberKeys: new Set(),
+};
+
+const CODEX_LEARNED_SUGGESTIONS_KEY = "codxLearnedSuggestionsV2";
 const CODEX_LEARNED_SUGGESTION_LIMIT = 600;
 const __codxLearnedSuggestionDefaults = {
   html: { tags: [], attrs: [], ids: [], classes: [] },
@@ -14806,18 +14813,12 @@ function __codxTokenizeJs(projectFiles) {
         .join("\n");
     }
 
-    // const/let/var X
+    if (!canParseJavaScriptForSuggestions(text)) continue;
+
+    collectDeclaredJavaScriptIdentifiers(text, { allowFallback: false })
+      .forEach((name) => addIdent(name, 2));
+
     let m;
-    const declRe = /\b(?:const|let|var)\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
-    while ((m = declRe.exec(text)) !== null) addIdent(m[1], 2);
-
-    // function X
-    const fnRe = /\bfunction\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
-    while ((m = fnRe.exec(text)) !== null) addIdent(m[1], 2);
-
-    // class X
-    const clsRe = /\bclass\s+([$A-Z_][0-9A-Z_$]*)\b/gim;
-    while ((m = clsRe.exec(text)) !== null) addIdent(m[1], 2);
 
     // member keys: obj.someKey or obj["someKey"]
     const memberDotRe = /\.([$A-Z_][0-9A-Z_$]*)\b/gim;
@@ -14879,8 +14880,6 @@ function __codxLearnFromProjectCache() {
   __codxRememberLearnedValues("css", "values", cache.css.valueFreq.keys());
   __codxRememberLearnedValues("css", "vars", cache.css.vars);
   __codxRememberLearnedValues("css", "colors", cache.css.colors);
-  __codxRememberLearnedValues("js", "identifiers", cache.js.identFreq.keys());
-  __codxRememberLearnedValues("js", "members", cache.js.memberKeys);
   __codxRememberLearnedValues("env", "keys", cache.env.keys);
   __codxRememberLearnedValues(
     "files",
@@ -15350,28 +15349,35 @@ function collectBindingPatternNames(pattern, names) {
   }
 }
 
-function collectDeclaredJavaScriptIdentifiers(source) {
+function parseJavaScriptForSuggestions(source) {
   const code = String(source || "");
-  const names = new Set();
-  let ast = null;
-  if (window.acorn && typeof window.acorn.parse === "function") {
-    const options = {
-      ecmaVersion: "latest",
-      sourceType: "script",
-      allowHashBang: true,
-      allowAwaitOutsideFunction: true,
-      allowReturnOutsideFunction: true,
-    };
+  if (!window.acorn || typeof window.acorn.parse !== "function") return null;
+  const options = {
+    ecmaVersion: "latest",
+    sourceType: "script",
+    allowHashBang: true,
+    allowAwaitOutsideFunction: true,
+    allowReturnOutsideFunction: true,
+  };
+  try {
+    return window.acorn.parse(code, options);
+  } catch (_scriptError) {
     try {
-      ast = window.acorn.parse(code, options);
-    } catch (_scriptError) {
-      try {
-        ast = window.acorn.parse(code, { ...options, sourceType: "module" });
-      } catch (_moduleError) {
-        ast = null;
-      }
+      return window.acorn.parse(code, { ...options, sourceType: "module" });
+    } catch (_moduleError) {
+      return null;
     }
   }
+}
+
+function canParseJavaScriptForSuggestions(source) {
+  return Boolean(parseJavaScriptForSuggestions(source));
+}
+
+function collectDeclaredJavaScriptIdentifiers(source, options = {}) {
+  const code = String(source || "");
+  const names = new Set();
+  const ast = parseJavaScriptForSuggestions(code);
 
   if (ast) {
     const visit = (node) => {
@@ -15396,7 +15402,7 @@ function collectDeclaredJavaScriptIdentifiers(source) {
       });
     };
     visit(ast);
-  } else {
+  } else if (options.allowFallback !== false) {
     const declarationPatterns = [
       /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g,
       /\b(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/g,
@@ -15411,19 +15417,52 @@ function collectDeclaredJavaScriptIdentifiers(source) {
   return names;
 }
 
-function getCurrentFileJavaScriptIdentifiers() {
+function getCurrentFileJavaScriptIdentifiers(options = {}) {
   if (!activeFile) return new Set();
   if (activeFile.type === "js") {
-    return collectDeclaredJavaScriptIdentifiers(activeFile.content);
+    return collectDeclaredJavaScriptIdentifiers(activeFile.content, options);
   }
   if (activeFile.type === "html") {
     const names = new Set();
     getHtmlRawTextSegments(activeFile.content, "script", { includeUnclosed: true }).filter(isJavaScriptScriptSegment).forEach((segment) => {
-      collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name));
+      collectDeclaredJavaScriptIdentifiers(segment.code, options).forEach((name) => names.add(name));
     });
     return names;
   }
   return new Set();
+}
+
+function getJavaScriptSuggestionSourcesForFile(file) {
+  if (!file) return [];
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(String(file.type || "").toLowerCase())) {
+    return [String(file.content || "")];
+  }
+  if (file.type === "html") {
+    return getHtmlRawTextSegments(file.content, "script", { includeUnclosed: true })
+      .filter(isJavaScriptScriptSegment)
+      .map((segment) => String(segment.code || ""));
+  }
+  return [];
+}
+
+function commitExecutedJavaScriptSuggestions() {
+  const byFile = new Map();
+  const memberKeys = new Set();
+
+  projectFiles.forEach((file) => {
+    const names = new Set();
+    getJavaScriptSuggestionSourcesForFile(file).forEach((source) => {
+      if (!canParseJavaScriptForSuggestions(source)) return;
+      collectDeclaredJavaScriptIdentifiers(source, { allowFallback: false })
+        .forEach((name) => names.add(name));
+      const memberPattern = /\.([$A-Z_][0-9A-Z_$]*)\b/gim;
+      let match;
+      while ((match = memberPattern.exec(source)) !== null) memberKeys.add(match[1]);
+    });
+    if (names.size) byFile.set(file.name, names);
+  });
+
+  __codxExecutedJavaScriptSuggestions = { byFile, memberKeys };
 }
 
 function getCurrentFileCssSelectors() {
@@ -15559,19 +15598,38 @@ function getRankedCssSuggestions(prefix, mode, propertyName) {
 function getRankedJsSuggestions(prefix) {
   const q = (prefix || "").toLowerCase();
   const runtimeMembers = getRuntimeJsMemberSuggestions(prefix);
-  const currentEntries = [...getCurrentFileJavaScriptIdentifiers()].map((value) => ({
-    value,
-    desc: "Declared in current file",
-    sourcePriority: 4,
-  }));
-  const projectEntries = [
-    ...__codxProjectSuggestionCache.js.identFreq.keys(),
-    ...__codxProjectSuggestionCache.js.memberKeys,
-  ].map((value) => ({ value, desc: "Used in this project", sourcePriority: 3 }));
-  const learnedEntries = [
-    ...__codxLearnedSuggestions.js.identifiers,
-    ...__codxLearnedSuggestions.js.members,
-  ].map((value) => ({ value, desc: "Learned JavaScript identifier", sourcePriority: 2 }));
+  const currentValidNames = getCurrentFileJavaScriptIdentifiers({ allowFallback: false });
+  const activeFileName = String(activeFile?.name || "").toLowerCase();
+  const executedEntries = [];
+  __codxExecutedJavaScriptSuggestions.byFile.forEach((names, fileName) => {
+    const isCurrentFile = String(fileName || "").toLowerCase() === activeFileName;
+    names.forEach((value) => {
+      if (isCurrentFile && !currentValidNames.has(value)) return;
+      executedEntries.push({
+        value,
+        desc: isCurrentFile ? "Declared in current file and run" : `Declared in ${fileName} and run`,
+        sourcePriority: isCurrentFile ? 5 : 4,
+      });
+    });
+  });
+  const executedMemberEntries = [...__codxExecutedJavaScriptSuggestions.memberKeys]
+    .map((value) => ({ value, desc: "JavaScript member used in the last run", sourcePriority: 3 }));
+  const crossLanguageEntries = [
+    ...Array.from(__codxProjectSuggestionCache.html.ids).flatMap((value) => [
+      { value, desc: "HTML id in this project", sourcePriority: 3 },
+      { value: `#${value}`, desc: "HTML id selector in this project", sourcePriority: 3, stripSigil: true },
+    ]),
+    ...Array.from(__codxProjectSuggestionCache.html.classes).flatMap((value) => [
+      { value, desc: "HTML class in this project", sourcePriority: 3 },
+      { value: `.${value}`, desc: "HTML class selector in this project", sourcePriority: 3, stripSigil: true },
+    ]),
+    ...Array.from(__codxProjectSuggestionCache.css.selectorFreq.keys())
+      .map((value) => ({ value, desc: "CSS selector in this project", sourcePriority: 3, stripSigil: true })),
+    ...Array.from(__codxProjectSuggestionCache.css.vars).flatMap((value) => [
+      { value, desc: "CSS custom property in this project", sourcePriority: 3 },
+      { value: `var(${value})`, desc: "CSS custom property value", sourcePriority: 3 },
+    ]),
+  ];
   const envEntries = [
     ...__codxProjectSuggestionCache.env.keys,
     ...__codxLearnedSuggestions.env.keys,
@@ -15579,7 +15637,7 @@ function getRankedJsSuggestions(prefix) {
   const genericEntries = jsSuggestions.map((entry) => ({ ...entry, sourcePriority: 1 }));
   const runtimeEntries = runtimeMembers.map((entry) => ({ ...entry, sourcePriority: 1 }));
   const deduped = new Map();
-  [...currentEntries, ...projectEntries, ...learnedEntries, ...envEntries, ...genericEntries, ...runtimeEntries]
+  [...executedEntries, ...executedMemberEntries, ...crossLanguageEntries, ...envEntries, ...genericEntries, ...runtimeEntries]
     .forEach((entry) => {
       const key = entry.value.toLowerCase();
       const existing = deduped.get(key);
@@ -15588,7 +15646,10 @@ function getRankedJsSuggestions(prefix) {
       }
     });
   const matches = [...deduped.values()].filter((entry) =>
-    getSuggestionMatchTier(entry.value, q, { allowClose: Number(entry.sourcePriority || 0) >= 4 }) > 0,
+    getSuggestionMatchTier(entry.value, q, {
+      allowClose: Number(entry.sourcePriority || 0) >= 4,
+      stripSigil: entry.stripSigil === true,
+    }) > 0,
   );
   matches.sort((a, b) => {
     const aValue = a.value.toLowerCase();
@@ -15596,13 +15657,13 @@ function getRankedJsSuggestions(prefix) {
     const aSource = Number(a.sourcePriority || 0);
     const bSource = Number(b.sourcePriority || 0);
     if (aSource !== bSource) return bSource - aSource;
-    const aTier = getSuggestionMatchTier(aValue, q, { allowClose: true });
-    const bTier = getSuggestionMatchTier(bValue, q, { allowClose: true });
+    const aTier = getSuggestionMatchTier(aValue, q, { allowClose: true, stripSigil: a.stripSigil === true });
+    const bTier = getSuggestionMatchTier(bValue, q, { allowClose: true, stripSigil: b.stripSigil === true });
     if (aTier !== bTier) return bTier - aTier;
     if (aValue.length !== bValue.length) return aValue.length - bValue.length;
     return aValue.localeCompare(bValue);
   });
-  return matches.slice(0, 20).map(({ sourcePriority, ...entry }) => entry);
+  return matches.slice(0, 20).map(({ sourcePriority, stripSigil, ...entry }) => entry);
 }
 
 function getRuntimeJsMemberSuggestions(prefix) {
@@ -16931,8 +16992,59 @@ function getJavaScriptExpressionEndForAutoWrap(source, start) {
   return fallbackMatch ? expressionStart + fallbackMatch[0].length : -1;
 }
 
+function getJavaScriptLexicalStateAtPosition(source, position, contentStart = 0) {
+  const text = String(source || "");
+  const start = Math.max(0, Math.min(Number(contentStart || 0), text.length));
+  const end = Math.max(start, Math.min(Number(position || 0), text.length));
+  let state = "code";
+
+  for (let index = start; index < end; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (state === "line-comment") {
+      if (char === "\n" || char === "\r") state = "code";
+      continue;
+    }
+
+    if (state === "block-comment") {
+      if (char === "*" && next === "/") {
+        state = "code";
+        index += 1;
+      }
+      continue;
+    }
+
+    if (["single-string", "double-string", "template-string"].includes(state)) {
+      if (char === "\\") {
+        index += 1;
+        continue;
+      }
+      const closingQuote = state === "single-string" ? "'" : state === "double-string" ? '"' : "`";
+      if (char === closingQuote) state = "code";
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      state = "line-comment";
+      index += 1;
+    } else if (char === "/" && next === "*") {
+      state = "block-comment";
+      index += 1;
+    } else if (char === "'") {
+      state = "single-string";
+    } else if (char === '"') {
+      state = "double-string";
+    } else if (char === "`") {
+      state = "template-string";
+    }
+  }
+
+  return state;
+}
+
 /**
- * Handles auto-closing of brackets/parentheses and indentation on 'Enter'.
+ * Handles auto-closing of quotes/brackets/parentheses and indentation on 'Enter'.
  * This is specific for CSS and JS files.
  */
 function handleAutoCloseAndIndent(e, editor, providedLanguageContext = null) {
@@ -16948,6 +17060,37 @@ function handleAutoCloseAndIndent(e, editor, providedLanguageContext = null) {
   const nextCharacter = editorValue.charAt(pos);
   const currentIndentMatch = currentLine.match(/^(\s*)/);
   const currentIndent = currentIndentMatch ? currentIndentMatch[1] : "";
+
+  if (isJsContext && (e.key === '"' || e.key === "'")) {
+    const quote = e.key;
+    const selectionEnd = editor.selectionEnd;
+    const lexicalState = getJavaScriptLexicalStateAtPosition(
+      editorValue,
+      pos,
+      languageContext.contentStart,
+    );
+    const matchingStringState = quote === "'" ? "single-string" : "double-string";
+
+    if (selectionEnd === pos && nextCharacter === quote && lexicalState === matchingStringState) {
+      e.preventDefault();
+      editor.setSelectionRange(pos + 1, pos + 1);
+      return true;
+    }
+
+    if (lexicalState !== "code") return false;
+
+    e.preventDefault();
+    const selectedText = editorValue.slice(pos, selectionEnd);
+    applyEditorMutation(
+      editor,
+      pos,
+      selectionEnd,
+      `${quote}${selectedText}${quote}`,
+      pos + 1,
+      selectedText ? pos + 1 + selectedText.length : pos + 1,
+    );
+    return true;
+  }
 
   // 2. Check for an immediate auto-close/indent trigger
   let autoClosePair = null; // Stores { or (
@@ -17750,7 +17893,7 @@ function handleEditorKeyDown(e) {
     updateLineNumbers(editor);
   }
 
-  const contextSensitiveKeys = new Set(["Enter", "Tab", "=", " ", ">", "{", "("]);
+  const contextSensitiveKeys = new Set(["Enter", "Tab", "=", " ", ">", "{", "(", '"', "'"]);
   if (
     suggestionPopup.style.display !== "block" &&
     !contextSensitiveKeys.has(e.key)
