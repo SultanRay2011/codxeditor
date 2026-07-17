@@ -167,7 +167,7 @@ function setMobileWorkspacePane(pane, { focus = false } = {}) {
     showConsoleCheckbox.checked = true;
     showConsoleCheckbox.dispatchEvent(new Event("change"));
     requestAnimationFrame(() => {
-      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      scrollConsoleToPriority();
     });
   } else if (
     isCompactWorkspaceLayout() &&
@@ -5043,6 +5043,7 @@ let projectFiles = [
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
+            <li>Console errors and code diagnostics stay above logs, warnings, and informational output, and opening the Console focuses the error section first</li>
             <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>
@@ -8891,6 +8892,27 @@ const runtimeDiagnosticRawErrors = new Map();
 const runtimeDiagnosticRecent = new Map();
 let runtimeDiagnosticSequence = 0;
 
+function scrollConsoleToPriority() {
+  if (!consoleOutput) return;
+  const hasError = Boolean(consoleOutput.querySelector(":scope > .error"));
+  consoleOutput.scrollTop = hasError ? 0 : consoleOutput.scrollHeight;
+}
+
+function insertConsoleEntry(node, type = "info", { scroll = true } = {}) {
+  if (!consoleOutput || !node) return null;
+  const isError = type === "error" || node.classList?.contains("error");
+  node.dataset.consolePriority = isError ? "error" : "normal";
+  if (isError) {
+    consoleOutput.prepend(node);
+  } else {
+    consoleOutput.appendChild(node);
+  }
+  if (scroll) scrollConsoleToPriority();
+  return node;
+}
+
+window.__codxInsertConsoleEntry = (node, type) => insertConsoleEntry(node, type);
+
 const RUNTIME_DIAGNOSTIC_GLOBALS = [
   "console", "document", "window", "localStorage", "sessionStorage", "navigator",
   "location", "history", "fetch", "setTimeout", "setInterval", "clearTimeout",
@@ -9220,7 +9242,7 @@ function renderRuntimeDiagnostic(payload, rawError) {
       stored.error = rawError || stored.error;
       stored.payload = { ...payload };
     }
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    insertConsoleEntry(recent.node, "error");
     return;
   }
   const context = getRuntimeSourceContext(fileName, line, col);
@@ -9315,7 +9337,7 @@ function renderRuntimeDiagnostic(payload, rawError) {
     });
   }
 
-  consoleOutput.appendChild(root);
+  insertConsoleEntry(root, "error");
   runtimeDiagnosticRecent.set(repeatKey, {
     at: Date.now(),
     count: 1,
@@ -9325,7 +9347,6 @@ function renderRuntimeDiagnostic(payload, rawError) {
   while (runtimeDiagnosticRecent.size > 100) {
     runtimeDiagnosticRecent.delete(runtimeDiagnosticRecent.keys().next().value);
   }
-  consoleOutput.scrollTop = consoleOutput.scrollHeight;
 }
 
 window.__codxReportRuntimeDiagnostic = (payload, rawError = null) => {
@@ -11645,8 +11666,16 @@ function updatePreview() {
                 }
                 return String(arg);
               }).join(' ');
-              parentConsole.appendChild(line);
-              parentConsole.scrollTop = parentConsole.scrollHeight;
+              if (window.parent && typeof window.parent.__codxInsertConsoleEntry === 'function') {
+                window.parent.__codxInsertConsoleEntry(line, type);
+              } else if (type === 'error') {
+                parentConsole.prepend(line);
+                parentConsole.scrollTop = 0;
+              } else {
+                parentConsole.appendChild(line);
+                const hasError = parentConsole.querySelector(':scope > .error');
+                parentConsole.scrollTop = hasError ? 0 : parentConsole.scrollHeight;
+              }
             } catch (e) {
               // Silently fail if parent access is blocked
             }
@@ -11882,8 +11911,7 @@ function appendConsoleMessage(type, message) {
   } else {
     line.textContent = message;
   }
-  consoleOutput.appendChild(line);
-  consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  insertConsoleEntry(line, type);
   if (type === "error") {
     updateFileErrorCountsFromConsole();
   }
@@ -11892,6 +11920,7 @@ function appendConsoleMessage(type, message) {
 function renderDiagnosticConsoleEntries(entries) {
   if (!consoleOutput) return;
   consoleOutput.querySelectorAll(".codx-diagnostic-line").forEach((node) => node.remove());
+  const renderedEntries = [];
   (entries || []).forEach((entry) => {
     if (!entry) return;
     const line = document.createElement("div");
@@ -11920,10 +11949,16 @@ function renderDiagnosticConsoleEntries(entries) {
         }
       });
     }
-    consoleOutput.appendChild(line);
+    renderedEntries.push({ line, type: entry.type || "info" });
   });
-  if (entries && entries.length) {
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  const errorEntries = renderedEntries.filter((entry) => entry.type === "error");
+  const normalEntries = renderedEntries.filter((entry) => entry.type !== "error");
+  for (let index = errorEntries.length - 1; index >= 0; index -= 1) {
+    insertConsoleEntry(errorEntries[index].line, "error", { scroll: false });
+  }
+  normalEntries.forEach((entry) => insertConsoleEntry(entry.line, entry.type, { scroll: false }));
+  if (renderedEntries.length) {
+    scrollConsoleToPriority();
   }
 }
 
