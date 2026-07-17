@@ -4125,6 +4125,74 @@ header {
   background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-tertiary));
 }
 
+#collabModal .collab-green-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid #22c55e;
+  border-radius: 6px;
+  background: color-mix(in srgb, #22c55e 8%, var(--bg-primary));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+#collabModal .collab-green-checkbox::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  opacity: 0;
+  transform: rotate(45deg) scale(0.65);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+#collabModal .collab-green-checkbox:hover {
+  border-color: #4ade80;
+  transform: translateY(-1px);
+}
+
+#collabModal .collab-green-checkbox:checked,
+#collabModal .collab-green-checkbox:indeterminate {
+  border-color: #16a34a;
+  background: linear-gradient(180deg, #22c55e, #16a34a);
+  box-shadow: 0 0 0 4px color-mix(in srgb, #22c55e 18%, transparent);
+}
+
+#collabModal .collab-green-checkbox:checked::after {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
+
+#collabModal .collab-green-checkbox:indeterminate::after {
+  left: 3px;
+  top: 7px;
+  width: 9px;
+  height: 0;
+  border-width: 0 0 2px;
+  opacity: 1;
+  transform: none;
+}
+
+#collabModal .collab-green-checkbox:focus-visible {
+  outline: 2px solid #86efac;
+  outline-offset: 3px;
+}
+
+#collabModal .switch input:checked + .slider {
+  border-color: #16a34a;
+  background: #22c55e;
+}
+
 .file-access-option {
   display: flex;
   align-items: center;
@@ -4148,6 +4216,108 @@ header {
   background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
   border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
   transform: translateY(-1px);
+}
+
+.collab-file-choice-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  scrollbar-gutter: stable;
+}
+
+.collab-file-choice-list.is-compact {
+  max-height: 190px;
+}
+
+.collab-file-choice-option {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--bg-tertiary) 64%, transparent);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.collab-file-choice-option:hover,
+.collab-file-choice-option.is-selected {
+  border-color: color-mix(in srgb, #22c55e 68%, var(--border-color));
+  background: color-mix(in srgb, #22c55e 10%, var(--bg-tertiary));
+}
+
+.collab-file-choice-option:hover {
+  transform: translateY(-1px);
+}
+
+.collab-file-choice-icon,
+.collab-select-all-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  color: #22c55e;
+  background: color-mix(in srgb, #22c55e 12%, var(--bg-primary));
+}
+
+.collab-file-choice-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.collab-file-choice-copy strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collab-file-choice-copy small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.collab-file-picker-card {
+  display: grid;
+  gap: 13px;
+}
+
+.collab-select-all-option {
+  margin-bottom: 10px;
+  border-color: color-mix(in srgb, #22c55e 55%, var(--border-color));
+  background: color-mix(in srgb, #22c55e 10%, var(--bg-primary));
+}
+
+.collab-secondary-action {
+  border-color: color-mix(in srgb, #22c55e 35%, var(--border-color)) !important;
+  background: color-mix(in srgb, #22c55e 9%, var(--bg-tertiary)) !important;
+}
+
+@media (max-width: 620px) {
+  .collab-file-choice-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .collab-bulk-participant-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .collab-bulk-participant-option .collab-bulk-status {
+    grid-column: 2;
+  }
 }
 
 .file-access-check {

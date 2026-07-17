@@ -5031,6 +5031,7 @@ let projectFiles = [
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
             <li>Waiting-room join requests stay in the host's approval panel without creating a duplicate "waiting to join" notification</li>
+            <li>Collaboration participant and file checklists use clear green controls with Select All for multi-selection, while Bring To File, Pin Team File, Team Focus, and visibility tools show every project file as a clickable list instead of asking you to type a filename</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
@@ -19250,24 +19251,103 @@ function updateGroupPermission(partial, successMessage) {
   );
 }
 
-async function promptForExistingFile(label, currentValue = "") {
-  const existingNames = projectFiles.map((file) => file.name).join(", ");
-  const dialog = await showAppPrompt(
-    "SELECT FILE",
-    `${label}\nAvailable files: ${existingNames}`,
-    currentValue || (activeFile ? activeFile.name : ""),
-    activeFile ? activeFile.name : "",
-  );
-  if (!dialog?.ok) {
-    return { status: "cancel" };
+function bindCollabSelectAll(selectAll, inputs, onItemChange = null) {
+  const items = Array.from(inputs || []);
+  const sync = () => {
+    if (!selectAll) return;
+    const checkedCount = items.filter((input) => input.checked).length;
+    selectAll.checked = items.length > 0 && checkedCount === items.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < items.length;
+  };
+  items.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (typeof onItemChange === "function") onItemChange(input);
+      sync();
+    });
+  });
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      items.forEach((input) => {
+        input.checked = selectAll.checked;
+        if (typeof onItemChange === "function") onItemChange(input);
+      });
+      sync();
+    });
   }
-  const picked = dialog.value;
-  const trimmed = String(picked || "").trim();
-  if (!trimmed) {
-    return { status: "empty" };
+  sync();
+  return sync;
+}
+
+async function promptForExistingFile(label, currentValue = "", options = {}) {
+  if (!projectFiles.length) {
+    showNotification("There are no project files to choose from.", "info");
+    return { status: "invalid" };
   }
-  const match = projectFiles.find((file) => file.name.toLowerCase() === trimmed.toLowerCase());
-  return match ? { status: "ok", fileName: match.name } : { status: "invalid" };
+  const selectedName = projectFiles.some((file) => file.name === currentValue)
+    ? currentValue
+    : (activeFile?.name || projectFiles[0].name);
+  const allowClear = options.allowClear === true;
+  collabModalView = "group-controls";
+  setCollabCloseButtonVisible(false);
+  modalTitle.innerHTML = `<strong>${escapeHtml(options.title || "SELECT FILE")}</strong>`;
+  modalBody.innerHTML = `
+    <div class="collab-section-card collab-file-picker-card">
+      <p class="collab-section-note">${escapeHtml(label)}</p>
+      <div id="collabFilePickerList" class="collab-file-choice-list" role="group" aria-label="Project files">
+        ${projectFiles.map((file) => `
+          <label class="collab-file-choice-option${file.name === selectedName ? " is-selected" : ""}">
+            <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(file.name)}" ${file.name === selectedName ? "checked" : ""}>
+            <span class="collab-file-choice-icon"><i class="fa-regular fa-file-code" aria-hidden="true"></i></span>
+            <span class="collab-file-choice-copy">
+              <strong>${escapeHtml(file.name)}</strong>
+              <small>${escapeHtml(String(file.type || "file").toUpperCase())} file</small>
+            </span>
+          </label>`).join("")}
+      </div>
+    </div>`;
+  setModalActions(`
+    <button id="collabFilePickerChooseBtn" class="run-button"><strong>CHOOSE FILE</strong></button>
+    ${allowClear ? `<button id="collabFilePickerClearBtn" class="run-button collab-secondary-action"><strong>${escapeHtml(options.clearLabel || "CLEAR")}</strong></button>` : ""}
+    <button id="collabFilePickerCancelBtn" class="run-button collab-secondary-action"><strong>BACK</strong></button>
+  `);
+  collabModal.style.display = "flex";
+
+  return new Promise((resolve) => {
+    const list = document.getElementById("collabFilePickerList");
+    const inputs = Array.from(list?.querySelectorAll("input[type='checkbox']") || []);
+    const chooseBtn = document.getElementById("collabFilePickerChooseBtn");
+    const updateSelectedState = () => {
+      inputs.forEach((input) => input.closest(".collab-file-choice-option")?.classList.toggle("is-selected", input.checked));
+      if (chooseBtn) chooseBtn.disabled = !inputs.some((input) => input.checked);
+    };
+    inputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          inputs.forEach((other) => {
+            if (other !== input) other.checked = false;
+          });
+        }
+        updateSelectedState();
+      });
+    });
+    updateSelectedState();
+    if (chooseBtn) {
+      chooseBtn.onclick = () => {
+        const selected = inputs.find((input) => input.checked);
+        if (!selected) return;
+        resolve({ status: "ok", fileName: selected.value });
+      };
+    }
+    const clearBtn = document.getElementById("collabFilePickerClearBtn");
+    if (clearBtn) clearBtn.onclick = () => resolve({ status: "empty" });
+    const cancelBtn = document.getElementById("collabFilePickerCancelBtn");
+    if (cancelBtn) {
+      cancelBtn.onclick = () => {
+        showGroupControls(activeSessionId);
+        resolve({ status: "cancel" });
+      };
+    }
+  });
 }
 
 async function bringEveryoneToFile() {
@@ -19275,7 +19355,7 @@ async function bringEveryoneToFile() {
   const result = await promptForExistingFile("Bring everyone to which file?", activeFile ? activeFile.name : "");
   if (result.status === "cancel") return;
   if (result.status !== "ok") {
-    showNotification("Choose an existing file name.", "error");
+    showNotification("Choose a project file.", "error");
     return;
   }
   const fileName = result.fileName;
@@ -19285,6 +19365,7 @@ async function bringEveryoneToFile() {
       return;
     }
     showNotification(`Everyone was brought to ${fileName}.`, "success");
+    if (collabModal.style.display === "flex") showGroupControls(activeSessionId);
   });
 }
 
@@ -19695,6 +19776,18 @@ function showGroupFeatureAccessPicker(featureKey) {
     <div class="collab-section-card">
       <h4 class="collab-section-title">${escapeHtml(config.label)}</h4>
       <p class="collab-section-note" style="margin-bottom:12px;">Checked participants will be affected by this feature restriction. Unchecked participants keep access unless a room-wide setting also blocks it.</p>
+      ${participants.length ? `
+        <label class="collab-bulk-participant-option collab-select-all-option">
+          <input id="bulkFeatureSelectAll" class="collab-green-checkbox" type="checkbox">
+          <span class="collab-participant-main">
+            <span class="collab-select-all-icon"><i class="fa-solid fa-check-double" aria-hidden="true"></i></span>
+            <span class="collab-participant-text">
+              <span class="collab-participant-name">Select All</span>
+              <span class="collab-participant-meta">Apply this restriction to every listed participant.</span>
+            </span>
+          </span>
+          <span class="collab-bulk-status">All</span>
+        </label>` : ""}
       <div class="collab-bulk-participant-list" id="bulkFeatureParticipantList">
         ${
           participants.length
@@ -19703,7 +19796,7 @@ function showGroupFeatureAccessPicker(featureKey) {
                   const affected = participantHasDisabledFeature(participant, featureKey);
                   return `
                     <label class="collab-bulk-participant-option">
-                      <input type="checkbox" value="${escapeHtml(participant.name)}" ${affected ? "checked" : ""}>
+                      <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(participant.name)}" ${affected ? "checked" : ""}>
                       <span class="collab-participant-main">
                         <span class="collab-participant-color" style="background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
                         <span class="collab-participant-text">
@@ -19726,12 +19819,12 @@ function showGroupFeatureAccessPicker(featureKey) {
   `);
   collabModal.style.display = "flex";
   const list = document.getElementById("bulkFeatureParticipantList");
+  const selectAll = document.getElementById("bulkFeatureSelectAll");
   if (list) {
-    list.querySelectorAll("input[type='checkbox']").forEach((input) => {
-      input.addEventListener("change", () => {
-        const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
-        if (status) status.textContent = input.checked ? "Affected" : "Allowed";
-      });
+    const inputs = Array.from(list.querySelectorAll("input[type='checkbox']"));
+    bindCollabSelectAll(selectAll, inputs, (input) => {
+      const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
+      if (status) status.textContent = input.checked ? "Affected" : "Allowed";
     });
   }
   const applyBtn = document.getElementById("bulkFeatureApplyBtn");
@@ -19786,13 +19879,25 @@ function showGroupParticipantFlagPicker(flagName) {
     <div class="collab-section-card">
       <h4 class="collab-section-title">${escapeHtml(config.title)}</h4>
       <p class="collab-section-note" style="margin-bottom:12px;">${escapeHtml(config.desc)} Check the participants who should be affected.</p>
+      ${participants.length ? `
+        <label class="collab-bulk-participant-option collab-select-all-option">
+          <input id="bulkParticipantSelectAll" class="collab-green-checkbox" type="checkbox">
+          <span class="collab-participant-main">
+            <span class="collab-select-all-icon"><i class="fa-solid fa-check-double" aria-hidden="true"></i></span>
+            <span class="collab-participant-text">
+              <span class="collab-participant-name">Select All</span>
+              <span class="collab-participant-meta">Apply this control to every listed participant.</span>
+            </span>
+          </span>
+          <span class="collab-bulk-status">All</span>
+        </label>` : ""}
       <div class="collab-bulk-participant-list" id="bulkParticipantList">
         ${
           participants.length
             ? participants
                 .map((participant) => `
                   <label class="collab-bulk-participant-option">
-                    <input type="checkbox" value="${escapeHtml(participant.name)}" ${participant[flagName] ? "checked" : ""}>
+                    <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(participant.name)}" ${participant[flagName] ? "checked" : ""}>
                     <span class="collab-participant-main">
                       <span class="collab-participant-color" style="background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
                       <span class="collab-participant-text">
@@ -19815,12 +19920,12 @@ function showGroupParticipantFlagPicker(flagName) {
   `);
   collabModal.style.display = "flex";
   const list = document.getElementById("bulkParticipantList");
+  const selectAll = document.getElementById("bulkParticipantSelectAll");
   if (list) {
-    list.querySelectorAll("input[type='checkbox']").forEach((input) => {
-      input.addEventListener("change", () => {
-        const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
-        if (status) status.textContent = input.checked ? config.statusOn : config.statusOff;
-      });
+    const inputs = Array.from(list.querySelectorAll("input[type='checkbox']"));
+    bindCollabSelectAll(selectAll, inputs, (input) => {
+      const status = input.closest(".collab-bulk-participant-option")?.querySelector(".collab-bulk-status");
+      if (status) status.textContent = input.checked ? config.statusOn : config.statusOff;
     });
   }
   const applyBtn = document.getElementById("bulkParticipantApplyBtn");
@@ -19996,14 +20101,18 @@ function showGroupControls(sessionId) {
   bind("groupHideFilesBtn", () => showFileVisibilityEditor(activeFile ? activeFile.name : "", "group-controls"));
   bind("groupBringToFileBtn", bringEveryoneToFile);
   bind("groupPinFileBtn", async () => {
-    const result = await promptForExistingFile("Pin which file for the team? Leave blank to clear.", collabPermissions.pinnedFile || (activeFile ? activeFile.name : ""));
+    const result = await promptForExistingFile(
+      "Choose the file that should stay visible to the team.",
+      collabPermissions.pinnedFile || (activeFile ? activeFile.name : ""),
+      { title: "PIN TEAM FILE", allowClear: true, clearLabel: "CLEAR PIN" },
+    );
     if (result.status === "cancel") return;
     if (result.status === "empty") {
       updateGroupPermission({ pinnedFile: "" }, "Pinned file cleared.");
       return;
     }
     if (result.status !== "ok") {
-      showNotification("Choose an existing file name.", "error");
+      showNotification("Choose a project file.", "error");
       return;
     }
     updateGroupPermission({ pinnedFile: result.fileName }, `Pinned ${result.fileName} for the team.`);
@@ -20053,14 +20162,18 @@ function showGroupControls(sessionId) {
     ),
   );
   bind("groupHighlightBtn", async () => {
-    const result = await promptForExistingFile("Highlight which file for the group? Leave blank to clear.", collabPermissions.groupHighlightFile || (activeFile ? activeFile.name : ""));
+    const result = await promptForExistingFile(
+      "Choose the file everyone should focus on.",
+      collabPermissions.groupHighlightFile || (activeFile ? activeFile.name : ""),
+      { title: "TEAM FOCUS FILE", allowClear: true, clearLabel: "CLEAR FOCUS" },
+    );
     if (result.status === "cancel") return;
     if (result.status === "empty") {
       updateGroupPermission({ groupHighlightFile: "" }, "Team focus cleared.");
       return;
     }
     if (result.status !== "ok") {
-      showNotification("Choose an existing file name.", "error");
+      showNotification("Choose a project file.", "error");
       return;
     }
     updateGroupPermission({ groupHighlightFile: result.fileName }, `Team focus set to ${result.fileName}.`);
@@ -20342,15 +20455,17 @@ function showFileVisibilityEditor(fileName = "", returnView = "group-controls", 
   }
   const participants = getModeratableCollabParticipants();
   const fileOptions = projectFiles
-    .map((file) => `<option value="${escapeHtml(file.name)}" ${file.name === selectedFile.name ? "selected" : ""}>${escapeHtml(file.name)}</option>`)
+    .map((file) => `
+      <label class="collab-file-choice-option${file.name === selectedFile.name ? " is-selected" : ""}">
+        <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(file.name)}" ${file.name === selectedFile.name ? "checked" : ""}>
+        <span class="collab-file-choice-icon"><i class="fa-regular fa-file-code" aria-hidden="true"></i></span>
+        <span class="collab-file-choice-copy"><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(String(file.type || "file").toUpperCase())} file</small></span>
+      </label>`)
     .join("");
   const participantOptions = participants
     .map((participant) => `
       <label class="file-access-option">
-        <span class="file-access-check">
-          <input type="checkbox" value="${escapeHtml(participant.name)}" ${participantCannotSeeFile(participant, selectedFile.name) ? "checked" : ""}>
-          <span class="file-access-box" aria-hidden="true"></span>
-        </span>
+        <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(participant.name)}" ${participantCannotSeeFile(participant, selectedFile.name) ? "checked" : ""}>
         <span class="file-access-name">
           <span class="collab-participant-color" style="display:inline-block;background:${escapeHtml(participant.theme || "#4CAF50")};"></span>
           ${escapeHtml(participant.name)}
@@ -20365,13 +20480,10 @@ function showFileVisibilityEditor(fileName = "", returnView = "group-controls", 
       <span class="collab-meta-label">FILE</span>
       ${fixedFile
         ? `<div class="visibility-file-name"><i class="fa-regular fa-file-code" aria-hidden="true"></i><strong>${escapeHtml(selectedFile.name)}</strong></div>`
-        : `<select id="visibilityFileSelect" class="collab-select" aria-label="Choose a file">${fileOptions}</select>`}
+        : `<div id="visibilityFileList" class="collab-file-choice-list is-compact" role="group" aria-label="Choose a file">${fileOptions}</div>`}
       <p class="collab-section-note">Checked participants cannot see this file in their Files tab. Hosts and co-hosts keep access.</p>
       <label class="file-access-option file-access-select-all">
-        <span class="file-access-check">
-          <input id="visibilitySelectAll" type="checkbox">
-          <span class="file-access-box" aria-hidden="true"></span>
-        </span>
+        <input id="visibilitySelectAll" class="collab-green-checkbox" type="checkbox">
         <span class="file-access-name"><strong>SELECT ALL PARTICIPANTS</strong></span>
       </label>
       <div id="fileVisibilityParticipantList" class="participant-file-access-list">
@@ -20384,20 +20496,22 @@ function showFileVisibilityEditor(fileName = "", returnView = "group-controls", 
   `);
   collabModal.style.display = "flex";
 
-  const select = document.getElementById("visibilityFileSelect");
+  const fileList = document.getElementById("visibilityFileList");
   const selectAll = document.getElementById("visibilitySelectAll");
   const list = document.getElementById("fileVisibilityParticipantList");
   const boxes = () => Array.from(list?.querySelectorAll("input[type='checkbox']") || []);
-  const syncSelectAll = () => {
-    if (!selectAll) return;
-    const current = boxes();
-    selectAll.checked = current.length > 0 && current.every((input) => input.checked);
-    selectAll.indeterminate = current.some((input) => input.checked) && !selectAll.checked;
-  };
-  boxes().forEach((input) => input.addEventListener("change", syncSelectAll));
-  syncSelectAll();
-  if (selectAll) selectAll.onchange = () => boxes().forEach((input) => { input.checked = selectAll.checked; });
-  if (select) select.onchange = () => showFileVisibilityEditor(select.value, returnView, false);
+  bindCollabSelectAll(selectAll, boxes());
+  if (fileList) {
+    fileList.querySelectorAll("input[type='checkbox']").forEach((input) => {
+      input.addEventListener("change", () => {
+        if (!input.checked) {
+          input.checked = true;
+          return;
+        }
+        showFileVisibilityEditor(input.value, returnView, false);
+      });
+    });
+  }
   const saveBtn = document.getElementById("fileVisibilitySaveBtn");
   if (saveBtn) saveBtn.onclick = async () => {
     const hiddenFor = boxes().filter((input) => input.checked).map((input) => input.value);
@@ -20437,10 +20551,8 @@ function showParticipantFileAccessEditor(targetName) {
   const options = projectFiles
     .map((file) => `
       <label class="file-access-option">
-        <span class="file-access-check">
-          <input type="checkbox" value="${escapeHtml(file.name)}" ${hiddenSet.has(file.name) ? "checked" : ""}>
-          <span class="file-access-box" aria-hidden="true"></span>
-        </span>
+        <input class="collab-green-checkbox" type="checkbox" value="${escapeHtml(file.name)}" ${hiddenSet.has(file.name) ? "checked" : ""}>
+        <span class="collab-file-choice-icon"><i class="fa-regular fa-file-code" aria-hidden="true"></i></span>
         <span class="file-access-name">${escapeHtml(file.name)}</span>
       </label>
     `)
@@ -20453,10 +20565,7 @@ function showParticipantFileAccessEditor(targetName) {
       Checked files will be hidden from <strong>${escapeHtml(participant.name)}</strong>'s Files tab.
     </p>
     <label class="file-access-option file-access-select-all">
-      <span class="file-access-check">
-        <input id="participantFilesSelectAll" type="checkbox">
-        <span class="file-access-box" aria-hidden="true"></span>
-      </span>
+      <input id="participantFilesSelectAll" class="collab-green-checkbox" type="checkbox">
       <span class="file-access-name"><strong>SELECT ALL FILES</strong></span>
     </label>
     <div id="participantFileAccessList" class="participant-file-access-list" style="text-align:left;max-height:220px;overflow:auto;border:1px solid var(--border-color);border-radius:8px;padding:10px;background:var(--bg-primary);">
@@ -20473,15 +20582,7 @@ function showParticipantFileAccessEditor(targetName) {
   const backBtn = document.getElementById("participantFileAccessBackBtn");
   const selectAll = document.getElementById("participantFilesSelectAll");
   const fileInputs = () => Array.from(document.querySelectorAll("#participantFileAccessList input[type='checkbox']"));
-  const syncSelectAll = () => {
-    if (!selectAll) return;
-    const inputs = fileInputs();
-    selectAll.checked = inputs.length > 0 && inputs.every((input) => input.checked);
-    selectAll.indeterminate = inputs.some((input) => input.checked) && !selectAll.checked;
-  };
-  fileInputs().forEach((input) => input.addEventListener("change", syncSelectAll));
-  syncSelectAll();
-  if (selectAll) selectAll.onchange = () => fileInputs().forEach((input) => { input.checked = selectAll.checked; });
+  bindCollabSelectAll(selectAll, fileInputs());
   if (saveBtn) {
     saveBtn.onclick = async () => {
       const hiddenFiles = fileInputs().filter((input) => input.checked).map((input) => input.value);
