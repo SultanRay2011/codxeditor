@@ -5042,7 +5042,7 @@ let projectFiles = [
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
-            <li>The homepage editor preview now matches the real CodX Editor workspace on desktop and mobile</li>
+            <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
             <li>The public pages use a precisely centered hamburger-to-X animation so the mobile close icon stays aligned</li>
             <li>Line numbers stay aligned with their code rows at every supported screen size, including while the editor is scrolling</li>
             <li>Large File Performance Mode keeps huge files responsive with native text rendering, virtualized line numbers, paused Auto-Run and suggestions, and memory-safe undo</li>

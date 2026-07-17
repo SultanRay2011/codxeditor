@@ -1242,27 +1242,31 @@
             <div class="home-codx-workspace">
               <section class="home-codx-editors" aria-label="Files and code editor">
                 <div class="home-codx-files-header">
-                  <span><b>Files</b><em>UNSAVED</em><small>Save to keep this version</small></span>
+                  <span><b>Files</b><em class="saved">SAVED</em><small>Ready</small></span>
                   <strong><i class="fa-solid fa-plus"></i> NEW FILE</strong>
                 </div>
                 <div class="home-codx-file-tabs">
                   <span class="active"><i class="fa-brands fa-html5"></i> index.html <i class="fa-solid fa-pen"></i> <i class="fa-solid fa-trash"></i></span>
-                  <span><i class="fa-brands fa-css3-alt"></i> style.css <i class="fa-solid fa-pen"></i></span>
-                  <span><i class="fa-brands fa-js"></i> script.js <i class="fa-solid fa-pen"></i></span>
+                  <span><i class="fa-brands fa-css3-alt"></i> style.css <i class="fa-solid fa-pen"></i> <i class="fa-solid fa-trash"></i></span>
+                  <span><i class="fa-brands fa-js"></i> script.js <i class="fa-solid fa-pen"></i> <i class="fa-solid fa-trash"></i></span>
                 </div>
                 <div class="home-codx-code-area" aria-hidden="true">
-                  <span class="home-codx-line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</span>
+                  <span class="home-codx-line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14</span>
                   <code class="home-codx-code">
-                    <span><i>&lt;main</i> <u>class</u>=<q>"hero"</q><i>&gt;</i></span>
-                    <span>  <i>&lt;span&gt;</i><mark>Build together</mark><i>&lt;/span&gt;</i></span>
-                    <span>  <i>&lt;h1&gt;</i><mark>Ideas become</mark></span>
-                    <span>    <mark>working pages.</mark><i>&lt;/h1&gt;</i></span>
-                    <span>  <i>&lt;p&gt;</i><mark>Code. Preview. Share.</mark><i>&lt;/p&gt;</i></span>
-                    <span>  <i>&lt;button</i> <u>id</u>=<q>"start"</q><i>&gt;</i></span>
-                    <span>    <mark>Start building</mark></span>
-                    <span>  <i>&lt;/button&gt;</i></span>
-                    <span><i>&lt;/main&gt;</i></span>
-                    <span class="comment">&lt;!-- live preview ready --&gt;</span>
+                    <span class="comment">&lt;!DOCTYPE html&gt;</span>
+                    <span><i>&lt;html</i> <u>lang</u>=<q>"en"</q><i>&gt;</i></span>
+                    <span>  <i>&lt;head&gt;</i></span>
+                    <span>    <i>&lt;meta</i> <u>charset</u>=<q>"UTF-8"</q><i>&gt;</i></span>
+                    <span>    <i>&lt;title&gt;</i><mark>Get started with CodX Editor</mark><i>&lt;/title&gt;</i></span>
+                    <span>    <i>&lt;link</i> <u>rel</u>=<q>"stylesheet"</q> <u>href</u>=<q>"style.css"</q><i>&gt;</i></span>
+                    <span>  <i>&lt;/head&gt;</i></span>
+                    <span>  <i>&lt;body&gt;</i></span>
+                    <span>    <i>&lt;main</i> <u>class</u>=<q>"shell"</q><i>&gt;</i></span>
+                    <span>      <i>&lt;p</i> <u>class</u>=<q>"eyebrow"</q><i>&gt;</i><mark>CodX Editor Starter</mark><i>&lt;/p&gt;</i></span>
+                    <span>      <i>&lt;h1&gt;</i><mark>Build and preview web apps instantly</mark><i>&lt;/h1&gt;</i></span>
+                    <span>      <i>&lt;p&gt;</i><mark>Write code and see updates live.</mark><i>&lt;/p&gt;</i></span>
+                    <span>    <i>&lt;/main&gt;</i></span>
+                    <span>  <i>&lt;/body&gt;</i></span>
                   </code>
                 </div>
                 <div class="home-codx-editor-actions">
@@ -1280,12 +1284,16 @@
                   <span class="home-codx-preview-actions"><em>Responsive</em><i class="fa-solid fa-rotate-right"></i><i class="fa-solid fa-code"></i><i class="fa-solid fa-magnifying-glass"></i></span>
                 </div>
                 <div class="home-codx-preview-stage">
-                  <div class="home-preview-page">
-                    <span class="home-preview-badge">BUILD TOGETHER</span>
-                    <h3>Ideas become working pages.</h3>
-                    <p>Edit the project, inspect the result, and share the next step with your team.</p>
-                    <span class="home-preview-cta">START BUILDING</span>
-                    <div class="home-preview-cards"><span class="home-preview-card"><i class="fa-solid fa-bolt"></i><b>Live result</b></span><span class="home-preview-card"><i class="fa-solid fa-users"></i><b>Shared work</b></span></div>
+                  <div class="home-preview-page home-preview-starter">
+                    <div class="home-preview-shell">
+                      <div class="home-preview-brand"><img src="cx.png" alt=""><span>CodX Editor Starter</span></div>
+                      <h3>Build and preview web apps instantly</h3>
+                      <p>Write HTML, CSS, and JavaScript in separate files and see updates live in the preview panel.</p>
+                      <div class="home-preview-cards">
+                        <span class="home-preview-card"><i class="fa-solid fa-code"></i><b>Build in the editor</b><small>Smart suggestions and real project files.</small></span>
+                        <span class="home-preview-card"><i class="fa-solid fa-bolt"></i><b>Preview instantly</b><small>Run your page and debug it beside the code.</small></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
