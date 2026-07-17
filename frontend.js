@@ -3711,7 +3711,7 @@ function applyRoomIndicators() {
   const el = getCollabAnnouncementEl();
   if (!el) return;
   const parts = [];
-  if (collabPermissions.announcementBar) {
+  if (shouldReceiveCollabAnnouncement() && collabPermissions.announcementBar) {
     parts.push(`Announcement: ${collabPermissions.announcementBar}`);
   }
   if (collabPermissions.pinnedFile) {
@@ -3736,7 +3736,7 @@ function closeAnnouncementPopup() {
 function showAnnouncementPopup(message) {
   const text = String(message || "").trim();
   if (!announcementPopup || !announcementPopupText) return;
-  if (!text) {
+  if (!text || !shouldReceiveCollabAnnouncement()) {
     closeAnnouncementPopup();
     return;
   }
@@ -5032,6 +5032,7 @@ let projectFiles = [
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
             <li>Waiting-room join requests stay in the host's approval panel without creating a duplicate "waiting to join" notification</li>
             <li>Collaboration participant and file checklists use clear green controls with Select All for multi-selection, while Bring To File, Pin Team File, Team Focus, and visibility tools show every project file as a clickable list instead of asking you to type a filename</li>
+            <li>Session announcements use a spacious responsive writing field and appear only for participants, so the host and co-host screens stay uninterrupted</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
@@ -18867,6 +18868,10 @@ function canUseCoHostTools() {
   return isHost() || isCoHost();
 }
 
+function shouldReceiveCollabAnnouncement() {
+  return Boolean(activeSessionId) && !canUseCoHostTools();
+}
+
 function canModerateParticipant(participant) {
   if (!participant) return false;
   const role = String(participant.role || "participant");
@@ -19367,6 +19372,69 @@ async function bringEveryoneToFile() {
     showNotification(`Everyone was brought to ${fileName}.`, "success");
     if (collabModal.style.display === "flex") showGroupControls(activeSessionId);
   });
+}
+
+function showAnnouncementEditor() {
+  if (!activeSessionId || !canUseCoHostTools()) return;
+  const currentText = String(collabPermissions.announcementBar || "");
+  collabModalView = "announcement-editor";
+  setCollabCloseButtonVisible(true);
+  modalTitle.innerHTML = '<strong>ANNOUNCEMENT</strong>';
+  modalBody.innerHTML = `
+    <div class="collab-section-card collab-announcement-editor">
+      <div class="collab-announcement-editor-heading">
+        <span class="collab-announcement-editor-icon"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></span>
+        <span>
+          <strong>Message your participants</strong>
+          <small>The announcement appears for participants only. Hosts and co-hosts will not receive the popup.</small>
+        </span>
+      </div>
+      <label class="collab-announcement-label" for="collabAnnouncementInput">Announcement text</label>
+      <textarea id="collabAnnouncementInput" class="collab-announcement-input" maxlength="220" rows="7" placeholder="Write a clear announcement for everyone in the session...">${escapeHtml(currentText)}</textarea>
+      <div class="collab-announcement-input-footer">
+        <span>Use Ctrl + Enter to send</span>
+        <span id="collabAnnouncementCount" aria-live="polite">${currentText.length}/220</span>
+      </div>
+      <div class="collab-announcement-editor-actions">
+        <button type="button" id="collabAnnouncementSendBtn" class="run-button" onclick="saveCollabAnnouncementFromEditor()"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i><strong>${currentText.trim() ? "UPDATE" : "SEND"}</strong></button>
+        <button type="button" id="collabAnnouncementClearBtn" class="run-button collab-secondary-action" onclick="clearCollabAnnouncementFromEditor()" ${currentText.trim() ? "" : "disabled"}><strong>CLEAR</strong></button>
+        <button type="button" id="collabAnnouncementBackBtn" class="run-button collab-secondary-action" onclick="showGroupControls(activeSessionId)"><strong>BACK</strong></button>
+      </div>
+    </div>`;
+  setModalActions("");
+  collabModal.style.display = "flex";
+
+  const input = document.getElementById("collabAnnouncementInput");
+  const count = document.getElementById("collabAnnouncementCount");
+  const sendBtn = document.getElementById("collabAnnouncementSendBtn");
+  const updateCount = () => {
+    const length = String(input?.value || "").length;
+    if (count) count.textContent = `${length}/220`;
+    if (sendBtn) sendBtn.disabled = !String(input?.value || "").trim();
+  };
+  input?.addEventListener("input", updateCount);
+  input?.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      saveCollabAnnouncementFromEditor();
+    }
+  });
+  updateCount();
+  setTimeout(() => input?.focus({ preventScroll: true }), 0);
+}
+
+function saveCollabAnnouncementFromEditor() {
+  const input = document.getElementById("collabAnnouncementInput");
+  const text = String(input?.value || "").trim();
+  if (!text || !activeSessionId || !isHost()) return;
+  collabModalView = "group-controls";
+  updateGroupPermission({ announcementBar: text }, "Announcement sent to participants.");
+}
+
+function clearCollabAnnouncementFromEditor() {
+  if (!activeSessionId || !isHost()) return;
+  collabModalView = "group-controls";
+  updateGroupPermission({ announcementBar: "" }, "Announcement cleared.");
 }
 
 function clearGroupChat() {
@@ -20118,17 +20186,7 @@ function showGroupControls(sessionId) {
     updateGroupPermission({ pinnedFile: result.fileName }, `Pinned ${result.fileName} for the team.`);
   });
   bind("groupClearChatBtn", clearGroupChat);
-  bind("groupAnnouncementBtn", async () => {
-    const dialog = await showAppPrompt(
-      "ANNOUNCEMENT BAR",
-      "Enter the announcement text. Leave it empty to clear.",
-      collabPermissions.announcementBar || "",
-      "Type announcement here",
-    );
-    if (!dialog?.ok) return;
-    const text = String(dialog.value || "");
-    updateGroupPermission({ announcementBar: text.trim() }, text.trim() ? "Announcement updated." : "Announcement cleared.");
-  });
+  bind("groupAnnouncementBtn", showAnnouncementEditor);
   bind("groupPauseBtn", () =>
     updateGroupPermission({ pauseCollab: !collabPermissions.pauseCollab }, collabPermissions.pauseCollab ? "Collaboration resumed." : "Collaboration paused."),
   );
@@ -22602,13 +22660,13 @@ function ensureCollabSocket() {
     collabShareLink = meta.shareLink || collabShareLink;
     collabSessionPin = meta.sessionPin || collabSessionPin;
     const nextAnnouncement = String(collabPermissions.announcementBar || "").trim();
-    if (nextAnnouncement) {
+    if (nextAnnouncement && shouldReceiveCollabAnnouncement()) {
       if (nextAnnouncement !== previousAnnouncement || nextAnnouncement !== lastAnnouncementText) {
         showAnnouncementPopup(nextAnnouncement);
         lastAnnouncementText = nextAnnouncement;
       }
     } else {
-      lastAnnouncementText = "";
+      lastAnnouncementText = shouldReceiveCollabAnnouncement() ? "" : nextAnnouncement;
       closeAnnouncementPopup();
     }
     enforceCollabPermissionsUI();
@@ -22940,6 +22998,10 @@ function ensureCollabSocket() {
     showNotification(`Welcome, ${myInfo.name}!`, "success");
     startSyncing();
     closeModal();
+    if (collabPermissions.announcementBar) {
+      lastAnnouncementText = String(collabPermissions.announcementBar).trim();
+      showAnnouncementPopup(lastAnnouncementText);
+    }
   });
 
   collabSocket.on("collab:join-rejected", (payload) => {
@@ -24187,6 +24249,10 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
       showNotification(`Welcome, ${name}!`, "success");
       startSyncing();
       closeModal();
+      if (collabPermissions.announcementBar) {
+        lastAnnouncementText = String(collabPermissions.announcementBar).trim();
+        showAnnouncementPopup(lastAnnouncementText);
+      }
     },
   );
 }
