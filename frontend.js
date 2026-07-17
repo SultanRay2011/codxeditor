@@ -5035,6 +5035,7 @@ let projectFiles = [
             <li>Group Controls use distinct, accessible colors for permissions, participant actions, file focus, session tools, warnings, and destructive actions so controls are easier to recognize</li>
             <li>Session announcements use a spacious responsive writing field and appear only for participants, so the host and co-host screens stay uninterrupted</li>
             <li>If a host refreshes while the session is empty, the original device can rejoin with the newly entered name and securely reclaim the host position without letting another device take over</li>
+            <li>The collaboration Session Info modal includes dedicated Copy Link and Copy PIN buttons, so invite details stay easy to share after setup</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
@@ -24297,6 +24298,7 @@ function showSessionDetails(sid) {
   collabModalView = "session";
   setCollabCloseButtonVisible(true);
   const link = collabShareLink || `${window.location.origin}/frontend.html/${sid}`;
+  const sessionPin = collabSessionPin || sid;
   const orderedParticipants = sortSessionParticipants(collabParticipants);
   const listItems = orderedParticipants
     .map((p) => {
@@ -24357,7 +24359,13 @@ function showSessionDetails(sid) {
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Session Pin</span>
-          <span class="collab-meta-value collab-inline-pin">${escapeHtml(collabSessionPin || sid)}</span>
+          <div class="collab-pin-copy-row">
+            <span class="collab-meta-value collab-inline-pin">${escapeHtml(sessionPin)}</span>
+            <button id="sessionCopyPinBtn" class="run-button collab-copy-pin-button" type="button" aria-label="Copy session PIN">
+              <i class="fa-regular fa-copy" aria-hidden="true"></i>
+              <strong>COPY PIN</strong>
+            </button>
+          </div>
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Host</span>
@@ -24409,6 +24417,10 @@ function showSessionDetails(sid) {
   const sessionCopyLinkBtn = document.getElementById("sessionCopyLinkBtn");
   if (sessionCopyLinkBtn) {
     sessionCopyLinkBtn.onclick = () => copyLink();
+  }
+  const sessionCopyPinBtn = document.getElementById("sessionCopyPinBtn");
+  if (sessionCopyPinBtn) {
+    sessionCopyPinBtn.onclick = () => copyTextValue(sessionPin, "Session PIN copied.");
   }
   const participantSortSelect = document.getElementById("collabParticipantSortSelect");
   if (participantSortSelect) {

@@ -4775,6 +4775,21 @@ header {
   word-break: break-word;
 }
 
+.collab-pin-copy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.collab-copy-pin-button {
+  min-height: 36px;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 8px 12px;
+  background: #2563eb;
+}
+
 .collab-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6277,6 +6292,15 @@ body.template-preview-modal-open {
 
   .collab-pending-actions,
   .collab-participant-row-actions {
+    width: 100%;
+  }
+
+  .collab-pin-copy-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .collab-copy-pin-button {
     width: 100%;
   }
 
