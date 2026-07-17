@@ -5030,6 +5030,7 @@ let projectFiles = [
             <li>Open More for New, Save, Saved Projects, Templates, and Publish / Share</li>
             <li>The first Save asks for a project name; later saves update that same browser project immediately without asking again</li>
             <li>Use Device Transfer to send or receive projects and settings; the Send screen shows the countdown first, then the transfer code, QR code, details, and actions</li>
+            <li>Waiting-room join requests stay in the host's approval panel without creating a duplicate "waiting to join" notification</li>
             <li>Visit the homepage FAQ for quick answers about projects, Device Transfer, collaboration, GitHub, publishing, and mobile support</li>
             <li>The expanded homepage gives feature, workflow, comparison, and FAQ sections more room instead of placing everything inside one narrow card</li>
             <li>The homepage editor preview mirrors the real CodX Editor proportions, Saved/Ready file toolbar, complete file controls, line-numbered starter project, editor actions, preview tools, starter-page output, and mobile workspace tabs</li>
@@ -19528,20 +19529,6 @@ function renderWaitingRoomPopup() {
   });
 }
 
-function openWaitingRoomRequestFromNotification(socketId) {
-  if (!activeSessionId || !isHost()) return;
-  renderWaitingRoomPopup();
-  requestAnimationFrame(() => {
-    const requestCard = Array.from(document.querySelectorAll("[data-waiting-socket]"))
-      .find((card) => card.dataset.waitingSocket === String(socketId || ""));
-    if (!requestCard) return;
-    requestCard.scrollIntoView({ behavior: "smooth", block: "center" });
-    requestCard.classList.add("notification-target-flash");
-    setTimeout(() => requestCard.classList.remove("notification-target-flash"), 1800);
-    requestCard.querySelector("[data-waiting-action='accept']")?.focus();
-  });
-}
-
 function showJoinPendingState(sessionId, name, hostName = "") {
   const resolvedHostName = String(hostName || collabHostName || "").trim();
   if (resolvedHostName) collabHostName = resolvedHostName;
@@ -22506,13 +22493,7 @@ function ensureCollabSocket() {
   collabSocket.on("collab:meta", (meta) => {
     if (!meta) return;
     const previousAnnouncement = String(collabPermissions.announcementBar || "").trim();
-    const previousPendingJoinIds = new Set(
-      collabPendingJoins.map((entry) => String(entry?.socketId || "")),
-    );
     const nextPendingJoins = Array.isArray(meta.pendingJoins) ? meta.pendingJoins : [];
-    const newPendingJoinRequests = nextPendingJoins.filter(
-      (entry) => !previousPendingJoinIds.has(String(entry?.socketId || "")),
-    );
     collabHostName = meta.hostName || collabHostName;
     collabPermissions = normalizeCollabPermissions(meta.permissions);
     collabPendingJoins = nextPendingJoins;
@@ -22531,15 +22512,6 @@ function ensureCollabSocket() {
     }
     enforceCollabPermissionsUI();
     renderWaitingRoomPopup();
-    if (isHost()) {
-      newPendingJoinRequests.forEach((entry) => {
-        showActionNotificationHtml(
-          `<strong>${escapeHtml(entry?.name || "A participant")}</strong> is waiting to join the session.`,
-          () => openWaitingRoomRequestFromNotification(entry?.socketId),
-          "warn",
-        );
-      });
-    }
     if (collabModal.style.display === "flex" && activeSessionId) {
       if (collabModalView === "session") {
         showSessionDetails(activeSessionId);
