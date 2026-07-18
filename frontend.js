@@ -6061,7 +6061,6 @@ function bindPreviewNavigationHandlers() {
     (event) => {
       if (isPreviewInspecting) {
         event.preventDefault();
-        event.stopImmediatePropagation();
         return;
       }
       const target = event.target;
