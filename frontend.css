@@ -1436,12 +1436,24 @@ textarea::selection {
   display: none;
 }
 
+.code-container.large-file-performance.windowed-syntax-highlight #highlightLayer {
+  display: block;
+}
+
 .code-container.large-file-performance #activeEditor {
   color: var(--text-primary);
 }
 
+.code-container.large-file-performance.windowed-syntax-highlight #activeEditor {
+  color: transparent;
+}
+
 .code-container.large-file-performance #activeEditor::selection {
   color: var(--text-primary);
+}
+
+.code-container.large-file-performance.windowed-syntax-highlight #activeEditor::selection {
+  color: transparent;
 }
 
 textarea.active {

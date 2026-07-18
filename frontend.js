@@ -971,6 +971,9 @@ let activeInlineHtmlCorrection = null;
 const MAX_EDITOR_HISTORY_ENTRIES = 150;
 const LARGE_EDITOR_CHARACTER_THRESHOLD = 80 * 1024;
 const LARGE_EDITOR_LINE_THRESHOLD = 2500;
+const WINDOWED_SYNTAX_CHARACTER_LIMIT = 8 * 1024 * 1024;
+const WINDOWED_SYNTAX_HORIZONTAL_OVERSCAN = 2048;
+const WINDOWED_SYNTAX_VERTICAL_OVERSCAN = 18;
 const VIRTUAL_LINE_NUMBER_THRESHOLD = 2000;
 const LARGE_EDITOR_CONTEXT_WINDOW = 24 * 1024;
 const fileEditHistory = new Map();
@@ -4717,6 +4720,16 @@ function isLargeEditorContent(text, knownLineCount = 0) {
   return lineCount >= LARGE_EDITOR_LINE_THRESHOLD;
 }
 
+function shouldUseWindowedSyntaxHighlight(text, knownLineCount = 0) {
+  const value = String(text || "");
+  const lineCount = knownLineCount || countTextLines(value);
+  return (
+    value.length >= LARGE_EDITOR_CHARACTER_THRESHOLD &&
+    value.length <= WINDOWED_SYNTAX_CHARACTER_LIMIT &&
+    lineCount < LARGE_EDITOR_LINE_THRESHOLD
+  );
+}
+
 function getBoundedEditorContextBefore(text, index, limit = LARGE_EDITOR_CONTEXT_WINDOW) {
   const value = String(text || "");
   const safeIndex = Math.max(0, Math.min(Number(index || 0), value.length));
@@ -5024,7 +5037,7 @@ let projectFiles = [
         <div class="section-heading">
           <p class="eyebrow">Quick orientation</p>
           <h2 id="quickGuideTitle">The controls you will use first</h2>
-          <p>Use these shortcuts while your cursor is inside the editor. On macOS, use Command wherever Ctrl is shown. Code suggestions stay open and update their matches smoothly as you type.</p>
+          <p>Use these shortcuts while your cursor is inside the editor. On macOS, use Command wherever Ctrl is shown. Suggestions update smoothly, Enter respects existing block braces, and long lines keep syntax colors in the visible editor area.</p>
         </div>
         <div class="shortcut-grid">
           <article class="shortcut"><span>Command palette</span><strong><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></strong></article>
@@ -13153,12 +13166,15 @@ function setLargeFilePerformanceMode(textarea, lineCount = 0, content = null) {
   if (!textarea) return false;
   const value = content === null ? textarea.value : String(content);
   const enabled = isLargeEditorContent(value, lineCount);
+  const windowedSyntaxEnabled = enabled && shouldUseWindowedSyntaxHighlight(value, lineCount);
   const nextState = enabled ? "true" : "false";
+  const container = textarea.closest(".code-container");
+  container?.classList.toggle("windowed-syntax-highlight", windowedSyntaxEnabled);
+  textarea.dataset.windowedSyntaxHighlight = windowedSyntaxEnabled ? "true" : "false";
   if (textarea.dataset.largeFilePerformance !== nextState) {
-    const container = textarea.closest(".code-container");
     container?.classList.toggle("large-file-performance", enabled);
     textarea.dataset.largeFilePerformance = nextState;
-    if (enabled && highlightLayer && highlightLayer.textContent) {
+    if (enabled && !windowedSyntaxEnabled && highlightLayer && highlightLayer.textContent) {
       highlightLayer.replaceChildren();
     }
     if (
@@ -13256,8 +13272,11 @@ function scheduleEditorDecorations(textarea, options = {}) {
   if (!textarea) return;
   clearTimeout(editorDecorationTimer);
   const lineCount = Number(lineNumbers?.dataset.totalLines || 0) || countTextLines(textarea.value);
-  if (setLargeFilePerformanceMode(textarea, lineCount)) {
-    if (errorHighlightLayer?.childElementCount) errorHighlightLayer.replaceChildren();
+  const largeFileMode = setLargeFilePerformanceMode(textarea, lineCount);
+  if (largeFileMode && errorHighlightLayer?.childElementCount) {
+    errorHighlightLayer.replaceChildren();
+  }
+  if (largeFileMode && textarea.dataset.windowedSyntaxHighlight !== "true") {
     return;
   }
 
@@ -13290,7 +13309,11 @@ function updateLineNumbers(textarea, options = {}) {
   if (!options.preserveLineCount || !cachedLineCount) {
     renderLineNumberWindow(textarea, lines, Boolean(options.forceLineNumbers));
   }
-  if (largeFileMode && options.preserveLineCount) {
+  if (
+    largeFileMode &&
+    options.preserveLineCount &&
+    textarea.dataset.windowedSyntaxHighlight !== "true"
+  ) {
     if (editorDecorationTimer) {
       clearTimeout(editorDecorationTimer);
       editorDecorationTimer = null;
@@ -13574,6 +13597,9 @@ function syncScroll(textarea) {
     editorScrollFrame = requestAnimationFrame(() => {
       editorScrollFrame = null;
       renderLineNumberWindow(textarea);
+      if (textarea.dataset.windowedSyntaxHighlight === "true") {
+        renderSyntaxHighlight(textarea);
+      }
       renderErrorHighlights(textarea);
       if (activeSessionId || activePairState) renderRemoteCursors();
       if (suggestionPopup.style.display === "block") positionSuggestionPopup(textarea);
@@ -14178,27 +14204,88 @@ function highlightPlainText(code) {
   return escapeHtml(code) || " ";
 }
 
+function highlightCodeByFileType(code, fileType) {
+  if (["html", "htm", "svg", "xml"].includes(fileType)) return highlightHtml(code);
+  if (["css", "scss", "sass", "less"].includes(fileType)) return highlightCss(code);
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) return highlightJs(code);
+  if (["json", "jsonc"].includes(fileType)) return highlightJson(code);
+  if (fileType === "env" || /^\.env(?:\.|$)/i.test(activeFile?.name || "")) return highlightEnv(code);
+  return highlightPlainText(code);
+}
+
+function renderWindowedSyntaxHighlight(textarea, code, fileType) {
+  const computed = window.getComputedStyle(textarea);
+  const fontSize = parseFloat(computed.fontSize) || 13;
+  const letterSpacing = parseFloat(computed.letterSpacing) || 0;
+  const lineHeight = parseFloat(computed.lineHeight) || fontSize * 1.5;
+  const approximateCharacterWidth = Math.max(5, fontSize * 0.62 + letterSpacing);
+  const visibleColumnStart = Math.max(0, Math.floor(textarea.scrollLeft / approximateCharacterWidth));
+  const visibleColumnCount = Math.max(1, Math.ceil(textarea.clientWidth / approximateCharacterWidth));
+  const windowColumnStart = Math.max(
+    0,
+    visibleColumnStart - WINDOWED_SYNTAX_HORIZONTAL_OVERSCAN,
+  );
+  const windowColumnEnd =
+    visibleColumnStart + visibleColumnCount + WINDOWED_SYNTAX_HORIZONTAL_OVERSCAN;
+  const visibleLineStart = Math.max(0, Math.floor(textarea.scrollTop / lineHeight));
+  const visibleLineCount = Math.max(1, Math.ceil(textarea.clientHeight / lineHeight));
+  const windowLineStart = Math.max(0, visibleLineStart - WINDOWED_SYNTAX_VERTICAL_OVERSCAN);
+  const windowLineEnd = visibleLineStart + visibleLineCount + WINDOWED_SYNTAX_VERTICAL_OVERSCAN;
+  const caret = Number(textarea.selectionStart || 0);
+  const caretSample = code.slice(Math.max(0, caret - 48), Math.min(code.length, caret + 48));
+  const windowKey = [
+    activeFile?.name || "",
+    code.length,
+    windowColumnStart,
+    windowColumnEnd,
+    windowLineStart,
+    windowLineEnd,
+    caret,
+    caretSample,
+  ].join(":");
+  if (highlightLayer.dataset.windowKey === windowKey) return;
+
+  const lines = code.split("\n");
+  const highlighted = lines
+    .map((line, lineIndex) => {
+      if (lineIndex < windowLineStart || lineIndex > windowLineEnd) {
+        return escapeHtml(line);
+      }
+      const segmentStart = Math.min(line.length, windowColumnStart);
+      const segmentEnd = Math.min(line.length, Math.max(segmentStart, windowColumnEnd));
+      if (segmentEnd <= segmentStart) return escapeHtml(line);
+      return (
+        escapeHtml(line.slice(0, segmentStart)) +
+        highlightCodeByFileType(line.slice(segmentStart, segmentEnd), fileType) +
+        escapeHtml(line.slice(segmentEnd))
+      );
+    })
+    .join("\n");
+
+  highlightLayer.innerHTML = highlighted + (code.endsWith("\n") ? " " : "");
+  highlightLayer.dataset.windowKey = windowKey;
+}
+
 function renderSyntaxHighlight(textarea) {
   if (!highlightLayer || !textarea || !activeFile) return;
   const code = textarea.value || "";
   const lineCount = Number(lineNumbers?.dataset.totalLines || 0) || countTextLines(code);
-  if (setLargeFilePerformanceMode(textarea, lineCount)) {
-    if (highlightLayer.textContent) highlightLayer.replaceChildren();
-    return;
-  }
-  let highlighted = "";
-
   const extensionType = getFileType(activeFile.name || "");
   const fileType = String(extensionType || activeFile.type || "").toLowerCase();
-  if (["html", "htm", "svg", "xml"].includes(fileType)) highlighted = highlightHtml(code);
-  else if (["css", "scss", "sass", "less"].includes(fileType)) highlighted = highlightCss(code);
-  else if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) highlighted = highlightJs(code);
-  else if (["json", "jsonc"].includes(fileType)) highlighted = highlightJson(code);
-  else if (fileType === "env" || /^\.env(?:\.|$)/i.test(activeFile.name || "")) highlighted = highlightEnv(code);
-  else highlighted = highlightPlainText(code);
+  if (setLargeFilePerformanceMode(textarea, lineCount)) {
+    if (textarea.dataset.windowedSyntaxHighlight === "true") {
+      renderWindowedSyntaxHighlight(textarea, code, fileType);
+      return;
+    }
+    if (highlightLayer.textContent) highlightLayer.replaceChildren();
+    delete highlightLayer.dataset.windowKey;
+    return;
+  }
+  let highlighted = highlightCodeByFileType(code, fileType);
 
   if (code.endsWith("\n")) highlighted += " ";
   highlightLayer.innerHTML = highlighted;
+  delete highlightLayer.dataset.windowKey;
 }
 
 function syncSyntaxLayerStyle(textarea) {
@@ -17050,6 +17137,76 @@ function getJavaScriptLexicalStateAtPosition(source, position, contentStart = 0)
  * Handles auto-closing of quotes/brackets/parentheses and indentation on 'Enter'.
  * This is specific for CSS and JS files.
  */
+function hasMatchingClosingDelimiterAfterCaret(source, start, openingChar, closingChar, language) {
+  const text = String(source || "");
+  let depth = 1;
+  let state = "code";
+  let escaped = false;
+
+  for (let index = Math.max(0, Number(start) || 0); index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1] || "";
+
+    if (state === "line-comment") {
+      if (char === "\n") state = "code";
+      continue;
+    }
+    if (state === "block-comment") {
+      if (char === "*" && next === "/") {
+        state = "code";
+        index += 1;
+      }
+      continue;
+    }
+    if (state !== "code") {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      const quote = state === "single-string" ? "'" : state === "double-string" ? '"' : "`";
+      if (char === quote) state = "code";
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      state = "block-comment";
+      index += 1;
+      continue;
+    }
+    if (language === "js" && char === "/" && next === "/") {
+      state = "line-comment";
+      index += 1;
+      continue;
+    }
+    if (char === "'") {
+      state = "single-string";
+      continue;
+    }
+    if (char === '"') {
+      state = "double-string";
+      continue;
+    }
+    if (language === "js" && char === "`") {
+      state = "template-string";
+      continue;
+    }
+    if (char === openingChar) {
+      depth += 1;
+      continue;
+    }
+    if (char === closingChar) {
+      depth -= 1;
+      if (depth === 0) return true;
+    }
+  }
+
+  return false;
+}
+
 function handleAutoCloseAndIndent(e, editor, providedLanguageContext = null) {
   const pos = editor.selectionStart;
   const editorValue = editor.value;
@@ -17185,14 +17342,28 @@ function handleAutoCloseAndIndent(e, editor, providedLanguageContext = null) {
         // --- 💡 MODIFICATION START ---
         const autoClosingBracket = currentLine.endsWith("{") ? "}" : ")";
 
-        // Check if the corresponding closing bracket already exists right after the cursor
+        // Check the complete remaining block, not only the character beside the caret.
+        // A rule such as `.tag {\n  display: block;\n}` already owns a closing brace
+        // even though the next character after `{` is a newline.
         const closingExists = nextCharacter === autoClosingBracket;
+        const matchingClosingExistsLater = closingExists || hasMatchingClosingDelimiterAfterCaret(
+          editorValue,
+          pos,
+          currentLine.endsWith("{") ? "{" : "(",
+          autoClosingBracket,
+          isCssContext ? "css" : "js",
+        );
 
         if (closingExists) {
           // Scenario: { | } -> Newline + Indent + Newline + CurrentIndent + }
           // This is essentially the same logic as 'isTriggered' but applied to the {|} case
           replacement = "\n" + nextIndent + "\n" + currentIndent;
           newCursorPos = pos + 1 + nextIndent.length; // Pos + \n + newIndent
+        } else if (matchingClosingExistsLater) {
+          // The block already contains declarations/statements and owns a closing
+          // delimiter farther ahead. Add only the requested indented line.
+          replacement = "\n" + nextIndent;
+          newCursorPos = pos + 1 + nextIndent.length;
         } else {
           // Scenario: { | -> Newline + Indent + Newline + CurrentIndent + autoClosingBracket
           // Insert: newline + indent + newline + closing bracket
