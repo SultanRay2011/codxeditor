@@ -7,7 +7,7 @@
     <meta name="description" content="Private CodX Editor administration interface." />
     <title>Private Admin | CodX Editor</title>
     <script src="/socket.io/socket.io.js"></script>
-    <style>
+    <style media="not all">
       :root {
         color-scheme: dark;
         --bg: #070b14;
@@ -387,7 +387,7 @@
       }
     </style>
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/adminprivate.css?v=20260717-created-links1" />
+    <link rel="stylesheet" href="/adminprivate.css?v=20260718-admin-pages1" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
@@ -413,7 +413,7 @@
             <input id="password" type="password" autocomplete="current-password" />
           </label>
           <div class="login-actions">
-            <button class="btn" type="submit">LOGIN</button>
+            <button class="btn" type="submit"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6v-2H6V6h4V4Zm5.59 3.59L17 9l-2 2H8v2h7l2 2-1.41 1.41L11.17 12l4.42-4.41ZM18 4h2v16h-2V4Z"/></svg><span>Login securely</span></button>
             <div id="loginError" class="error"></div>
           </div>
         </form>
@@ -423,11 +423,11 @@
     <main id="appView" class="app">
       <div class="dashboard-shell">
         <aside class="sidebar" aria-label="Admin navigation">
-          <a class="sidebar-brand" href="#overview" aria-label="CodX Editor admin home">
+          <a class="sidebar-brand" href="/adminprivate.html?page=overview" aria-label="CodX Editor admin home">
             <span class="brand-mark">CX</span>
             <span class="sidebar-brand-copy">
-              <strong>CODX</strong>
-              <small>ADMIN</small>
+              <strong>CODX EDITOR</strong>
+              <small>ADMIN CONSOLE</small>
             </span>
           </a>
 
@@ -438,25 +438,25 @@
 
           <nav class="sidebar-nav">
             <span class="nav-label">Workspace</span>
-            <a class="nav-item active" href="#overview" aria-label="Overview">
+            <a class="nav-item active" href="/adminprivate.html?page=overview" data-admin-route="overview" aria-label="Overview">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
               <span>Overview</span>
             </a>
-            <a class="nav-item" href="#sessionsPanel" aria-label="Live sessions">
+            <a class="nav-item" href="/adminprivate.html?page=sessions" data-admin-route="sessions" aria-label="Live sessions">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a4 4 0 1 0-3.46-6H12a4 4 0 0 0 0 8h.54A4 4 0 0 0 16 11ZM8 13c-3.31 0-6 1.79-6 4v2h10v-2c0-1.05.42-2.02 1.14-2.84A9.42 9.42 0 0 0 8 13Zm8 0c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4Z"/></svg>
               <span>Live sessions</span>
               <b class="nav-count" id="sessionNavCount">0</b>
             </a>
-            <a class="nav-item" href="#projectsPanel" aria-label="Published projects">
+            <a class="nav-item" href="/adminprivate.html?page=projects" data-admin-route="projects" aria-label="Published projects">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L17.8 7 12 9.8 6.2 7 12 4.3ZM5 8.6l6 3v7.8l-6-3V8.6Zm8 10.8v-7.8l6-3v7.8l-6 3Z"/></svg>
               <span>Projects</span>
               <b class="nav-count" id="projectNavCount">0</b>
             </a>
-            <a class="nav-item" href="#selectedPanel" aria-label="Session inspector">
+            <a class="nav-item" href="/adminprivate.html?page=inspector" data-admin-route="inspector" aria-label="Session inspector">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3a8 8 0 1 0 4.9 14.33L20.6 22 22 20.6l-4.67-4.7A8 8 0 0 0 11 3Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
               <span>Inspector</span>
             </a>
-            <a class="nav-item" href="#activityPanel" aria-label="Admin activity">
+            <a class="nav-item" href="/adminprivate.html?page=activity" data-admin-route="activity" aria-label="Admin activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h10V8H7Zm0 4v2h10v-2H7Zm0 4v2h7v-2H7Z"/></svg>
               <span>Activity</span>
             </a>
@@ -478,96 +478,116 @@
         </aside>
 
         <div class="dashboard-workspace">
-          <header class="topbar" id="overview">
+          <header class="topbar">
             <div class="topbar-copy">
               <div class="topbar-kicker">
-                <span class="hero-eyebrow">Operations center</span>
+                <span class="hero-eyebrow" id="pageEyebrow">Operations center</span>
                 <span class="sync-pill"><i></i><span id="liveUpdateLabel">Live data connected</span></span>
               </div>
-              <h1>Everything happening in CodX Editor, <em>right now.</em></h1>
+              <h1 id="pageTitle">Everything happening in CodX Editor, <em>right now.</em></h1>
+              <p id="pageDescription">Monitor the editor, collaboration rooms, and published projects from one private workspace.</p>
               <p id="lastUpdated">Loading private admin data...</p>
             </div>
             <div class="topbar-actions">
-              <a class="btn hero-btn" href="/frontend.html">OPEN CODX EDITOR</a>
-              <button id="refreshBtn" class="btn hero-btn">REFRESH DATA</button>
-              <button id="logoutBtn" class="btn hero-btn danger">LOGOUT</button>
+              <a class="btn hero-btn" href="/frontend.html"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4V4Zm2 2v3h12V6H6Zm0 5v7h12v-7H6Zm2 2h6v2H8v-2Z"/></svg><span>Open CodX Editor</span></a>
+              <button id="refreshBtn" class="btn hero-btn"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"/></svg><span class="btn-label">Refresh data</span></button>
+              <button id="logoutBtn" class="btn hero-btn danger"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6v-2H6V6h4V4Zm5.59 3.59L17 9l-2 2H9v2h6l2 2-1.41 1.41L11.17 12l4.42-4.41Z"/></svg><span>Logout</span></button>
             </div>
           </header>
 
-          <section class="section-heading" aria-labelledby="overviewTitle">
-            <div>
-              <span class="section-label">Platform pulse</span>
-              <h2 id="overviewTitle">Dashboard overview</h2>
-              <p>Live operational totals refresh automatically as people and projects change.</p>
-            </div>
-            <div class="realtime-legend"><span></span> Updating in real time</div>
-          </section>
-
-          <section class="grid stats" id="statsGrid" aria-label="System overview"></section>
-
-          <section class="card panel-card latest-links-panel" id="latestLinksPanel">
-            <div class="panel-heading latest-links-heading">
+          <section class="admin-page is-active" data-admin-page="overview" aria-labelledby="overviewTitle">
+            <div class="section-heading">
               <div>
-                <span class="section-label">Freshly published</span>
-                <h2>Latest created links</h2>
-                <p>New Publish / Share links appear here automatically as soon as a user creates them.</p>
+                <span class="section-label">Platform pulse</span>
+                <h2 id="overviewTitle">Dashboard overview</h2>
+                <p>Live operational totals refresh automatically as people and projects change.</p>
               </div>
-              <a class="btn secondary" href="#projectsPanel">VIEW ALL PROJECTS</a>
+              <div class="realtime-legend"><span></span> Updating in real time</div>
             </div>
-            <div id="latestLinks" class="latest-links-list" aria-live="polite"></div>
-          </section>
 
-          <section class="grid main-grid">
-            <div class="card panel-card" id="sessionsPanel">
-              <div class="panel-heading">
+            <div class="grid stats" id="statsGrid" aria-label="System overview" aria-busy="true">
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+              <article class="card stat stat-skeleton"><span></span><strong></strong><i></i><i></i></article>
+            </div>
+
+            <section class="card panel-card latest-links-panel" id="latestLinksPanel">
+              <div class="panel-heading latest-links-heading">
                 <div>
-                  <span class="section-label">Collaboration control</span>
-                  <h2>Live sessions</h2>
-                  <p>Inspect every active room, its invite details, people, files, messages, and permissions.</p>
+                  <span class="section-label">Freshly published</span>
+                  <h2>Latest created links</h2>
+                  <p>New Publish / Share links appear here automatically as soon as a user creates them.</p>
                 </div>
-                <button id="copyAllBtn" class="btn secondary">COPY ALL PINS</button>
+                <a class="btn secondary" href="/adminprivate.html?page=projects">VIEW ALL PROJECTS</a>
               </div>
-              <div id="sessions" class="session-list"></div>
-            </div>
-
-            <aside class="grid side-stack">
-              <section class="card panel-card" id="selectedPanel">
-                <div class="panel-heading compact">
-                  <div>
-                    <span class="section-label">Deep inspection</span>
-                    <h2>Session inspector</h2>
-                  </div>
-                </div>
-                <div id="sessionDetail" class="detail-box empty">
-                  Select a live session to inspect its complete operational state.
-                </div>
-              </section>
-              <section class="card panel-card" id="activityPanel">
-                <div class="panel-heading compact">
-                  <div>
-                    <span class="section-label">Audit trail</span>
-                    <h2>Admin activity</h2>
-                  </div>
-                </div>
-                <div id="activity" class="activity"></div>
-              </section>
-            </aside>
+              <div id="latestLinks" class="latest-links-list" aria-live="polite"></div>
+            </section>
           </section>
 
-          <section class="card panel-card projects-panel" id="projectsPanel">
-            <div class="panel-heading projects-heading">
+          <section class="admin-page" data-admin-page="sessions" aria-labelledby="sessionsTitle" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="section-label">Collaboration control</span>
+                <h2 id="sessionsTitle">Live sessions</h2>
+                <p>Inspect and manage every active room, its invite details, people, files, messages, and permissions.</p>
+              </div>
+              <button id="copyAllBtn" class="btn secondary">COPY ALL PINS</button>
+            </div>
+            <section class="card panel-card page-panel">
+              <div id="sessions" class="session-list"></div>
+            </section>
+          </section>
+
+          <section class="admin-page" data-admin-page="inspector" aria-labelledby="inspectorTitle" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="section-label">Deep inspection</span>
+                <h2 id="inspectorTitle">Session inspector</h2>
+                <p>Open a room from Live Sessions to review its people, files, permissions, messages, and invite details.</p>
+              </div>
+              <a class="btn secondary" href="/adminprivate.html?page=sessions">CHOOSE A SESSION</a>
+            </div>
+            <section class="card panel-card page-panel">
+              <div id="sessionDetail" class="detail-box empty">
+                Select a live session to inspect its complete operational state.
+              </div>
+            </section>
+          </section>
+
+          <section class="admin-page" data-admin-page="activity" aria-labelledby="activityTitle" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="section-label">Audit trail</span>
+                <h2 id="activityTitle">Admin activity</h2>
+                <p>Follow publishing, moderation, collaboration, and administrative events in chronological order.</p>
+              </div>
+            </div>
+            <section class="card panel-card page-panel">
+              <div id="activity" class="activity activity-page"></div>
+            </section>
+          </section>
+
+          <section class="admin-page" data-admin-page="projects" aria-labelledby="projectsTitle" hidden>
+            <div class="section-heading projects-heading">
               <div>
                 <span class="section-label">Published experiences</span>
-                <h2>Projects</h2>
-                <p>Review every published project, copy its public URL, open the live page, or load its files back into CodX Editor.</p>
+                <h2 id="projectsTitle">Published projects</h2>
+                <p>Review every project, its real publication date, public URL, files, and editor access.</p>
               </div>
               <label class="project-search">
                 <span>Search projects</span>
                 <input id="projectSearch" type="search" placeholder="Name, link, or file type" autocomplete="off" />
               </label>
             </div>
-            <div class="project-summary" id="projectSummary">Loading published projects...</div>
-            <div id="projects" class="projects-grid"></div>
+            <section class="card panel-card projects-panel page-panel">
+              <div class="project-summary" id="projectSummary">Loading published projects...</div>
+              <div id="projects" class="projects-grid"></div>
+            </section>
           </section>
         </div>
       </div>
@@ -593,21 +613,87 @@
       const sessionNavCount = document.getElementById("sessionNavCount");
       const projectNavCount = document.getElementById("projectNavCount");
       const liveUpdateLabel = document.getElementById("liveUpdateLabel");
+      const refreshBtnLabel = refreshBtn.querySelector(".btn-label");
+      const pageEyebrow = document.getElementById("pageEyebrow");
+      const pageTitle = document.getElementById("pageTitle");
+      const pageDescription = document.getElementById("pageDescription");
       const sidebarNavItems = Array.from(document.querySelectorAll(".sidebar-nav .nav-item"));
+      const adminPages = Array.from(document.querySelectorAll("[data-admin-page]"));
+      const adminPageDetails = {
+        overview: {
+          eyebrow: "Operations center",
+          title: "Everything happening in CodX Editor, <em>right now.</em>",
+          description: "Monitor the editor, collaboration rooms, and published projects from one private workspace.",
+        },
+        sessions: {
+          eyebrow: "Collaboration control",
+          title: "Manage every <em>live session.</em>",
+          description: "Review room health, copy invitation details, and apply moderation controls without leaving this page.",
+        },
+        projects: {
+          eyebrow: "Publishing library",
+          title: "Every published project, <em>clearly dated.</em>",
+          description: "Search public experiences and see exactly when each project was published and last updated.",
+        },
+        inspector: {
+          eyebrow: "Session intelligence",
+          title: "Inspect one room in <em>full detail.</em>",
+          description: "Review participants, permissions, files, chat totals, and room access information.",
+        },
+        activity: {
+          eyebrow: "Administrative history",
+          title: "Follow the complete <em>activity trail.</em>",
+          description: "See publishing, room management, moderation, and collaboration events with precise timestamps.",
+        },
+      };
 
       let overview = null;
-      let selectedSessionId = "";
+      let selectedSessionId = new URLSearchParams(window.location.search).get("session") || "";
       let publishedProjects = [];
       let projectApiUnavailable = false;
       let realtimeRefreshTimer = null;
 
-      function setActiveSidebarItem(activeItem) {
-        sidebarNavItems.forEach((item) => item.classList.toggle("active", item === activeItem));
+      function getRequestedAdminPage() {
+        const requestedPage = new URLSearchParams(window.location.search).get("page") || "overview";
+        return Object.hasOwn(adminPageDetails, requestedPage) ? requestedPage : "overview";
+      }
+
+      function showAdminPage(pageName, { updateHistory = false } = {}) {
+        const nextPage = Object.hasOwn(adminPageDetails, pageName) ? pageName : "overview";
+        adminPages.forEach((page) => {
+          const active = page.dataset.adminPage === nextPage;
+          page.hidden = !active;
+          page.classList.toggle("is-active", active);
+        });
+        sidebarNavItems.forEach((item) => {
+          const active = item.dataset.adminRoute === nextPage;
+          item.classList.toggle("active", active);
+          if (active) item.setAttribute("aria-current", "page");
+          else item.removeAttribute("aria-current");
+        });
+        const details = adminPageDetails[nextPage];
+        pageEyebrow.textContent = details.eyebrow;
+        pageTitle.innerHTML = details.title;
+        pageDescription.textContent = details.description;
+        document.title = `${nextPage === "overview" ? "Overview" : details.eyebrow} | CodX Editor Admin`;
+        if (updateHistory) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("page", nextPage);
+          if (nextPage === "inspector" && selectedSessionId) url.searchParams.set("session", selectedSessionId);
+          else url.searchParams.delete("session");
+          window.history.pushState({ adminPage: nextPage }, "", url);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
 
       sidebarNavItems.forEach((item) => {
-        item.addEventListener("click", () => setActiveSidebarItem(item));
+        item.addEventListener("click", (event) => {
+          event.preventDefault();
+          showAdminPage(item.dataset.adminRoute, { updateHistory: true });
+        });
       });
+      window.addEventListener("popstate", () => showAdminPage(getRequestedAdminPage()));
+      showAdminPage(getRequestedAdminPage());
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -622,9 +708,25 @@
         return /^#[0-9a-f]{3,8}$/i.test(color) ? color : "#16a34a";
       }
 
+      function formatExactDate(ts) {
+        const date = new Date(Number(ts));
+        if (!Number.isFinite(date.getTime())) return "Unknown date";
+        return new Intl.DateTimeFormat(undefined, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(date);
+      }
+
+      function formatIsoDate(ts) {
+        const date = new Date(Number(ts));
+        return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+      }
+
       function formatTime(ts) {
-        if (!ts) return "Unknown";
-        return new Date(ts).toLocaleString();
+        return formatExactDate(ts);
       }
 
       function formatCompactNumber(value) {
@@ -644,14 +746,21 @@
       }
 
       function formatRelativeTime(ts) {
-        const difference = Date.now() - Number(ts || 0);
-        if (!Number.isFinite(difference) || difference < 0) return "just now";
-        const minutes = Math.floor(difference / 60000);
-        if (minutes < 1) return "just now";
-        if (minutes < 60) return `${minutes}m ago`;
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours}h ago`;
-        return `${Math.floor(hours / 24)}d ago`;
+        const timestamp = Number(ts);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return "unknown time";
+        const difference = timestamp - Date.now();
+        const absolute = Math.abs(difference);
+        const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+        const ranges = [
+          [60 * 1000, "second", 1000],
+          [60 * 60 * 1000, "minute", 60 * 1000],
+          [24 * 60 * 60 * 1000, "hour", 60 * 60 * 1000],
+          [30 * 24 * 60 * 60 * 1000, "day", 24 * 60 * 60 * 1000],
+          [365 * 24 * 60 * 60 * 1000, "month", 30 * 24 * 60 * 60 * 1000],
+          [Infinity, "year", 365 * 24 * 60 * 60 * 1000],
+        ];
+        const [, unit, divisor] = ranges.find(([limit]) => absolute < limit);
+        return formatter.format(Math.round(difference / divisor), unit);
       }
 
       function setLoggedIn(loggedIn) {
@@ -767,6 +876,7 @@
             `,
           )
           .join("");
+        statsGrid.setAttribute("aria-busy", "false");
       }
 
       function renderSessions(sessions) {
@@ -797,8 +907,8 @@
               <article class="session" data-session="${escapeHtml(session.sessionId)}">
                 <div class="session-head">
                   <div class="session-title">
-                    <div class="session-live-line"><span class="session-live-dot"></span> LIVE ROOM <span>·</span> ${escapeHtml(formatRelativeTime(session.createdAt))}</div>
-                    <h3>${escapeHtml(session.hostName)}’s session</h3>
+                    <div class="session-live-line"><span class="session-live-dot"></span> LIVE ROOM <span>&middot;</span> ${escapeHtml(formatRelativeTime(session.createdAt))}</div>
+                    <h3>${escapeHtml(session.hostName)}&rsquo;s session</h3>
                     <span class="session-id">ID ${escapeHtml(session.sessionId)}</span>
                   </div>
                   <div class="session-pin-block"><small>SESSION PIN</small><span class="pin">${escapeHtml(session.sessionPin || "NO PIN")}</span></div>
@@ -812,7 +922,7 @@
                 ${participantStack}
                 <div class="session-link-row">
                   <div class="linkbox"><span>${escapeHtml(session.shareLink)}</span></div>
-                  <a class="icon-action" href="${escapeHtml(session.shareLink)}" target="_blank" rel="noopener noreferrer" aria-label="Open session link">↗</a>
+                  <a class="icon-action" href="${escapeHtml(session.shareLink)}" target="_blank" rel="noopener noreferrer" aria-label="Open session link">&nearr;</a>
                 </div>
                 <div class="chips">
                   <span class="chip">Active: ${escapeHtml(session.activeFileName || "None")}</span>
@@ -847,7 +957,7 @@
         });
         projectSummary.innerHTML = projectApiUnavailable
           ? "Detailed project catalog waiting for the next normal server restart"
-          : `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>·</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
+          : `<strong>${filtered.length}</strong> of <strong>${projects.length}</strong> published projects shown <span>&middot;</span> ${projects.reduce((sum, project) => sum + Number(project.fileCount || 0), 0)} files in total`;
         if (!filtered.length) {
           projectsEl.innerHTML = `<div class="empty project-empty">${projectApiUnavailable ? "Project details will appear after the CodX Editor server completes its next normal restart." : projects.length ? "No projects match that search." : "No projects have been published yet."}</div>`;
           return;
@@ -868,7 +978,6 @@
                 <div class="project-card-top">
                   <span class="project-mark">${escapeHtml(initials || "PX")}</span>
                   <span class="project-status"><i></i> PUBLISHED</span>
-                  <span class="project-age">Updated ${escapeHtml(formatRelativeTime(project.updatedAt))}</span>
                 </div>
                 <div class="project-title-row">
                   <div>
@@ -880,6 +989,18 @@
                   <span>${escapeHtml(project.shareLink)}</span>
                   <button class="project-copy-btn" data-link="${escapeHtml(project.shareLink)}" aria-label="Copy published project link">COPY</button>
                 </div>
+                <div class="project-dates">
+                  <time datetime="${escapeHtml(formatIsoDate(project.createdAt))}">
+                    <span>Published</span>
+                    <strong>${escapeHtml(formatExactDate(project.createdAt))}</strong>
+                    <small>${escapeHtml(formatRelativeTime(project.createdAt))}</small>
+                  </time>
+                  <time datetime="${escapeHtml(formatIsoDate(project.updatedAt))}">
+                    <span>Last updated</span>
+                    <strong>${escapeHtml(formatExactDate(project.updatedAt))}</strong>
+                    <small>${escapeHtml(formatRelativeTime(project.updatedAt))}</small>
+                  </time>
+                </div>
                 <div class="project-facts">
                   <div><strong>${escapeHtml(project.fileCount || 0)}</strong><span>Files</span></div>
                   <div><strong>${escapeHtml(formatCompactNumber(project.totalCharacters || 0))}</strong><span>Characters</span></div>
@@ -888,7 +1009,7 @@
                 <div class="file-types">${types || '<span class="file-type">NO FILE TYPES</span>'}</div>
                 <div class="project-actions">
                   <a class="btn" href="${escapeHtml(project.editorLink)}" target="_blank" rel="noopener noreferrer">OPEN IN CODX EDITOR</a>
-                  <a class="btn secondary" href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">VIEW LIVE PAGE ↗</a>
+                  <a class="btn secondary" href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">VIEW LIVE PAGE &nearr;</a>
                 </div>
               </article>
             `;
@@ -907,12 +1028,12 @@
         latestLinksEl.innerHTML = latest
           .map((project) => `
             <article class="latest-link-item">
-              <div class="latest-link-icon" aria-hidden="true">↗</div>
+              <div class="latest-link-icon" aria-hidden="true">&nearr;</div>
               <div class="latest-link-copy">
                 <div class="latest-link-title">
                   <strong>${escapeHtml(project.projectName || "Untitled project")}</strong>
-                  <span>${escapeHtml(formatRelativeTime(project.createdAt))}</span>
                 </div>
+                <time datetime="${escapeHtml(formatIsoDate(project.createdAt))}">${escapeHtml(formatExactDate(project.createdAt))} <span>&middot; ${escapeHtml(formatRelativeTime(project.createdAt))}</span></time>
                 <a href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(project.shareLink)}</a>
               </div>
               <div class="latest-link-actions">
@@ -936,7 +1057,7 @@
               <div class="activity-item">
                 <strong>${escapeHtml(item.title)}</strong>
                 <p>${escapeHtml(item.detail || "")}</p>
-                <span class="chip">${escapeHtml(formatTime(item.ts))}</span>
+                <time datetime="${escapeHtml(formatIsoDate(item.ts))}">${escapeHtml(formatExactDate(item.ts))} <span>&middot; ${escapeHtml(formatRelativeTime(item.ts))}</span></time>
               </div>
             `,
           )
@@ -961,8 +1082,8 @@
           <div class="detail-hero">
             <div>
               <span class="session-live-line"><span class="session-live-dot"></span> LIVE SESSION</span>
-              <h3>${escapeHtml(session.hostName)}’s room</h3>
-              <p>${escapeHtml(session.sessionId)} · created ${escapeHtml(formatTime(session.createdAt))}</p>
+              <h3>${escapeHtml(session.hostName)}&rsquo;s room</h3>
+              <p>${escapeHtml(session.sessionId)} &middot; created ${escapeHtml(formatTime(session.createdAt))}</p>
             </div>
             <div class="detail-pin"><small>PIN</small><strong>${escapeHtml(session.sessionPin || "None")}</strong></div>
           </div>
@@ -997,7 +1118,7 @@
                               <span class="dot" style="background:${safeColor(p.theme)}"></span>
                               <div>
                                 <strong>${escapeHtml(p.name)}</strong>
-                                <p>${escapeHtml(p.role)} · ${escapeHtml(p.currentFile || "No active file")}</p>
+                                <p>${escapeHtml(p.role)} &middot; ${escapeHtml(p.currentFile || "No active file")}</p>
                               </div>
                             </div>
                             <span class="chip ${p.frozenEditing || p.mutedChat ? "warn" : "good"}">${p.frozenEditing ? "Frozen" : p.mutedChat ? "Muted" : "OK"}</span>
@@ -1045,7 +1166,7 @@
 
       refreshBtn.addEventListener("click", async () => {
         refreshBtn.disabled = true;
-        refreshBtn.textContent = "REFRESHING…";
+        refreshBtnLabel.textContent = "Refreshing...";
         liveUpdateLabel.textContent = "Synchronizing data";
         try {
           await loadDashboard();
@@ -1053,7 +1174,7 @@
           alert(error.message);
         } finally {
           refreshBtn.disabled = false;
-          refreshBtn.textContent = "REFRESH DATA";
+          refreshBtnLabel.textContent = "Refresh data";
         }
       });
 
@@ -1081,6 +1202,7 @@
         try {
           if (target.classList.contains("inspect-btn")) {
             await loadSessionDetail(target.dataset.id);
+            showAdminPage("inspector", { updateHistory: true });
           } else if (target.classList.contains("copy-link-btn")) {
             await copyText(target.dataset.link);
             target.textContent = "COPIED";
