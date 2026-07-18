@@ -18808,7 +18808,10 @@ async function importProjectFromZipFile(file) {
         .replace(/^\.\//, "");
       if (!normalizedPath || normalizedPath.startsWith("__MACOSX/")) return;
       const ext = normalizedPath.split(".").pop().toLowerCase();
-      if (editableTextExtensions.includes(ext)) archiveFiles.push({ entry, normalizedPath });
+      const mediaKind = getProjectMediaKind({ name: normalizedPath });
+      if (editableTextExtensions.includes(ext) || mediaKind) {
+        archiveFiles.push({ entry, normalizedPath, mediaKind });
+      }
     });
 
     const sharedRoot = getSharedZipRootFolder(
@@ -18818,12 +18821,42 @@ async function importProjectFromZipFile(file) {
     const importedFiles = [];
     for (let index = 0; index < archiveFiles.length; index += ZIP_IMPORT_BATCH_SIZE) {
       const batch = archiveFiles.slice(index, index + ZIP_IMPORT_BATCH_SIZE);
-      const batchFiles = await Promise.all(batch.map(async ({ entry, normalizedPath }) => {
+      const batchFiles = await Promise.all(batch.map(async ({ entry, normalizedPath, mediaKind }) => {
         const relativePath = sharedRoot
           ? normalizedPath.split("/").filter(Boolean).slice(1).join("/")
           : normalizedPath;
         const safePath = normalizeProjectFileName(relativePath);
         const ext = safePath.split(".").pop().toLowerCase();
+        if (mediaKind) {
+          const sourceBlob = await entry.async("blob");
+          const mimeType = getMediaMimeTypeForArchiveFile(safePath);
+          const blob = sourceBlob.type === mimeType
+            ? sourceBlob
+            : new Blob([sourceBlob], { type: mimeType });
+          const mediaFile = {
+            name: safePath,
+            type: "media",
+            mediaType: mediaKind,
+            mediaStorageId: createMediaStorageId(),
+            mediaSize: Number(blob.size || 0),
+            mediaMimeType: mimeType,
+            content: "",
+            active: false,
+          };
+          attachRuntimeMediaBlob(mediaFile, blob);
+          try {
+            await persistMediaBlob(mediaFile, blob);
+          } catch (error) {
+            console.warn(`Media persistence unavailable for ${safePath}:`, error);
+            mediaFile.mediaStorageId = "";
+          }
+          if (blob.size <= MAX_LIVE_MEDIA_TRANSFER_BYTES) {
+            try {
+              mediaFile.content = await readMediaBlobAsDataUrl(blob);
+            } catch (_error) {}
+          }
+          return mediaFile;
+        }
         const content = await entry.async("string");
         return {
           name: safePath,
