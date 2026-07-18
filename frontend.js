@@ -30,6 +30,7 @@ const textSizeValue = document.getElementById("textSizeValue");
 const tagSuggestionsCheckbox = document.getElementById("tagSuggestions");
 const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
+const previewInspectNavigateCheckbox = document.getElementById("previewInspectNavigate");
 const editorFontFamilySelect = document.getElementById("editorFontFamily");
 const editorFontEmbedInput = document.getElementById("editorFontEmbed");
 const googleFontCustomization = document.getElementById("googleFontCustomization");
@@ -6112,6 +6113,11 @@ function bindPreviewNavigationHandlers() {
 function getInspectorMarkup(element) {
   if (!element || !element.outerHTML) return "";
   const clone = element.cloneNode(true);
+  [clone, ...clone.querySelectorAll("*")].forEach((node) => {
+    node.removeAttribute("data-codx-source-file");
+    node.removeAttribute("data-codx-source-line");
+    node.removeAttribute("data-codx-source-column");
+  });
   clone
     .querySelectorAll("#__codx-inspector-root, #__codx-inspector-overlay, #__codx-inspector-outline, #__codx-inspector-styles, #__codx-inspector-cursor-styles, #__codx-preview-zoom-styles")
     .forEach((node) => node.remove());
@@ -6121,6 +6127,50 @@ function getInspectorMarkup(element) {
   let markup = clone.outerHTML;
   if (markup.length > 1800) markup = `${markup.slice(0, 1800)}\n...`;
   return markup;
+}
+
+function annotatePreviewHtmlSourceLocations(htmlText, fileName) {
+  const source = String(htmlText || "");
+  const safeFileName = String(fileName || "").trim();
+  if (!source || !safeFileName) return source;
+  const tokens = scanHtmlTagTokens(source, () => {});
+  const openingTags = tokens.filter(
+    (token) => !token.isClosing && !/\bdata-codx-source-line\s*=/i.test(token.raw),
+  );
+  let annotated = source;
+  for (let index = openingTags.length - 1; index >= 0; index -= 1) {
+    const token = openingTags[index];
+    const location = getLineAndColumnFromIndex(source, token.start);
+    const attributes =
+      ` data-codx-source-file="${escapeHtmlAttributeValue(safeFileName)}"` +
+      ` data-codx-source-line="${location.line}"` +
+      ` data-codx-source-column="${location.col}"`;
+    annotated = `${annotated.slice(0, token.nameEnd)}${attributes}${annotated.slice(token.nameEnd)}`;
+  }
+  return annotated;
+}
+
+function getPreviewInspectorSourceLocation(element) {
+  const sourceElement = element?.matches?.("[data-codx-source-line]") ? element : null;
+  if (!sourceElement) return null;
+  const fileName = String(sourceElement.getAttribute("data-codx-source-file") || "").trim();
+  const line = Number(sourceElement.getAttribute("data-codx-source-line") || 0);
+  const col = Number(sourceElement.getAttribute("data-codx-source-column") || 1);
+  if (!fileName || !Number.isFinite(line) || line < 1) return null;
+  return {
+    fileName,
+    line: Math.max(1, Math.floor(line)),
+    col: Number.isFinite(col) ? Math.max(1, Math.floor(col)) : 1,
+  };
+}
+
+function navigateToPreviewInspectorSource(element) {
+  if (previewInspectNavigateCheckbox && !previewInspectNavigateCheckbox.checked) return false;
+  const location = getPreviewInspectorSourceLocation(element);
+  if (!location) return false;
+  if (isCompactWorkspaceLayout()) setMobileWorkspacePane("editor");
+  jumpToEditorLocation(location.fileName, location.line, location.col);
+  return true;
 }
 
 function removePreviewInspector(previewDoc) {
@@ -6259,6 +6309,7 @@ function bindPreviewInspector() {
       if (!isPreviewInspecting) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      navigateToPreviewInspectorSource(event.target);
     }, true);
     previewDoc.addEventListener("scroll", () => {
       if (isPreviewInspecting) positionPreviewInspector(previewDoc, previewDoc.__codxInspectedElement);
@@ -6933,6 +6984,7 @@ const defaultSettings = {
   tagSuggestions: true,
   zenShowFiles: true,
   fullscreenPreviewPanel: true,
+  previewInspectNavigate: true,
 };
 
 // PART 2 - UTILITY FUNCTIONS
@@ -10233,6 +10285,12 @@ function loadSettings() {
             ? Boolean(settings.fullscreenPreviewPanel)
             : defaultSettings.fullscreenPreviewPanel;
       }
+      if (previewInspectNavigateCheckbox) {
+        previewInspectNavigateCheckbox.checked =
+          settings.previewInspectNavigate !== undefined
+            ? Boolean(settings.previewInspectNavigate)
+            : defaultSettings.previewInspectNavigate;
+      }
     } catch (e) {
       console.error("Error loading settings:", e);
       resetToDefaultSettings();
@@ -10266,6 +10324,9 @@ function resetToDefaultSettings() {
   if (zenShowFilesCheckbox) zenShowFilesCheckbox.checked = defaultSettings.zenShowFiles;
   if (fullscreenPreviewPanelCheckbox) {
     fullscreenPreviewPanelCheckbox.checked = defaultSettings.fullscreenPreviewPanel;
+  }
+  if (previewInspectNavigateCheckbox) {
+    previewInspectNavigateCheckbox.checked = defaultSettings.previewInspectNavigate;
   }
   applyGoogleFontImport("");
   updateFontControlsState();
@@ -10624,6 +10685,9 @@ applySettingsBtn.addEventListener("click", () => {
     fullscreenPreviewPanel: fullscreenPreviewPanelCheckbox
       ? fullscreenPreviewPanelCheckbox.checked
       : defaultSettings.fullscreenPreviewPanel,
+    previewInspectNavigate: previewInspectNavigateCheckbox
+      ? previewInspectNavigateCheckbox.checked
+      : defaultSettings.previewInspectNavigate,
   };
   if (safeLocalStorage("set", "editorSettings", JSON.stringify(settings))) {
     applyZenFileVisibilitySetting(settings.zenShowFiles);
@@ -12527,6 +12591,7 @@ function updatePreview() {
   updatePreviewTitle(extractHtmlTitle(html) || htmlFile.name);
   updatePreviewLink(htmlFile.name);
   updatePreviewFavicon(resolvePreviewAssetPath(extractHtmlFavicon(html)));
+  html = annotatePreviewHtmlSourceLocations(html, htmlFile.name);
   const externalHeadResources = [];
 
   // Normalize external font/resource links into <head> so they reliably load in srcdoc.

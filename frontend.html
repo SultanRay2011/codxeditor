@@ -990,6 +990,43 @@
           </label>
         </div>
 
+        <div
+          class="preview-inspector-setting"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+          "
+        >
+          <div>
+            <strong style="color: var(--text-primary)">Open code when inspecting</strong>
+            <p id="previewInspectNavigateDescription" style="margin: 6px 0 0; color: var(--text-muted); font-size: 12px">
+              Open the matching HTML file and line when you click an element while inspecting the preview.
+            </p>
+          </div>
+          <label
+            class="switch"
+            for="previewInspectNavigate"
+            title="Open the matching source line while inspecting"
+            style="flex: 0 0 44px"
+          >
+            <input
+              type="checkbox"
+              id="previewInspectNavigate"
+              checked
+              aria-label="Open the matching source line while inspecting"
+              aria-describedby="previewInspectNavigateDescription"
+            />
+            <span class="slider"></span>
+          </label>
+        </div>
+
         <!-- Font Family -->
         <div style="margin-bottom: 20px">
           <label
@@ -1847,7 +1884,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260718-zip-media1"></script>
+    <script src="/frontend.js?v=20260718-inspector-source1"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>
