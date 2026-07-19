@@ -356,6 +356,10 @@
         gap: 18px;
       }
 
+      .contact-form[hidden] {
+        display: none;
+      }
+
       .contact-form-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -973,12 +977,20 @@
               </p>
               <button class="contact-submit" type="submit">Send Message</button>
             </form>
-            <div class="contact-success" id="contactSuccess">
+            <div
+              class="contact-success"
+              id="contactSuccess"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-hidden="true"
+              tabindex="-1"
+            >
               <div class="success-checkmark" aria-hidden="true">
                 <i class="fa-solid fa-check"></i>
               </div>
-              <h4>Form Submitted</h4>
-              <p>You have successfully submitted this form.</p>
+              <h4>Message Submitted Successfully</h4>
+              <p>Your message has been submitted successfully. Your email application will open with the details filled in so you can complete delivery.</p>
             </div>
           </div>
         </div>
@@ -1170,7 +1182,17 @@
             "",
             contactMessage.value.trim(),
           ].join("\n"));
-          window.location.href = `mailto:support@codxeditor.com?subject=${subject}&body=${body}`;
+          const mailtoUrl = `mailto:support@codxeditor.com?subject=${subject}&body=${body}`;
+
+          contactForm.hidden = true;
+          contactSuccess.classList.add("visible");
+          contactSuccess.setAttribute("aria-hidden", "false");
+          contactSuccess.focus({ preventScroll: true });
+          contactSuccess.scrollIntoView({ behavior: "smooth", block: "center" });
+
+          window.setTimeout(() => {
+            window.location.href = mailtoUrl;
+          }, 450);
         });
       }
     </script>
