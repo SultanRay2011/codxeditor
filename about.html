@@ -13,7 +13,7 @@
     <link rel="canonical" href="https://codxeditor.up.railway.app/about.html" />
     <link rel="icon" type="image/png" href="cx.png" />
     <link rel="stylesheet" href="theme.css" />
-    <link rel="stylesheet" href="site-enhancements.css?v=20260719-public-doodles1" />
+    <link rel="stylesheet" href="site-enhancements.css?v=20260719-public-footer2" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -493,8 +493,10 @@
             <svg class="about-handdrawn codx-doodle" viewBox="0 0 420 225" role="img" aria-labelledby="aboutDoodleTitle aboutDoodleDesc">
               <title id="aboutDoodleTitle">A shared browser workspace</title>
               <desc id="aboutDoodleDesc">A hand-drawn browser project connects code, live preview, and two collaborators.</desc>
+              <path class="sketch-wash" d="M22 73C53 7 165-2 256 19c88 20 153 75 132 132-23 62-133 77-230 58C64 191-10 141 22 73Z"/>
               <g transform="rotate(-1 172 91)">
                 <rect class="sketch-paper" x="22" y="24" width="292" height="145" rx="21"/>
+                <path class="sketch-rough" d="M28 30c72-7 207-5 279 1M29 164c70 5 200 4 279-2"/>
                 <path class="sketch-main" d="M22 58h292"/><circle cx="44" cy="41" r="5" fill="#fb7185"/><circle cx="61" cy="41" r="5" fill="#fbbf24"/><circle cx="78" cy="41" r="5" fill="#4ade80"/>
                 <path class="sketch-secondary" d="M158 59v110"/>
                 <path class="sketch-main" d="m63 88-18 17 18 17M116 88l18 17-18 17M101 78l-23 55"/>
@@ -502,8 +504,8 @@
                 <path class="sketch-main" d="M196 98h73M196 113h49M196 128h61"/>
               </g>
               <path class="sketch-path" d="M314 84c38-32 64-22 76 5M312 132c31 25 56 25 76 2"/>
-              <g class="doodle-float" transform="translate(337 52)"><circle class="sketch-paper" cx="27" cy="27" r="25"/><circle class="sketch-accent" cx="27" cy="22" r="8"/><path class="sketch-main" d="M12 45c4-13 26-13 30 0"/></g>
-              <g class="doodle-float-delayed" transform="translate(338 131)"><circle class="sketch-paper" cx="27" cy="27" r="25"/><circle class="sketch-accent-2" cx="27" cy="22" r="8"/><path class="sketch-secondary" d="M12 45c4-13 26-13 30 0"/></g>
+              <g class="doodle-float" transform="translate(337 52)"><circle class="sketch-paper" cx="27" cy="27" r="25"/><path class="sketch-ink" d="M19 23c0-12 17-14 20-3-7 0-12-4-16-8 0 5-2 9-4 11Z"/><path class="sketch-main" d="M20 27c4 3 10 3 14 0M12 45c4-13 26-13 30 0"/></g>
+              <g class="doodle-float-delayed" transform="translate(338 131)"><circle class="sketch-paper" cx="27" cy="27" r="25"/><path class="sketch-accent-2" d="M18 22c2-11 18-11 20 0-7-1-13-4-17-8 0 3-1 6-3 8Z"/><path class="sketch-secondary" d="M21 28c4 2 9 2 13 0M12 45c4-13 26-13 30 0"/></g>
               <path class="sketch-scribble" d="M34 188c45 13 89 12 134 0s87-12 126 0"/>
               <circle cx="18" cy="197" r="4" class="sketch-dot"/><path class="sketch-main" d="m305 188 8-8m-4 13 11-2"/>
             </svg>
@@ -643,18 +645,18 @@
       </section>
     </main>
 
-    <footer class="about-footer">
-      <div class="about-shell">
-        <div class="footer-grid">
-          <div>
-            <a class="about-brand footer-brand" href="index.html"><img src="cx.png" alt="" /><span>Cod<span class="x">X</span> Editor</span></a>
-            <p class="footer-about">A browser-based workspace for learning, prototyping, previewing, collaborating, and moving web projects forward.</p>
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <div class="site-footer__grid">
+          <div class="site-footer__brand">
+            <a class="site-footer__brand-link" href="index.html"><img src="cx.png" alt="" /><span>Cod<span class="x">X</span> Editor</span></a>
+            <p class="site-footer__summary">A browser-based workspace for writing, previewing, debugging, collaborating on, and sharing modern web projects.</p>
           </div>
-          <div class="footer-column"><h3>Explore</h3><a href="index.html">Home</a><a href="about.html">About</a><a href="help.html">Handbook</a></div>
-          <div class="footer-column"><h3>Support</h3><a href="contact.html">Contact</a><a href="404.html">Site links</a><a href="welcome.html">Launch Editor</a></div>
-          <div class="footer-column"><h3>Legal</h3><a href="privacy.html">Privacy Notice</a><a href="terms.html">Terms of Use</a></div>
+          <nav class="site-footer__column" aria-label="Explore"><h2>Explore</h2><a href="index.html">Home</a><a href="about.html">About</a><a href="index.html#faq">FAQ</a><a href="help.html">Help guide</a><a href="contact.html">Contact</a></nav>
+          <nav class="site-footer__column" aria-label="Legal"><h2>Legal</h2><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms and conditions</a><a href="mailto:support@codxeditor.com">Email support</a></nav>
+          <div class="site-footer__column"><h2>Workspace</h2><span class="site-footer__feature"><i class="fa-solid fa-check"></i> No installation required</span><span class="site-footer__feature"><i class="fa-solid fa-check"></i> Live preview and inspection</span><span class="site-footer__feature"><i class="fa-solid fa-check"></i> Multi-file projects</span><a href="welcome.html">Launch Editor <i class="fa-solid fa-arrow-right"></i></a></div>
         </div>
-        <div class="footer-bottom"><span>&copy; 2026 CodX Editor. All rights reserved.</span><span>Browser-based · Multi-file · Collaboration-ready</span></div>
+        <div class="site-footer__bottom"><p>&copy; 2026 CodX Editor. All rights reserved.</p><p class="site-footer__signature"><i class="fa-solid fa-code"></i> Built for the browser</p></div>
       </div>
     </footer>
 
