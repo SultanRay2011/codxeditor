@@ -4239,7 +4239,7 @@ function showAppDialog({
     }
     if (appDialogActions) {
       appDialogActions.innerHTML = `
-        <button type="button" id="appDialogCancelBtn" class="run-button" style="background:#6b7280;"><strong>${escapeHtml(cancelText)}</strong></button>
+        ${cancelText ? `<button type="button" id="appDialogCancelBtn" class="run-button" style="background:#6b7280;"><strong>${escapeHtml(cancelText)}</strong></button>` : ""}
         <button type="button" id="appDialogOkBtn" class="run-button"${okVariant ? ` style="${escapeHtml(okVariant)}"` : ""}><strong>${escapeHtml(okText)}</strong></button>
       `;
     }
@@ -26180,9 +26180,11 @@ const tutorialSteps = [
 
 let currentStep = 0;
 let tutorialActive = false;
+let tutorialStartedOnFirstVisit = false;
 let tutorialOpenedMoreMenu = false;
 let tutorialDemoCompleteTimer = null;
 let tutorialDemoReplayTimer = null;
+const FIRST_VISIT_SUPPORT_NOTICE_KEY = "codxFirstVisitSupportNoticeSeen";
 
 // Create tutorial modal HTML
 const tutorialModalHTML = `
@@ -26323,19 +26325,42 @@ function checkTutorialStatus() {
   const completed = safeLocalStorage("get", "tutorialCompleted");
   if (!completed) {
     // Wait a moment for the page to fully load, then start tutorial
-    setTimeout(() => startTutorial(), 500);
+    setTimeout(() => startTutorial({ firstVisit: true }), 500);
   }
 }
 
 // Start tutorial
-function startTutorial() {
+function startTutorial({ firstVisit = false } = {}) {
   tutorialActive = true;
+  tutorialStartedOnFirstVisit = firstVisit;
   currentStep = 0;
   tutorialModal.style.display = "block";
   if (!showTutorialStep(currentStep)) {
     tutorialActive = false;
+    tutorialStartedOnFirstVisit = false;
     tutorialModal.style.display = "none";
   }
+}
+
+function showFirstVisitSupportNotice() {
+  if (safeLocalStorage("get", FIRST_VISIT_SUPPORT_NOTICE_KEY)) return;
+  safeLocalStorage("set", FIRST_VISIT_SUPPORT_NOTICE_KEY, "true");
+  const dialog = showAppDialog({
+    title: "WE'RE HERE TO HELP",
+    messageHtml: `
+      <span class="first-visit-support-notice">
+        <span class="first-visit-support-icon"><i class="fa-solid fa-life-ring" aria-hidden="true"></i></span>
+        <span>
+          <strong>CodX Editor may occasionally have bugs.</strong>
+          <small>If you experience any issue, please do not hesitate to contact us at <a href="mailto:support@codxeditor.com">support@codxeditor.com</a>.</small>
+        </span>
+      </span>
+    `,
+    okText: "GOT IT",
+    cancelText: "",
+  });
+  if (appDialog) appDialog.dataset.dialogKind = "first-visit-support";
+  return dialog;
 }
 
 function getTutorialDemo(step) {
@@ -26745,7 +26770,9 @@ closeTutorialBtn.addEventListener("click", async () => {
 
 // Complete tutorial
 function completeTutorial() {
+  const shouldShowSupportNotice = tutorialStartedOnFirstVisit;
   tutorialActive = false;
+  tutorialStartedOnFirstVisit = false;
   clearTutorialDemoTimers();
   tutorialModal.style.display = "none";
   tutorialToolPointer?.classList.remove("is-playing");
@@ -26757,6 +26784,9 @@ function completeTutorial() {
   }
   safeLocalStorage("set", "tutorialCompleted", "true");
   showNotification("Tutorial completed! Welcome to CodX Editor", "success");
+  if (shouldShowSupportNotice) {
+    setTimeout(() => showFirstVisitSupportNotice(), 180);
+  }
 }
 
 // Handle window resize during tutorial

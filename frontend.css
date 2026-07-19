@@ -7059,6 +7059,66 @@ iframe {
   margin-top: 18px;
 }
 
+#appDialog[data-dialog-kind="first-visit-support"] > div {
+  width: min(540px, 94vw) !important;
+  border-color: color-mix(in srgb, var(--accent-color) 62%, var(--border-color)) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .48), 0 0 0 1px color-mix(in srgb, var(--accent-color) 18%, transparent) !important;
+}
+
+#appDialog[data-dialog-kind="first-visit-support"] #appDialogTitle {
+  color: var(--accent-color);
+  letter-spacing: .04em;
+}
+
+#appDialog[data-dialog-kind="first-visit-support"] #appDialogActions {
+  justify-content: center;
+}
+
+.first-visit-support-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 15px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--bg-primary));
+}
+
+.first-visit-support-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--bg-secondary));
+  color: var(--accent-color);
+  font-size: 20px;
+}
+
+.first-visit-support-notice strong,
+.first-visit-support-notice small {
+  display: block;
+}
+
+.first-visit-support-notice strong {
+  margin-bottom: 7px;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.first-visit-support-notice small {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.first-visit-support-notice a {
+  color: var(--accent-color);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .help-choice-button {
   min-width: 0;
   min-height: 118px;
