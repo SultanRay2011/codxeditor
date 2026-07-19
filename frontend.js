@@ -26356,7 +26356,7 @@ function showFirstVisitSupportNotice() {
         <span class="support-notice-main">
           <span class="first-visit-support-visual" aria-hidden="true">
             <span class="support-beacon-orbit"><i></i><i></i><i></i></span>
-            <span class="support-beacon-core"><i class="fa-solid fa-life-ring"></i></span>
+            <span class="support-beacon-core"><img src="/cx.png" alt="" /></span>
           </span>
           <span class="support-notice-copy">
             <strong class="support-notice-headline">Build freely. We are here if something gets in your way.</strong>

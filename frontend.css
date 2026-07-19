@@ -7215,6 +7215,14 @@ iframe {
   animation: firstVisitSupportFloat 3.4s ease-in-out infinite;
 }
 
+.support-beacon-core img {
+  width: 86px;
+  max-width: none;
+  height: 86px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
 .support-beacon-orbit {
   position: absolute;
   z-index: 3;
@@ -7311,8 +7319,14 @@ iframe {
   gap: 10px;
   border: 1px solid color-mix(in srgb, var(--accent-color) 72%, #fff);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent-color) 84%, #fff), var(--accent-color));
-  color: #07120c;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .32);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--accent-color) 24%, transparent);
+}
+
+#appDialogActions .first-visit-support-continue strong,
+#appDialogActions .first-visit-support-continue > i {
+  color: #fff;
 }
 
 #appDialogActions .first-visit-support-continue:hover {
@@ -7334,6 +7348,7 @@ iframe {
   .support-notice-main { grid-template-columns: 1fr; padding: 17px; }
   .first-visit-support-visual { width: 104px; border-radius: 27px; justify-self: center; }
   .support-beacon-core { width: 50px; height: 50px; font-size: 23px; }
+  .support-beacon-core img { width: 74px; height: 74px; }
   #appDialog[data-dialog-kind="first-visit-support"] #appDialogActions { justify-content: stretch; }
   #appDialogActions .first-visit-support-continue { width: 100%; min-width: 0; }
 }
