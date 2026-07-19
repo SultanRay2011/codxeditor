@@ -15,6 +15,7 @@ const remoteCursorLayer = document.getElementById("remoteCursorLayer");
 const localCollabCursor = document.getElementById("localCollabCursor");
 const localCollabCursorIcon = document.getElementById("localCollabCursorIcon");
 const editorContainer = document.querySelector(".editor-container");
+const projectDropOverlay = document.getElementById("projectDropOverlay");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
 const closeSettingsBtn = document.getElementById("closeSettingsBtn");
@@ -18420,15 +18421,24 @@ window.addEventListener("resize", () => {
 });
 
 // PART 8 - DRAG & DROP
-["dragover", "dragleave", "drop"].forEach((eventName) => {
-  editorContainer.addEventListener(eventName, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (eventName === "dragover") editorContainer.classList.add("dragover");
-    if (eventName === "dragleave" || eventName === "drop")
-      editorContainer.classList.remove("dragover");
-  });
-});
+let externalProjectDragDepth = 0;
+let projectDropImportInProgress = false;
+
+function isExternalProjectFileDrag(dataTransfer) {
+  const types = Array.from(dataTransfer?.types || []);
+  return types.includes("Files") || Boolean(dataTransfer?.files?.length);
+}
+
+function setProjectDropOverlayVisible(visible) {
+  if (!projectDropOverlay) return;
+  projectDropOverlay.hidden = !visible;
+  editorContainer?.classList.toggle("project-drop-active", Boolean(visible));
+}
+
+function clearExternalProjectDragState() {
+  externalProjectDragDepth = 0;
+  setProjectDropOverlayVisible(false);
+}
 
 function canImportProjectArchive() {
   if (activeSessionId && isReadOnlyParticipant() && collabPermissions.disableImportZip) {
@@ -18463,11 +18473,12 @@ async function loadImportedProjectFiles(importedFiles, successMessage) {
   }
 
   releaseProjectMediaObjectUrls(projectFiles);
-  projectFiles = importedFiles.map((file, index) => ({
-    ...file,
-    name: normalizeProjectFileName(file?.name, `file-${index + 1}.txt`),
-    active: index === 0,
-  }));
+  projectFiles = importedFiles.map((file, index) => {
+    const importedFile = file && typeof file === "object" ? file : {};
+    importedFile.name = normalizeProjectFileName(importedFile.name, `file-${index + 1}.txt`);
+    importedFile.active = index === 0;
+    return importedFile;
+  });
   normalizeProjectFileNamesInPlace(projectFiles);
   activeFile = projectFiles[0];
   const editor = document.getElementById("activeEditor");
@@ -18483,30 +18494,52 @@ async function loadImportedProjectFiles(importedFiles, successMessage) {
   return true;
 }
 
-function readDroppedTextFile(file, relativePath = file.name) {
-  return new Promise((resolve, reject) => {
-    const normalizedPath = String(relativePath || file.name || "")
-      .replace(/\\/g, "/")
-      .replace(/^\/+/, "");
-    const safePath = normalizeProjectFileName(normalizedPath);
-    const ext = safePath.split(".").pop().toLowerCase();
-    if (!editableTextExtensions.includes(ext)) {
-      resolve(null);
-      return;
-    }
+async function readDroppedProjectFile(file, relativePath = file?.name) {
+  if (!(file instanceof Blob)) return null;
+  const normalizedPath = String(relativePath || file.name || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  const safePath = normalizeProjectFileName(normalizedPath);
+  const ext = safePath.split(".").pop().toLowerCase();
+  const mediaKind = getProjectMediaKind({ name: safePath });
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      resolve({
-        name: safePath,
-        type: ext,
-        content: ev.target.result,
-        active: false,
-      });
-    };
-    reader.onerror = () => reject(reader.error || new Error(`Failed to read ${safePath}`));
-    reader.readAsText(file);
-  });
+  if (!editableTextExtensions.includes(ext) && !mediaKind) return null;
+  if (!mediaKind) {
+    const content = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(String(event.target?.result || ""));
+      reader.onerror = () => reject(reader.error || new Error(`Failed to read ${safePath}`));
+      reader.readAsText(file);
+    });
+    return { name: safePath, type: ext, content, active: false };
+  }
+
+  const mimeType = String(file.type || getMediaMimeTypeForArchiveFile(safePath));
+  const blob = file.type === mimeType ? file : new Blob([file], { type: mimeType });
+  const mediaFile = {
+    name: safePath,
+    type: "media",
+    mediaType: mediaKind,
+    mediaStorageId: createMediaStorageId(),
+    mediaSize: Number(blob.size || 0),
+    mediaMimeType: mimeType,
+    content: "",
+    active: false,
+  };
+  attachRuntimeMediaBlob(mediaFile, blob);
+  try {
+    await persistMediaBlob(mediaFile, blob);
+  } catch (error) {
+    console.warn(`Media persistence unavailable for dropped file ${safePath}:`, error);
+    mediaFile.mediaStorageId = "";
+    setRuntimeMediaProperty(mediaFile, "mediaPersistenceFailed", true);
+  }
+  if (blob.size <= MAX_LIVE_MEDIA_TRANSFER_BYTES) {
+    try {
+      mediaFile.content = await readMediaBlobAsDataUrl(blob);
+    } catch (_error) {}
+  }
+  return mediaFile;
 }
 
 function readDirectoryEntries(reader) {
@@ -18531,75 +18564,118 @@ function readDirectoryEntries(reader) {
   });
 }
 
-async function collectDroppedEntryFiles(entry, currentPath = "") {
+async function collectDroppedEntryFiles(entry, currentPath = "", includeDirectoryName = true) {
   if (!entry) return [];
 
   if (entry.isFile) {
     const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
-    const imported = await readDroppedTextFile(file, `${currentPath}${file.name}`);
+    const imported = await readDroppedProjectFile(file, `${currentPath}${file.name}`);
     return imported ? [imported] : [];
   }
 
   if (!entry.isDirectory) return [];
-  const nextPath = `${currentPath}${entry.name}/`;
+  const nextPath = includeDirectoryName ? `${currentPath}${entry.name}/` : currentPath;
   const childEntries = await readDirectoryEntries(entry.createReader());
   const nestedFiles = await Promise.all(
-    childEntries.map((child) => collectDroppedEntryFiles(child, nextPath)),
+    childEntries.map((child) => collectDroppedEntryFiles(child, nextPath, true)),
   );
   return nestedFiles.flat();
 }
 
 async function importProjectFromDroppedFolder(entries) {
-  const importedGroups = await Promise.all(entries.map((entry) => collectDroppedEntryFiles(entry)));
+  const keepRootFolder = entries.length > 1;
+  const importedGroups = await Promise.all(
+    entries.map((entry) => collectDroppedEntryFiles(entry, "", keepRootFolder)),
+  );
   const importedFiles = importedGroups.flat().sort((a, b) => a.name.localeCompare(b.name));
 
   if (!importedFiles.length) {
-    showNotification("No valid files found in dropped folder.", "error");
+    showNotification("No supported project or media files were found in the dropped folder.", "error");
     return false;
   }
 
-  return loadImportedProjectFiles(
+  const imported = await loadImportedProjectFiles(
     importedFiles,
     buildImportedFileSummary("Folder imported", importedFiles.map((file) => file.name)),
   );
+  if (imported && importedFiles.some((file) => file.mediaPersistenceFailed)) {
+    showNotification("Some media is available in this tab but could not be saved for reload.", "warn");
+  }
+  return imported;
 }
 
 async function addDroppedFilesToProject(files) {
-  if (!canCreateFilesFromDrop()) return;
+  if (!canCreateFilesFromDrop()) return false;
 
-  let importedCount = 0;
+  const existingNames = new Set(
+    projectFiles.map((file) => String(file.name || "").trim().toLowerCase()),
+  );
+  const importedNames = [];
+  const duplicateNames = [];
+  let unsupportedCount = 0;
+  let mediaPersistenceFailed = false;
   for (const file of files) {
-    const imported = await readDroppedTextFile(file);
-    if (!imported) continue;
-    if (projectFiles.some((f) => String(f.name || "").toLowerCase() === imported.name.toLowerCase())) {
-      showNotification(`File ${imported.name} already exists`, "error");
+    const candidateName = normalizeProjectFileName(file?.name || "file.txt");
+    if (existingNames.has(candidateName.toLowerCase())) {
+      duplicateNames.push(candidateName);
       continue;
     }
+    const imported = await readDroppedProjectFile(file);
+    if (!imported) {
+      unsupportedCount += 1;
+      continue;
+    }
+    const normalizedName = imported.name.toLowerCase();
+    if (existingNames.has(normalizedName)) {
+      duplicateNames.push(imported.name);
+      continue;
+    }
+    existingNames.add(normalizedName);
     projectFiles.push(imported);
-    scheduleProjectAutosave();
     if (projectFiles.length === 1) {
       imported.active = true;
       activeFile = imported;
       displayActiveFileInEditor();
     }
-    importedCount += 1;
-    showNotification(`Imported: ${imported.name}`, "success");
+    importedNames.push(imported.name);
+    mediaPersistenceFailed ||= Boolean(imported.mediaPersistenceFailed);
   }
 
-  if (importedCount > 0) {
-    renderFileList();
-    syncProjectWithSession();
+  if (!importedNames.length) {
+    const reason = duplicateNames.length
+      ? "The dropped files already exist in this project."
+      : "No supported project or media files were found in the drop.";
+    showNotification(reason, "error");
+    return false;
   }
+
+  hasUnsavedChanges = true;
+  updateProjectStatusUI();
+  renderFileList();
+  scheduleProjectAutosave();
+  if (autoRunCheckbox.checked) debouncedUpdatePreview();
+  syncProjectWithSession();
+  showNotification(buildImportedFileSummary("Files added", importedNames), "success");
+  if (duplicateNames.length) {
+    showNotification(`${duplicateNames.length} duplicate file${duplicateNames.length === 1 ? " was" : "s were"} skipped.`, "warn");
+  }
+  if (unsupportedCount) {
+    showNotification(`${unsupportedCount} unsupported file${unsupportedCount === 1 ? " was" : "s were"} skipped.`, "warn");
+  }
+  if (mediaPersistenceFailed) {
+    showNotification("Some media is available in this tab but could not be saved for reload.", "warn");
+  }
+  return true;
 }
 
-editorContainer.addEventListener("drop", async (e) => {
-  const droppedFiles = Array.from(e.dataTransfer?.files || []);
-  const droppedItems = Array.from(e.dataTransfer?.items || []);
+async function processExternalProjectDrop(dataTransfer) {
+  const droppedFiles = Array.from(dataTransfer?.files || []);
+  const droppedItems = Array.from(dataTransfer?.items || []);
   const droppedEntries = droppedItems
     .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
     .filter(Boolean);
   const directoryEntries = droppedEntries.filter((entry) => entry.isDirectory);
-  const zipFile = droppedFiles.find((file) => /\.zip$/i.test(file.name || ""));
+  const zipFiles = droppedFiles.filter((file) => /\.zip$/i.test(file.name || ""));
 
   if (directoryEntries.length > 0) {
     if (!canImportProjectArchive()) return;
@@ -18607,14 +18683,67 @@ editorContainer.addEventListener("drop", async (e) => {
     return;
   }
 
-  if (zipFile) {
+  if (zipFiles.length > 0) {
+    if (zipFiles.length !== 1 || droppedFiles.length !== 1) {
+      showNotification("Drop one ZIP by itself, or drop regular files without a ZIP.", "error");
+      return;
+    }
     if (!canImportProjectArchive()) return;
-    await importProjectFromZipFile(zipFile);
+    await importProjectFromZipFile(zipFiles[0]);
     return;
   }
 
   await addDroppedFilesToProject(droppedFiles);
+}
+
+async function handleExternalProjectDrop(dataTransfer) {
+  if (projectDropImportInProgress) {
+    showNotification("Another dropped project is still being imported.", "warn");
+    return;
+  }
+  projectDropImportInProgress = true;
+  try {
+    await processExternalProjectDrop(dataTransfer);
+  } catch (error) {
+    console.error("Dropped project import failed:", error);
+    showNotification("The dropped items could not be imported.", "error");
+  } finally {
+    projectDropImportInProgress = false;
+  }
+}
+
+document.addEventListener("dragenter", (event) => {
+  if (!isExternalProjectFileDrag(event.dataTransfer)) return;
+  event.preventDefault();
+  externalProjectDragDepth += 1;
+  setProjectDropOverlayVisible(true);
 });
+
+document.addEventListener("dragover", (event) => {
+  if (!isExternalProjectFileDrag(event.dataTransfer)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  setProjectDropOverlayVisible(true);
+});
+
+document.addEventListener("dragleave", (event) => {
+  if (!isExternalProjectFileDrag(event.dataTransfer)) return;
+  externalProjectDragDepth = Math.max(0, externalProjectDragDepth - 1);
+  if (externalProjectDragDepth === 0 || !event.relatedTarget) {
+    clearExternalProjectDragState();
+  }
+});
+
+document.addEventListener("drop", async (event) => {
+  if (!isExternalProjectFileDrag(event.dataTransfer)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const dataTransfer = event.dataTransfer;
+  clearExternalProjectDragState();
+  await handleExternalProjectDrop(dataTransfer);
+});
+
+window.addEventListener("blur", clearExternalProjectDragState);
 
 document.getElementById("activeEditor").addEventListener("pointermove", announceCursorPosition);
 document.getElementById("activeEditor").addEventListener("mouseenter", (event) => {

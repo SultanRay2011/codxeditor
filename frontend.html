@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260719-first-visit-support4" />
+    <link rel="stylesheet" href="/frontend.css?v=20260719-project-drop1" />
   </head>
   <body class="mobile-pane-editor">
     <a
@@ -329,6 +329,14 @@
     </nav>
 
     <div class="editor-container">
+      <div id="projectDropOverlay" class="project-drop-overlay" role="status" aria-live="polite" hidden>
+        <div class="project-drop-card">
+          <span class="project-drop-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-down"></i></span>
+          <strong>Drop your project here</strong>
+          <span>Import one ZIP or folder, or add multiple supported files</span>
+          <small>HTML, CSS, JavaScript, JSON, text, images, audio, and video</small>
+        </div>
+      </div>
       <div class="editors">
         <div id="fileExplorerPanel" class="file-explorer">
           <div
@@ -1884,7 +1892,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260719-first-visit-support3"></script>
+    <script src="/frontend.js?v=20260719-project-drop1"></script>
     <script type="module" src="/node-runtime.js"></script>
   </body>
 </html>
