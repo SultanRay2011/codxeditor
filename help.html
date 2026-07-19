@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="index,follow,max-image-preview:large" />
     <meta name="author" content="CodX Editor" />
-    <link rel="canonical" href="https://codxeditor.up.railway.app/help.html" />
+    <link rel="canonical" href="/help.html" />
     <meta property="og:type" content="article" />
     <meta property="og:title" content="CodX Editor Guide | Projects, Preview, Node.js & Collaboration" />
     <meta property="og:description" content="A complete practical guide to the CodX Editor workspace, coding tools, GitHub, Node.js, publishing, collaboration, shortcuts, and troubleshooting." />
-    <meta property="og:url" content="https://codxeditor.up.railway.app/help.html" />
     <meta
       name="description"
       content="A clear guide to CodX Editor features, including editing, preview, saving, publishing, collaboration, shortcuts, settings, and troubleshooting."
@@ -27,7 +26,7 @@
     />
     <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-19","author":{"@type":"Organization","name":"CodX Editor"},"mainEntityOfPage":"https://codxeditor.up.railway.app/help.html"}
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-19","author":{"@type":"Organization","name":"CodX Editor"}}
     </script>
     <style>
       * {
@@ -1004,7 +1003,7 @@
           <section class="section-card" id="nodejs">
             <h2>Node.js Runtime</h2>
             <p class="section-copy">
-              Enable Node.js from More to start a browser-isolated Node workspace. Node processes and npm packages run inside a WebContainer in your browser, not inside the CodX Editor or Railway server.
+              Enable Node.js from More to start a browser-isolated Node workspace. Node processes and npm packages run inside a WebContainer in your browser, not on the CodX Editor hosting server.
             </p>
             <div class="feature-grid">
               <article class="feature-item">
@@ -1045,7 +1044,7 @@
                   <li>Project files are copied into the in-browser runtime before commands run.</li>
                   <li>Files deleted from the editor are removed from the runtime before the next command, while <code>node_modules</code> remains managed by npm.</li>
                   <li>Native Node addons may not work; prefer JavaScript or WebAssembly-compatible packages.</li>
-                  <li>Node mode does not expose Railway environment variables or GitHub OAuth secrets to project code.</li>
+                  <li>Node mode does not expose hosting environment variables or GitHub OAuth secrets to project code.</li>
                   <li>Closing or refreshing the browser tab ends that temporary Node runtime.</li>
                 </ul>
               </article>
