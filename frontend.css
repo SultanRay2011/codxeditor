@@ -2280,6 +2280,59 @@ textarea::-webkit-scrollbar-thumb:hover {
   background: var(--accent-color);
 }
 
+#previewZoomBtn[aria-expanded="true"] {
+  color: #ffffff;
+  border-color: var(--accent-hover);
+  background: var(--accent-color);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent-color) 34%, transparent);
+}
+
+.preview-zoom-glyph {
+  width: 19px;
+  height: 19px;
+  overflow: visible;
+  color: currentColor;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.16));
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+
+.preview-zoom-glyph-lens {
+  fill: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  stroke: currentColor;
+  stroke-width: 1.85;
+}
+
+.preview-zoom-glyph-handle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.35;
+  stroke-linecap: round;
+}
+
+.preview-zoom-glyph-mark {
+  fill: none;
+  stroke: var(--accent-color);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+.preview-zoom-glyph-glint {
+  fill: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+#previewZoomBtn:hover .preview-zoom-glyph {
+  filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--accent-color) 32%, transparent));
+  transform: scale(1.08) rotate(-3deg);
+}
+
+#previewZoomBtn[aria-expanded="true"] .preview-zoom-glyph-mark {
+  stroke: #ffffff;
+}
+
+#previewZoomBtn[aria-expanded="true"] .preview-zoom-glyph-lens {
+  fill: rgba(255, 255, 255, 0.16);
+}
+
 .preview-icon-button.is-refreshing {
   color: #ffffff;
   border-color: var(--accent-hover);
