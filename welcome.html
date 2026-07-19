@@ -208,71 +208,77 @@
         flex-shrink: 0;
       }
 
-      .checkbox-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 14px;
-        cursor: pointer;
-        user-select: none;
+      .review-status {
+        margin-bottom: 12px;
+        color: #777;
+        font-size: 0.84em;
+        line-height: 1.45;
+        text-align: center;
       }
 
-      .checkbox-row input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        flex-shrink: 0;
-        cursor: pointer;
-        accent-color: #4caf50;
-      }
-
-      .checkbox-row label {
-        font-size: 0.9em;
-        color: #555;
-        cursor: pointer;
-        line-height: 1.4;
-      }
-
-      .checkbox-row label a {
-        color: #4caf50;
+      .review-status.ready {
+        color: #2e7d32;
         font-weight: 600;
-        text-decoration: none;
       }
 
-      .checkbox-row label a:hover {
-        text-decoration: underline;
+      .decision-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+        gap: 12px;
       }
 
-      .continue-btn {
-        width: 100%;
+      .decision-btn {
         padding: 13px;
-        border: none;
+        border: 1px solid transparent;
         border-radius: 10px;
         font-size: 0.95em;
         font-weight: 600;
-        cursor: not-allowed;
+        cursor: pointer;
         transition:
           background 0.2s,
           color 0.2s,
+          border-color 0.2s,
           box-shadow 0.2s,
           transform 0.15s;
-        background: #f0f0f0;
-        color: #aaa;
       }
 
-      .continue-btn.enabled {
+      .decision-btn:focus-visible {
+        outline: 3px solid rgba(76, 175, 80, 0.24);
+        outline-offset: 2px;
+      }
+
+      .decline-btn {
+        background: #fff;
+        border-color: #ddd;
+        color: #555;
+      }
+
+      .decline-btn:hover {
+        background: #f8f8f8;
+        border-color: #bbb;
+        color: #222;
+      }
+
+      .accept-btn {
+        background: #f0f0f0;
+        color: #aaa;
+        cursor: not-allowed;
+      }
+
+      .accept-btn.enabled {
         background: #4caf50;
         color: #fff;
         cursor: pointer;
         box-shadow: 0 2px 12px rgba(76, 175, 80, 0.3);
       }
 
-      .continue-btn.enabled:hover {
+      .accept-btn.enabled:hover {
         background: #43a047;
         transform: translateY(-1px);
         box-shadow: 0 4px 18px rgba(76, 175, 80, 0.38);
       }
 
-      .continue-btn.enabled:active {
+      .decision-btn:active {
         transform: translateY(0);
         box-shadow: none;
       }
@@ -341,7 +347,7 @@
         <p>Please review our Terms and Conditions below</p>
       </div>
 
-      <div class="card-body">
+      <div class="card-body" id="termsContent" tabindex="0" aria-label="CodX Editor terms summary">
         <div class="summary-box">
           <strong>Quick summary:</strong> CodX Editor is a free, browser-based
           code editor. Standard drafts stay in your browser; optional sharing,
@@ -435,16 +441,17 @@
       </div>
 
       <div class="card-footer">
-        <div class="checkbox-row">
-          <input type="checkbox" id="agreeCheckbox" />
-          <label for="agreeCheckbox">
-            I agree to the
-            <a href="terms.html" target="_blank">Terms and Conditions</a>
-          </label>
+        <p class="review-status" id="reviewStatus" role="status" aria-live="polite">
+          Scroll to the bottom of the terms to enable Accept.
+        </p>
+        <div class="decision-actions">
+          <button class="decision-btn decline-btn" id="declineButton" type="button">
+            Decline
+          </button>
+          <button class="decision-btn accept-btn" id="acceptButton" type="button" disabled>
+            Accept
+          </button>
         </div>
-        <button class="continue-btn" id="continueButton">
-          Start using CodX Editor
-        </button>
         <a class="help-link" href="help.html"
           >Need help understanding the features?</a
         >
@@ -452,8 +459,10 @@
     </div>
 
     <script>
-      const checkbox = document.getElementById("agreeCheckbox");
-      const button = document.getElementById("continueButton");
+      const termsContent = document.getElementById("termsContent");
+      const reviewStatus = document.getElementById("reviewStatus");
+      const declineButton = document.getElementById("declineButton");
+      const acceptButton = document.getElementById("acceptButton");
       const modal = document.getElementById("termsModal");
 
       function resolveNextEditorRoute() {
@@ -471,22 +480,34 @@
         window.location.href = resolveNextEditorRoute();
       }
 
-      checkbox.addEventListener("change", function () {
-        if (this.checked) {
-          button.classList.add("enabled");
-          button.textContent = "Start using CodX Editor";
-        } else {
-          button.classList.remove("enabled");
-          button.textContent = "Start using CodX Editor";
-        }
+      function updateAcceptAvailability() {
+        const reachedBottom =
+          termsContent.scrollHeight - termsContent.scrollTop - termsContent.clientHeight <= 8;
+
+        acceptButton.disabled = !reachedBottom;
+        acceptButton.classList.toggle("enabled", reachedBottom);
+        reviewStatus.classList.toggle("ready", reachedBottom);
+        reviewStatus.textContent = reachedBottom
+          ? "Review complete. You can now accept the terms."
+          : "Scroll to the bottom of the terms to enable Accept.";
+      }
+
+      termsContent.addEventListener("scroll", updateAcceptAvailability, { passive: true });
+      window.addEventListener("resize", updateAcceptAvailability);
+      requestAnimationFrame(updateAcceptAvailability);
+
+      declineButton.addEventListener("click", function () {
+        localStorage.removeItem("codxPendingEditorRoute");
+        window.location.href = "/index.html";
       });
 
-      button.addEventListener("click", function () {
-        if (!checkbox.checked) return;
+      acceptButton.addEventListener("click", function () {
+        if (acceptButton.disabled) return;
         localStorage.setItem("codxTermsAgreed", "true");
         localStorage.setItem("codxTermsAgreedDate", new Date().toISOString());
-        button.textContent = "Welcome! 🎉";
-        button.style.background = "#2e7d32";
+        acceptButton.textContent = "Opening Editor...";
+        acceptButton.disabled = true;
+        acceptButton.style.background = "#2e7d32";
         setTimeout(() => {
           window.location.href = resolveNextEditorRoute();
         }, 800);
