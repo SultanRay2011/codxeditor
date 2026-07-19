@@ -973,7 +973,7 @@ let activeInlineHtmlCorrection = null;
 const MAX_EDITOR_HISTORY_ENTRIES = 150;
 const LARGE_EDITOR_CHARACTER_THRESHOLD = 80 * 1024;
 const LARGE_EDITOR_LINE_THRESHOLD = 2500;
-const WINDOWED_SYNTAX_CHARACTER_LIMIT = 8 * 1024 * 1024;
+const WINDOWED_SYNTAX_FULL_DOCUMENT_LIMIT = 8 * 1024 * 1024;
 const WINDOWED_SYNTAX_HORIZONTAL_OVERSCAN = 2048;
 const WINDOWED_SYNTAX_VERTICAL_OVERSCAN = 18;
 const VIRTUAL_LINE_NUMBER_THRESHOLD = 2000;
@@ -4722,13 +4722,25 @@ function isLargeEditorContent(text, knownLineCount = 0) {
   return lineCount >= LARGE_EDITOR_LINE_THRESHOLD;
 }
 
+function getSingleEditorCodeLine(text, knownLineCount = 0) {
+  const value = String(text || "");
+  const lineCount = knownLineCount || countTextLines(value);
+  if (lineCount === 1) return value;
+  if (lineCount === 2 && value.endsWith("\n")) {
+    const content = value.slice(0, -1);
+    return content.endsWith("\r") ? content.slice(0, -1) : content;
+  }
+  return null;
+}
+
 function shouldUseWindowedSyntaxHighlight(text, knownLineCount = 0) {
   const value = String(text || "");
   const lineCount = knownLineCount || countTextLines(value);
   return (
     value.length >= LARGE_EDITOR_CHARACTER_THRESHOLD &&
-    value.length <= WINDOWED_SYNTAX_CHARACTER_LIMIT &&
-    lineCount < LARGE_EDITOR_LINE_THRESHOLD
+    lineCount < LARGE_EDITOR_LINE_THRESHOLD &&
+    (value.length <= WINDOWED_SYNTAX_FULL_DOCUMENT_LIMIT ||
+      getSingleEditorCodeLine(value, lineCount) !== null)
   );
 }
 
@@ -14278,12 +14290,68 @@ function highlightCodeByFileType(code, fileType) {
   return highlightPlainText(code);
 }
 
+function getWindowedSyntaxCharacterWidth(textarea, computed) {
+  const fontSize = parseFloat(computed.fontSize) || 13;
+  const letterSpacing = parseFloat(computed.letterSpacing) || 0;
+  const fallbackWidth = Math.max(5, fontSize * 0.62 + letterSpacing);
+  const canvas = getWindowedSyntaxCharacterWidth.canvas || document.createElement("canvas");
+  getWindowedSyntaxCharacterWidth.canvas = canvas;
+  const context = canvas.getContext("2d");
+  if (!context) return fallbackWidth;
+  context.font = computed.font || `${computed.fontSize} ${computed.fontFamily}`;
+  const probe = "0000000000000000";
+  const measuredWidth =
+    context.measureText(probe).width / probe.length + letterSpacing;
+  return Number.isFinite(measuredWidth) && measuredWidth > 0 ? measuredWidth : fallbackWidth;
+}
+
+function renderSingleLineSyntaxWindow(
+  textarea,
+  code,
+  fileType,
+  characterWidth,
+  lineHeight,
+  hasTrailingLineBreak = false,
+) {
+  const computed = window.getComputedStyle(textarea);
+  const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+  const paddingRight = parseFloat(computed.paddingRight) || 0;
+  const contentViewportWidth = Math.max(
+    1,
+    textarea.clientWidth - paddingLeft - paddingRight,
+  );
+  const overscanWidth = WINDOWED_SYNTAX_HORIZONTAL_OVERSCAN * characterWidth;
+  const segmentViewportStart = Math.max(0, textarea.scrollLeft - overscanWidth);
+  const segmentViewportEnd =
+    textarea.scrollLeft + contentViewportWidth + overscanWidth;
+  const segmentStart = Math.max(0, Math.floor(segmentViewportStart / characterWidth));
+  const segmentEnd = Math.min(
+    code.length,
+    Math.max(segmentStart + 1, Math.ceil(segmentViewportEnd / characterWidth)),
+  );
+  const segment = code.slice(segmentStart, segmentEnd);
+  const contentWidth = Math.max(
+    contentViewportWidth,
+    textarea.scrollWidth - paddingLeft - paddingRight,
+    code.length * characterWidth,
+  );
+  const segmentLeft = Math.min(contentWidth, segmentStart * characterWidth);
+  const highlightedSegment = highlightCodeByFileType(segment, fileType) || " ";
+
+  highlightLayer.innerHTML =
+    `<span class="syntax-window-track" style="width:${Math.ceil(contentWidth)}px;` +
+    `height:${Math.ceil(lineHeight * (hasTrailingLineBreak ? 2 : 1))}px">` +
+    `<span class="syntax-window-segment" style="left:${segmentLeft.toFixed(2)}px">` +
+    `${highlightedSegment}</span></span>`;
+  highlightLayer.scrollTop = textarea.scrollTop;
+  highlightLayer.scrollLeft = textarea.scrollLeft;
+}
+
 function renderWindowedSyntaxHighlight(textarea, code, fileType) {
   const computed = window.getComputedStyle(textarea);
   const fontSize = parseFloat(computed.fontSize) || 13;
-  const letterSpacing = parseFloat(computed.letterSpacing) || 0;
   const lineHeight = parseFloat(computed.lineHeight) || fontSize * 1.5;
-  const approximateCharacterWidth = Math.max(5, fontSize * 0.62 + letterSpacing);
+  const approximateCharacterWidth = getWindowedSyntaxCharacterWidth(textarea, computed);
   const visibleColumnStart = Math.max(0, Math.floor(textarea.scrollLeft / approximateCharacterWidth));
   const visibleColumnCount = Math.max(1, Math.ceil(textarea.clientWidth / approximateCharacterWidth));
   const windowColumnStart = Math.max(
@@ -14307,8 +14375,25 @@ function renderWindowedSyntaxHighlight(textarea, code, fileType) {
     windowLineEnd,
     caret,
     caretSample,
+    textarea.clientWidth,
+    textarea.scrollWidth,
+    approximateCharacterWidth.toFixed(3),
   ].join(":");
   if (highlightLayer.dataset.windowKey === windowKey) return;
+
+  const singleLineCode = getSingleEditorCodeLine(code);
+  if (singleLineCode !== null) {
+    renderSingleLineSyntaxWindow(
+      textarea,
+      singleLineCode,
+      fileType,
+      approximateCharacterWidth,
+      lineHeight,
+      singleLineCode.length !== code.length,
+    );
+    highlightLayer.dataset.windowKey = windowKey;
+    return;
+  }
 
   const lines = code.split("\n");
   const highlighted = lines
@@ -14328,6 +14413,8 @@ function renderWindowedSyntaxHighlight(textarea, code, fileType) {
     .join("\n");
 
   highlightLayer.innerHTML = highlighted + (code.endsWith("\n") ? " " : "");
+  highlightLayer.scrollTop = textarea.scrollTop;
+  highlightLayer.scrollLeft = textarea.scrollLeft;
   highlightLayer.dataset.windowKey = windowKey;
 }
 

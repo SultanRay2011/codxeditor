@@ -1226,6 +1226,18 @@ body.zen-mode #zenExitBtn {
   color: var(--syntax-identifier);
 }
 
+#highlightLayer .syntax-window-track {
+  position: relative;
+  display: block;
+  min-height: 1em;
+}
+
+#highlightLayer .syntax-window-segment {
+  position: absolute;
+  top: 0;
+  white-space: pre;
+}
+
 #errorHighlightLayer {
   position: absolute;
   inset: 0;
