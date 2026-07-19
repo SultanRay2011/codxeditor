@@ -26346,20 +26346,43 @@ function showFirstVisitSupportNotice() {
   if (safeLocalStorage("get", FIRST_VISIT_SUPPORT_NOTICE_KEY)) return;
   safeLocalStorage("set", FIRST_VISIT_SUPPORT_NOTICE_KEY, "true");
   const dialog = showAppDialog({
-    title: "WE'RE HERE TO HELP",
+    title: "A QUICK HEADS-UP",
     messageHtml: `
       <span class="first-visit-support-notice">
-        <span class="first-visit-support-icon"><i class="fa-solid fa-life-ring" aria-hidden="true"></i></span>
-        <span>
-          <strong>CodX Editor may occasionally have bugs.</strong>
-          <small>If you experience any issue, please do not hesitate to contact us at <a href="mailto:support@codxeditor.com">support@codxeditor.com</a>.</small>
+        <span class="support-notice-topline">
+          <span class="support-notice-label"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> FIRST VISIT</span>
+          <span class="support-notice-status"><i aria-hidden="true"></i> SUPPORT CHANNEL OPEN</span>
         </span>
+        <span class="support-notice-main">
+          <span class="first-visit-support-visual" aria-hidden="true">
+            <span class="support-beacon-orbit"><i></i><i></i><i></i></span>
+            <span class="support-beacon-core"><i class="fa-solid fa-life-ring"></i></span>
+          </span>
+          <span class="support-notice-copy">
+            <strong class="support-notice-headline">Build freely. We are here if something gets in your way.</strong>
+            <small>CodX Editor may occasionally have bugs while we continue improving it. If you experience any issue, please do not hesitate to contact us.</small>
+            <a class="support-notice-email" href="mailto:support@codxeditor.com">
+              <span><i class="fa-solid fa-envelope" aria-hidden="true"></i><b>support@codxeditor.com</b></span>
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            </a>
+          </span>
+        </span>
+        <span class="support-notice-tip"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i><span><b>Helpful tip</b> Tell us what you were doing, what happened, and what you expected to happen.</span></span>
       </span>
     `,
-    okText: "GOT IT",
+    okText: "CONTINUE TO EDITOR",
     cancelText: "",
   });
   if (appDialog) appDialog.dataset.dialogKind = "first-visit-support";
+  const continueButton = document.getElementById("appDialogOkBtn");
+  if (continueButton) {
+    continueButton.classList.add("first-visit-support-continue");
+    continueButton.innerHTML = '<strong>CONTINUE TO EDITOR</strong><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>';
+    setTimeout(() => {
+      resetAppDialogScroll();
+      continueButton.focus({ preventScroll: true });
+    }, 0);
+  }
   return dialog;
 }
 
