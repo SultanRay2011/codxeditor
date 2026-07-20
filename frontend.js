@@ -228,9 +228,32 @@ function getModalDoneBtn() {
   return document.getElementById("modalDoneBtn");
 }
 
+const activeButtonLoadingTasks = new WeakMap();
+
+function waitForButtonLoadingPaint() {
+  return new Promise((resolve) => {
+    let settled = false;
+    let fallbackTimer = 0;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      resolve();
+    };
+    if (document.hidden || typeof window.requestAnimationFrame !== "function") {
+      window.setTimeout(finish, 0);
+      return;
+    }
+    fallbackTimer = window.setTimeout(finish, 100);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(finish));
+  });
+}
+
 async function withButtonLoading(button, task, label = "Loading...") {
   if (typeof task !== "function") return undefined;
-  if (!button || button.dataset.codxLoading === "true") return task();
+  if (!button) return task();
+  const activeTask = activeButtonLoadingTasks.get(button);
+  if (activeTask) return activeTask;
   const previousHtml = button.innerHTML;
   const wasDisabled = button.disabled;
   const previousBusy = button.getAttribute("aria-busy");
@@ -238,15 +261,21 @@ async function withButtonLoading(button, task, label = "Loading...") {
   button.disabled = true;
   button.setAttribute("aria-busy", "true");
   button.innerHTML = `<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>${escapeHtml(label)}</span>`;
+  const loadingTask = (async () => {
+    await waitForButtonLoadingPaint();
+    return task();
+  })();
+  activeButtonLoadingTasks.set(button, loadingTask);
   try {
-    return await task();
+    return await loadingTask;
   } finally {
+    activeButtonLoadingTasks.delete(button);
+    delete button.dataset.codxLoading;
     if (button.isConnected) {
       button.innerHTML = previousHtml;
       button.disabled = wasDisabled;
       if (previousBusy === null) button.removeAttribute("aria-busy");
       else button.setAttribute("aria-busy", previousBusy);
-      delete button.dataset.codxLoading;
     }
   }
 }
@@ -620,7 +649,7 @@ if (connectGitHubBtn) {
       await withButtonLoading(connectGitHubBtn, openGitHubRepositoryModal);
       return;
     }
-    beginGitHubOAuth();
+    await withButtonLoading(connectGitHubBtn, beginGitHubOAuth);
   });
   handleGitHubOAuthResult();
   refreshGitHubConnectionStatus();
@@ -671,7 +700,10 @@ function renderGitHubRepositories(repositories, scope = "") {
         <button type="button" class="github-primary-button" data-github-repo-index="${index}" ${repo.canPush ? "" : "disabled"}>${repo.canPush ? "Update files" : "Read only"}</button>
       </article>`).join("") : '<div class="github-empty">No matching repositories found.</div>';
     grid.querySelectorAll("[data-github-repo-index]").forEach((button) => {
-      button.addEventListener("click", () => renderGitHubCommitView(filtered[Number(button.dataset.githubRepoIndex)]));
+      button.addEventListener("click", () => withButtonLoading(
+        button,
+        () => renderGitHubCommitView(filtered[Number(button.dataset.githubRepoIndex)]),
+      ));
     });
   };
   draw();
@@ -761,7 +793,10 @@ async function renderGitHubCommitView(repo) {
       }
       document.getElementById("githubUploadFileInput")?.click();
     });
-    document.getElementById("githubUploadFileInput")?.addEventListener("change", handleGitHubFileUpload);
+    document.getElementById("githubUploadFileInput")?.addEventListener("change", (event) => withButtonLoading(
+      document.getElementById("githubUploadFileBtn"),
+      () => handleGitHubFileUpload(event),
+    ));
     document.getElementById("githubCancelFileBtn")?.addEventListener("click", closeGitHubFileEditor);
     document.getElementById("githubStageFileBtn")?.addEventListener("click", stageGitHubEditedFile);
     document.getElementById("githubCommitMessage")?.focus();
@@ -790,7 +825,10 @@ async function loadExistingGitHubFiles(repo) {
     }).join("") : '<div class="github-empty">This branch has no files yet.</div>';
     if (data.truncated) container.insertAdjacentHTML("beforeend", '<div class="github-file-warning">GitHub returned a shortened file list for this large repository.</div>');
     container.querySelectorAll("[data-github-existing-path]").forEach((button) => {
-      button.addEventListener("click", () => editExistingGitHubFile(repo, button.dataset.githubExistingPath));
+      button.addEventListener("click", () => withButtonLoading(
+        button,
+        () => editExistingGitHubFile(repo, button.dataset.githubExistingPath),
+      ));
     });
   } catch (error) {
     container.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
@@ -799,12 +837,7 @@ async function loadExistingGitHubFiles(repo) {
 
 async function refreshGitHubRepositoryFiles(repo) {
   const button = document.getElementById("githubRefreshFilesBtn");
-  const icon = button?.querySelector("i");
-  if (button) button.disabled = true;
-  if (icon) icon.classList.add("fa-spin");
-  await loadExistingGitHubFiles(repo);
-  if (icon) icon.classList.remove("fa-spin");
-  if (button) button.disabled = false;
+  await withButtonLoading(button, () => loadExistingGitHubFiles(repo));
 }
 
 function openGitHubFileEditor(path = "", content = "", lockPath = false) {
@@ -903,26 +936,21 @@ async function commitProjectFilesToGitHub(repo) {
     return;
   }
   const files = stagedFiles;
-  const previousButtonHtml = button.innerHTML;
-  button.disabled = true;
-  button.setAttribute("aria-busy", "true");
-  button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Loading...</span>';
   status.innerHTML = '<div class="github-status"><i class="fa-solid fa-spinner fa-spin"></i> Creating commit…</div>';
   try {
-    const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/commit`, {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ branch, message, description, files }),
+    const data = await withButtonLoading(button, async () => {
+      const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/commit`, {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ branch, message, description, files }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "The commit failed.");
+      return payload;
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "The commit failed.");
     status.innerHTML = `<div class="github-status success">Committed ${data.commit.files} file(s) as <a href="${escapeHtmlAttributeValue(data.commit.htmlUrl)}" target="_blank" rel="noopener">${escapeHtml(data.commit.shortSha)}</a>.</div>`;
     showNotification("GitHub commit created successfully.", "success");
   } catch (error) {
     status.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
-  } finally {
-    button.innerHTML = previousButtonHtml;
-    button.removeAttribute("aria-busy");
-    button.disabled = false;
   }
 }
 
@@ -936,9 +964,10 @@ githubRepoModal?.addEventListener("keydown", (event) => {
   }
 }, true);
 githubRepoModalBody?.addEventListener("click", async (event) => {
-  const action = event.target.closest("[data-github-action]")?.dataset.githubAction;
-  if (action === "repos") openGitHubRepositoryModal();
-  if (action === "reconnect") beginGitHubOAuth();
+  const actionButton = event.target.closest("[data-github-action]");
+  const action = actionButton?.dataset.githubAction;
+  if (action === "repos") await withButtonLoading(actionButton, openGitHubRepositoryModal);
+  if (action === "reconnect") await withButtonLoading(actionButton, beginGitHubOAuth);
   if (action === "disconnect") {
     const disconnectButton = event.target.closest('[data-github-action="disconnect"]');
     await withButtonLoading(disconnectButton, async () => {
@@ -3761,7 +3790,11 @@ function showStarterTemplatePreview(template) {
   const iframe = modal.querySelector("iframe");
   iframe.srcdoc = buildStarterTemplatePreviewDocument(template);
   modal.querySelector(".starter-template-preview-close")?.addEventListener("click", closeStarterTemplatePreview);
-  modal.querySelector(".starter-template-use-preview")?.addEventListener("click", () => applyStarterTemplate(template));
+  const useTemplateButton = modal.querySelector(".starter-template-use-preview");
+  useTemplateButton?.addEventListener("click", () => withButtonLoading(
+    useTemplateButton,
+    () => applyStarterTemplate(template),
+  ));
   modal.querySelectorAll("[data-preview-device]").forEach((button) => {
     button.addEventListener("click", () => {
       modal.querySelectorAll("[data-preview-device]").forEach((entry) => entry.classList.remove("active"));
@@ -8678,10 +8711,14 @@ async function zipAllSavedProjects() {
   const zipFileName = `${getSafeArchiveFolderName(baseZipName, "codx-all-projects")}.zip`;
 
   const button = document.getElementById("zipAllProjectsBtn");
+  const previousButtonHtml = button?.innerHTML || "";
+  const buttonWasDisabled = Boolean(button?.disabled);
+  const previousButtonBusy = button?.getAttribute("aria-busy") ?? null;
   if (button) {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>Loading...</strong>';
+    await waitForButtonLoadingPaint();
   }
 
   try {
@@ -8728,7 +8765,14 @@ async function zipAllSavedProjects() {
     showNotification("Could not ZIP the saved project library.", "error");
     return false;
   } finally {
-    if (projectLibraryModal?.style.display === "flex") renderProjectLibrary("saved");
+    if (projectLibraryModal?.style.display === "flex") {
+      renderProjectLibrary("saved");
+    } else if (button?.isConnected) {
+      button.innerHTML = previousButtonHtml;
+      button.disabled = buttonWasDisabled;
+      if (previousButtonBusy === null) button.removeAttribute("aria-busy");
+      else button.setAttribute("aria-busy", previousButtonBusy);
+    }
   }
 }
 
@@ -8923,6 +8967,7 @@ async function importAllSavedProjects() {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>Loading...</strong>';
+    await waitForButtonLoadingPaint();
   }
 
   try {
