@@ -243,8 +243,9 @@ header .run-button:hover {
 }
 
 .header-more-action.github-connected {
-  border-color: #2ea043;
-  background: linear-gradient(180deg, #2ea043, #238636);
+  border-color: color-mix(in srgb, var(--accent-color) 78%, #ffffff 22%);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-color));
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-color) 30%, transparent);
 }
 
 #collabBtn {
@@ -6710,7 +6711,6 @@ iframe {
 .github-repo-kicker { color: var(--accent-color); font-size: 11px; font-weight: 800; letter-spacing: .13em; }
 .github-icon-button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); cursor: pointer; }
 .github-icon-button:hover { border-color: var(--accent-color); color: var(--accent-color); }
-.github-icon-button[aria-busy="true"] { width: auto; min-width: 36px; }
 .github-repo-body { flex: 1; min-height: 0; padding: 22px; overflow: auto; }
 .github-repo-toolbar, .github-commit-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 .github-repo-search, .github-form-control { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; background: var(--bg-primary); color: var(--text-primary); outline: none; }

@@ -25,25 +25,6 @@ let commandStarting = false;
 let syncedEditorFileNames = new Set();
 const activeServerPorts = new Set();
 
-function waitForLoadingPaint() {
-  return new Promise((resolve) => {
-    let settled = false;
-    let fallbackTimer = 0;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      if (fallbackTimer) window.clearTimeout(fallbackTimer);
-      resolve();
-    };
-    if (document.hidden || typeof window.requestAnimationFrame !== "function") {
-      window.setTimeout(finish, 0);
-      return;
-    }
-    fallbackTimer = window.setTimeout(finish, 100);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(finish));
-  });
-}
-
 function cleanTerminalOutput(value) {
   return String(value || "")
     .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
@@ -310,11 +291,7 @@ async function toggle() {
     toggleButton.disabled = true;
     toggleButton.setAttribute("aria-busy", "true");
   }
-  if (toggleLabel) toggleLabel.textContent = "Loading...";
-  const loadingIcon = toggleButton?.querySelector("i");
-  if (loadingIcon) loadingIcon.className = "fa-solid fa-spinner fa-spin";
   try {
-    await waitForLoadingPaint();
     if (enabled) {
       if (commandStarting) {
         throw new Error("The Node.js command is still starting. Wait for Stop to become available, then try again.");

@@ -703,11 +703,7 @@
 .home-preview-brand img { width: 32px; height: 32px; object-fit: contain; }
 .home-preview-starter h3 { max-width: 300px; margin: 12px 0 8px; color: #111827; font-size: 23px; line-height: 1.05; }
 .home-preview-starter p { max-width: 320px; color: #4b5563; font-size: 9px; line-height: 1.6; }
-.home-preview-starter .home-preview-cards { margin-top: 18px; }
-.home-preview-starter .home-preview-card { height: 78px; padding: 11px; border-color: #e5e7eb; background: linear-gradient(180deg, #fff, #f8fafc); }
-.home-preview-starter .home-preview-card i { color: #0f766e; font-size: 11px; }
-.home-preview-starter .home-preview-card b { color: #111827; font-size: 8px; }
-.home-preview-starter .home-preview-card small { display: block; margin-top: 5px; color: #4b5563; font-size: 6px; line-height: 1.4; }
+.home-preview-sourced-illustration { display: block; width: min(54%, 170px); height: 126px; margin: 12px auto 0; object-fit: contain; }
 
 @keyframes homeCodxCaret {
   0%, 48% { opacity: 1; }
