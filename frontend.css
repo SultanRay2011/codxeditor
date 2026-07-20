@@ -1993,7 +1993,7 @@ textarea::-webkit-scrollbar-thumb:hover {
 .run-button:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(35, 134, 54, 0.3);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-color) 30%, transparent);
 }
 
 .run-button:active {
@@ -9651,4 +9651,115 @@ iframe {
     flex-basis: calc(100% - 24px);
     min-height: 38px;
   }
+}
+
+/* ============================================================
+   Visual polish pass 2 — richer, accent-aware chrome
+   Every color derives from the theme variables, so light mode
+   and custom accent colors stay consistent automatically.
+   ============================================================ */
+
+/* Workspace panels read as elevated cards */
+.editors,
+.preview {
+  border: 1px solid color-mix(in srgb, var(--accent-color) 10%, var(--border-color));
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2);
+}
+
+body.light .editors,
+body.light .preview {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+/* Header: subtle accent-tinted gradient with a crisper edge */
+header {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color) 8%, var(--bg-secondary)),
+    var(--bg-secondary) 82%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color));
+}
+
+header .run-button {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color) 86%, #ffffff 14%),
+    var(--accent-color)
+  );
+}
+
+header .run-button:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-hover) 88%, #ffffff 12%),
+    var(--accent-hover)
+  );
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-color) 36%, transparent);
+}
+
+/* File strip: tinted surface with a lifted active file tab */
+.file-explorer {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color) 5%, var(--bg-secondary)),
+    var(--bg-secondary)
+  );
+}
+
+.file-item:hover {
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--bg-tertiary));
+}
+
+.file-item.active {
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-color));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 4px 12px color-mix(in srgb, var(--accent-color) 32%, transparent);
+}
+
+/* Gutter blends into the code surface instead of splitting it */
+.line-numbers {
+  background: color-mix(in srgb, var(--bg-secondary) 45%, var(--bg-primary));
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+/* Preview and console chrome match the header treatment */
+.preview-header {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color) 6%, var(--bg-secondary)),
+    var(--bg-secondary)
+  );
+}
+
+.console-container {
+  border-top: 1px solid color-mix(in srgb, var(--accent-color) 14%, var(--border-color));
+}
+
+/* Divider: quiet track, accent handle on hover and drag */
+.divider {
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+}
+
+/* Scrollbars pick up the accent */
+textarea::-webkit-scrollbar-thumb,
+#fileList::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--border-color));
+}
+
+textarea::-webkit-scrollbar-thumb:hover,
+#fileList::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent-color) 55%, var(--text-muted));
+}
+
+/* Suggestion popup: softer corners, deeper shadow */
+#suggestionPopup {
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.35),
+    0 0 0 1px color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
