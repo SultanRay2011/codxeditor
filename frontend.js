@@ -12022,7 +12022,7 @@ function collectPatternIdentifiers(pattern, result = []) {
   return result;
 }
 
-function collectDeclaredJavaScriptIdentifiers(code) {
+function collectTopLevelJavaScriptIdentifiers(code) {
   const ast = parseJavaScriptAstForDiagnostics(code);
   const names = new Set();
   if (!ast) return names;
@@ -12729,11 +12729,11 @@ function runPreflightDiagnostics(targetEntries = null) {
   diagnosticFiles.forEach((file) => {
     const names = new Set();
     if (file.type === "js") {
-      collectDeclaredJavaScriptIdentifiers(file.content).forEach((name) => names.add(name));
+      collectTopLevelJavaScriptIdentifiers(file.content).forEach((name) => names.add(name));
     } else if (file.type === "html") {
       getHtmlRawTextSegments(file.content || "", "script")
         .filter(isJavaScriptScriptSegment)
-        .forEach((segment) => collectDeclaredJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name)));
+        .forEach((segment) => collectTopLevelJavaScriptIdentifiers(segment.code).forEach((name) => names.add(name)));
     }
     declaredIdentifiersByFile.set(file.name, names);
   });
