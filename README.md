@@ -92,7 +92,7 @@ http://localhost:3000/frontend.html
 
 ### GitHub account connection
 
-The **More → Connect to GitHub** button uses GitHub's browser-based OAuth login. No personal access token is required. Once connected, click it again to browse repositories, choose editor files, enter a commit message and optional description, and commit them to a branch.
+The **More → Connect to GitHub** button uses GitHub's browser-based OAuth login. No personal access token is required. Once connected, click it again to browse repositories, choose editor files with checkboxes, enter a commit message and optional description, and commit them to a branch. The encrypted HTTP-only connection cookie remains valid across normal server redeployments for up to seven days.
 
 1. In GitHub, open **Settings → Developer settings → OAuth Apps → New OAuth App**.
 2. Use `http://localhost:3000` as the homepage URL for local development.
@@ -100,7 +100,7 @@ The **More → Connect to GitHub** button uses GitHub's browser-based OAuth logi
 4. Copy `.env.example` to `.env` and add the OAuth app's client ID and client secret.
 5. Restart the CodX Editor server with `npm run dev`.
 
-The default `repo read:user` scope allows updates to public and private repositories the account can access. Disconnect and reconnect after changing scopes. For production, set `GITHUB_OAUTH_CALLBACK_URL` to the public HTTPS callback URL registered with GitHub. Keep `.env` and the client secret private.
+The default `repo read:user` scope allows updates to public and private repositories the account can access. Disconnect and reconnect after changing scopes. For production, set `GITHUB_OAUTH_CALLBACK_URL` to the public HTTPS callback URL registered with GitHub. Keep `.env` and the client secret private and keep the same client secret across deployments; rotating it intentionally expires existing CodX Editor GitHub sessions.
 
 ## Project Structure
 

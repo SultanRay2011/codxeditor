@@ -26,7 +26,7 @@
     />
     <title>CodX Editor Guide | Projects, Preview, Node.js & Collaboration</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-19","author":{"@type":"Organization","name":"CodX Editor"}}
+      {"@context":"https://schema.org","@type":"TechArticle","headline":"CodX Editor Guide","description":"A practical guide to editing, previewing, debugging, saving, GitHub, Node.js, publishing, and collaboration in CodX Editor.","dateModified":"2026-07-20","author":{"@type":"Organization","name":"CodX Editor"}}
     </script>
     <style>
       * {
@@ -908,7 +908,7 @@
           <section class="section-card" id="github">
             <h2>GitHub Repositories</h2>
             <p class="section-copy">
-              Connect with GitHub OAuth from More. CodX Editor keeps the access token on the server in an HTTP-only session and opens a repository workspace after you sign in.
+              Connect with GitHub OAuth from More. CodX Editor protects the connection in an encrypted, HTTP-only session cookie and opens a repository workspace after you sign in.
             </p>
             <div class="feature-grid">
               <article class="feature-item">
@@ -917,7 +917,7 @@
                   <li>Choose Connect to GitHub and complete the normal GitHub account authorization screen.</li>
                   <li>After connecting, click the GitHub button again to search repositories you can access.</li>
                   <li>Public/private status, default branch, write access, and repository descriptions are shown on repository cards.</li>
-                  <li>The connection survives page refreshes. Use Disconnect when you want to remove the CodX Editor session.</li>
+                  <li>The connection survives page refreshes and normal server deployments for up to seven days. Use Disconnect when you want to remove the CodX Editor session.</li>
                 </ul>
               </article>
               <article class="feature-item">
@@ -933,7 +933,7 @@
                 <h3><i class="fa-solid fa-file-circle-plus"></i> Create & Upload</h3>
                 <ul>
                   <li>Create file adds a new path and text content to the pending changes list.</li>
-                  <li>Upload file can stage every file from the current CodX Editor project or one or more files selected from your device.</li>
+                  <li>Upload file shows checkboxes for the current CodX Editor project so you can choose exactly which files to stage, or you can select one or more files from your device. Private-looking files such as <code>.env</code> start unchecked.</li>
                   <li>Created, edited, and uploaded files can be reviewed or removed before committing.</li>
                   <li>Spaces in newly created or uploaded names are converted to dashes.</li>
                 </ul>

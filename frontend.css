@@ -6739,6 +6739,92 @@ iframe {
 .github-empty { padding: 40px 12px; text-align: center; color: var(--text-secondary); }
 @media (max-width: 650px) { .github-repo-modal { padding: 8px; } .github-repo-dialog { width: 100%; max-height: 96vh; } .github-repo-body { padding: 15px; } .github-form-grid { grid-template-columns: 1fr; } }
 
+#appDialog[data-dialog-kind="github-project-files"] > div {
+  width: min(680px, 94vw) !important;
+  border-color: color-mix(in srgb, var(--accent-color) 54%, var(--border-color)) !important;
+  background:
+    radial-gradient(circle at 92% 5%, color-mix(in srgb, var(--accent-color) 14%, transparent), transparent 34%),
+    var(--bg-secondary) !important;
+}
+
+#appDialog[data-dialog-kind="github-project-files"] #appDialogMessage { white-space: normal !important; }
+.github-project-picker { display: grid; gap: 13px; text-align: left; }
+.github-project-picker > p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.github-project-picker-select-all {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--bg-primary));
+  cursor: pointer;
+}
+.github-project-picker-select-all input,
+.github-project-picker-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent-color); cursor: pointer; }
+.github-project-picker-select-all span { display: grid; gap: 3px; }
+.github-project-picker-select-all strong { color: var(--text-primary); font-size: 13px; }
+.github-project-picker-select-all small { color: var(--text-muted); font-size: 10px; }
+.github-project-picker-list {
+  max-height: min(350px, 44vh);
+  overflow: auto;
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-primary) 88%, #000);
+}
+.github-project-picker-option {
+  display: grid;
+  grid-template-columns: auto 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.github-project-picker-option:hover { border-color: var(--border-color); transform: translateY(-1px); }
+.github-project-picker-option.is-selected {
+  border-color: color-mix(in srgb, var(--accent-color) 44%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 7%, var(--bg-secondary));
+}
+.github-project-picker-option.is-sensitive:not(.is-selected) .github-project-picker-icon {
+  color: #fbbf24;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+}
+.github-project-picker-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 13%, transparent);
+}
+.github-project-picker-name { min-width: 0; display: grid; gap: 3px; }
+.github-project-picker-name strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.github-project-picker-name small { color: var(--text-muted); font-size: 9px; letter-spacing: .04em; }
+.github-project-picker-check { color: var(--accent-color); opacity: 0; transform: scale(.72); transition: opacity .18s ease, transform .18s ease; }
+.github-project-picker-option.is-selected .github-project-picker-check { opacity: 1; transform: scale(1); }
+.github-project-picker-note { display: flex; align-items: flex-start; gap: 8px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.github-project-picker-note i { margin-top: 2px; color: #fbbf24; }
+.github-project-picker-note code { color: var(--text-primary); }
+#appDialog[data-dialog-kind="github-project-files"] #appDialogActions { justify-content: flex-end; }
+#githubProjectFilesAddBtn:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.35); }
+
+@media (max-width: 520px) {
+  .github-project-picker-option { grid-template-columns: auto 30px minmax(0, 1fr); gap: 8px; }
+  .github-project-picker-icon { width: 30px; height: 30px; }
+  .github-project-picker-check { display: none; }
+  #appDialog[data-dialog-kind="github-project-files"] #appDialogActions { display: grid !important; grid-template-columns: 1fr; }
+}
+
 /* Unified modal surfaces */
 :is(
   #settingsModal,

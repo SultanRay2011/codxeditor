@@ -502,17 +502,31 @@ document.addEventListener("keydown", (event) => {
   else closeCommandPalette();
 });
 
-let githubConnectionState = {
-  configured: true,
-  connected: false,
-  user: null,
-  scope: "",
-};
-let githubRepoFileState = { repo: null, staged: new Map() };
+const GITHUB_CONNECTION_CACHE_KEY = "codxGitHubConnectionStateV1";
 
-function hasGitHubSessionCookie() {
-  return document.cookie.split(";").some((part) => part.trim().startsWith("codx_github_session="));
+function readCachedGitHubConnectionState() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(GITHUB_CONNECTION_CACHE_KEY) || "null");
+    if (!cached || typeof cached !== "object") throw new Error("No cached GitHub state");
+    return {
+      configured: cached.configured !== false,
+      connected: Boolean(cached.connected),
+      user: cached.user || null,
+      scope: String(cached.scope || ""),
+    };
+  } catch (_error) {
+    return { configured: true, connected: false, user: null, scope: "" };
+  }
 }
+
+function cacheGitHubConnectionState() {
+  try {
+    sessionStorage.setItem(GITHUB_CONNECTION_CACHE_KEY, JSON.stringify(githubConnectionState));
+  } catch (_error) {}
+}
+
+let githubConnectionState = readCachedGitHubConnectionState();
+let githubRepoFileState = { repo: null, staged: new Map() };
 
 function updateGitHubConnectButton() {
   if (!connectGitHubBtn || !connectGitHubBtnLabel) return;
@@ -544,18 +558,14 @@ async function refreshGitHubConnectionStatus() {
       user: data.user || null,
       scope: data.scope || "",
     };
+    cacheGitHubConnectionState();
     updateGitHubConnectButton();
   } catch (_err) {
-    if (previousState.connected || hasGitHubSessionCookie()) {
-      githubConnectionState = {
-        ...previousState,
-        connected: true,
-        configured: previousState.configured !== false,
-      };
-    } else {
-      githubConnectionState = { configured: true, connected: false, user: null, scope: "" };
-    }
+    githubConnectionState = previousState;
     updateGitHubConnectButton();
+    if (githubConnectionState.connected) {
+      connectGitHubBtn.title = "GitHub is still connected. The latest status check could not be completed.";
+    }
   }
 }
 
@@ -681,22 +691,50 @@ async function renderGitHubCommitView(repo) {
     document.getElementById("githubRefreshFilesBtn")?.addEventListener("click", () => refreshGitHubRepositoryFiles(repo));
     document.getElementById("githubCreateFileBtn")?.addEventListener("click", () => { renderGitHubFileEditorControls(); openGitHubFileEditor(); });
     document.getElementById("githubUploadFileBtn")?.addEventListener("click", async () => {
+      const uploadButton = document.getElementById("githubUploadFileBtn");
+      const targetRepoState = githubRepoFileState;
       const choice = await showGitHubUploadSourcePicker();
-      if (!choice?.ok) return;
+      if (!choice?.ok) {
+        uploadButton?.focus();
+        return;
+      }
       if (choice.source === "project") {
         const uploadedFiles = Array.isArray(projectFiles) ? projectFiles : [];
-        const stagedCount = uploadedFiles.reduce((count, file) => {
-          const fileName = normalizeProjectFileName(file?.name || "");
-          if (!fileName) return count;
-          githubRepoFileState.staged.set(fileName, { path: fileName, content: String(file?.content || ""), encoding: "utf-8" });
-          return count + 1;
-        }, 0);
-        if (!stagedCount) {
+        if (!uploadedFiles.length) {
           showNotification("There are no files in the current CodX Editor project to upload.", "warn");
+          uploadButton?.focus();
           return;
         }
+        const selectedFiles = await showGitHubProjectFilePicker(uploadedFiles, uploadButton);
+        if (!selectedFiles?.length) return;
+        let preparedFiles;
+        if (uploadButton) uploadButton.disabled = true;
+        try {
+          preparedFiles = [];
+          for (const file of selectedFiles) {
+            preparedFiles.push(await prepareProjectFileForGitHub(file));
+          }
+        } catch (error) {
+          showNotification(error.message || "One of the selected files could not be prepared.", "error");
+          return;
+        } finally {
+          if (uploadButton?.isConnected) {
+            uploadButton.disabled = false;
+            if (!githubRepoModal?.hidden) uploadButton.focus();
+          }
+        }
+        if (
+          githubRepoFileState !== targetRepoState ||
+          targetRepoState.repo !== repo ||
+          !uploadButton?.isConnected ||
+          githubRepoModal?.hidden
+        ) return;
+        for (const [path, file] of targetRepoState.staged.entries()) {
+          if (file.source === "project") targetRepoState.staged.delete(path);
+        }
+        preparedFiles.forEach((file) => targetRepoState.staged.set(file.path, file));
         renderGitHubStagedFiles();
-        showNotification(`Added ${stagedCount} file(s) from the current CodX Editor project.`, "success");
+        showNotification(`Added ${preparedFiles.length} selected file(s) from the current project.`, "success");
         return;
       }
       document.getElementById("githubUploadFileInput")?.click();
@@ -875,10 +913,26 @@ githubRepoModalBody?.addEventListener("click", async (event) => {
   if (action === "repos") openGitHubRepositoryModal();
   if (action === "reconnect") beginGitHubOAuth();
   if (action === "disconnect") {
-    await fetch("/api/github/logout", { method: "POST", credentials: "same-origin" });
-    closeGitHubRepositoryModal();
-    await refreshGitHubConnectionStatus();
-    showNotification("GitHub account disconnected.", "info");
+    const disconnectButton = event.target.closest('[data-github-action="disconnect"]');
+    if (disconnectButton) disconnectButton.disabled = true;
+    try {
+      const response = await fetch("/api/github/logout", { method: "POST", credentials: "same-origin" });
+      if (!response.ok) throw new Error("GitHub could not be disconnected. Please try again.");
+      githubConnectionState = {
+        ...githubConnectionState,
+        connected: false,
+        user: null,
+        scope: "",
+      };
+      cacheGitHubConnectionState();
+      updateGitHubConnectButton();
+      closeGitHubRepositoryModal();
+      await refreshGitHubConnectionStatus();
+      showNotification("GitHub account disconnected.", "info");
+    } catch (error) {
+      showNotification(error.message || "GitHub could not be disconnected. Please try again.", "error");
+      if (disconnectButton?.isConnected) disconnectButton.disabled = false;
+    }
   }
 });
 
@@ -930,6 +984,30 @@ if (appDialog) {
   appDialog.addEventListener("click", (e) => {
     if (e.target === appDialog) {
       closeAppDialog({ ok: false, value: null });
+    }
+  });
+  appDialog.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeAppDialog({ ok: false, value: null });
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...appDialog.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !appDialog.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   });
 }
@@ -4534,6 +4612,7 @@ function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "cre
 function showGitHubUploadSourcePicker() {
   return new Promise((resolve) => {
     activeDialogResolver = (result) => resolve(result);
+    if (appDialog) appDialog.dataset.dialogKind = "github-upload-source";
     if (appDialogTitle) appDialogTitle.textContent = "Upload files";
     if (appDialogMessage) {
       appDialogMessage.innerHTML = '<div style="display:grid;gap:10px;text-align:left"><div><strong>Choose where to upload from:</strong></div><div>Use your current CodX Editor project files, or pick files from your computer.</div></div>';
@@ -4557,6 +4636,139 @@ function showGitHubUploadSourcePicker() {
     setTimeout(() => document.getElementById("githubUploadFromProjectBtn")?.focus(), 0);
   });
 
+}
+
+function isSensitiveGitHubProjectFile(fileName) {
+  const normalized = String(fileName || "").replace(/\\/g, "/").toLowerCase();
+  const baseName = normalized.split("/").pop() || "";
+  return (
+    baseName === ".env" ||
+    baseName.startsWith(".env.") ||
+    /\.(?:pem|key|p12|pfx)$/i.test(baseName) ||
+    /^(?:id_rsa|id_ed25519|credentials|secrets)(?:\.|$)/i.test(baseName)
+  );
+}
+
+function showGitHubProjectFilePicker(files, returnFocusElement = null) {
+  const availableFiles = Array.isArray(files) ? files.filter((file) => file?.name) : [];
+  if (!availableFiles.length) return Promise.resolve([]);
+  const defaultSelectedCount = availableFiles.filter((file) => !isSensitiveGitHubProjectFile(file.name)).length;
+  return new Promise((resolve) => {
+    activeDialogResolver = (result) => {
+      const selectedFiles = result?.files || [];
+      setTimeout(() => {
+        if (returnFocusElement?.isConnected) returnFocusElement.focus();
+      }, 0);
+      resolve(selectedFiles);
+    };
+    if (appDialog) appDialog.dataset.dialogKind = "github-project-files";
+    if (appDialogTitle) appDialogTitle.textContent = "Choose files to upload";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <div class="github-project-picker">
+          <p>Select the files from your current editor that you want to add to this GitHub update.</p>
+          <label class="github-project-picker-select-all">
+            <input id="githubProjectSelectAll" type="checkbox">
+            <span><strong>Select all files</strong><small id="githubProjectSelectionCount">${defaultSelectedCount} of ${availableFiles.length} selected</small></span>
+          </label>
+          <div class="github-project-picker-list" role="group" aria-label="Current project files">
+            ${availableFiles.map((file, index) => {
+              const mediaKind = getProjectMediaKind(file);
+              const isSensitive = isSensitiveGitHubProjectFile(file.name);
+              const detail = mediaKind
+                ? `${mediaKind.charAt(0).toUpperCase()}${mediaKind.slice(1)}${file.mediaSize ? ` • ${formatMediaByteSize(file.mediaSize)}` : ""}`
+                : isSensitive
+                  ? "Private-looking file • not selected"
+                  : `${String(getFileType(file.name) || "file").toUpperCase()} file`;
+              return `
+                <label class="github-project-picker-option${isSensitive ? " is-sensitive" : " is-selected"}">
+                  <input type="checkbox" data-github-project-file="${index}"${isSensitive ? "" : " checked"}>
+                  <span class="github-project-picker-icon"><i class="fa-solid ${isSensitive ? "fa-lock" : mediaKind ? "fa-photo-film" : "fa-file-code"}" aria-hidden="true"></i></span>
+                  <span class="github-project-picker-name"><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(detail)}</small></span>
+                  <i class="fa-solid fa-check github-project-picker-check" aria-hidden="true"></i>
+                </label>`;
+            }).join("")}
+          </div>
+          <div class="github-project-picker-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Private-looking files such as <code>.env</code> start unchecked. Only select one when you are certain it is safe to upload.</span></div>
+        </div>`;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="githubProjectFilesCancelBtn" class="run-button" style="background:#6b7280;"><strong>Cancel</strong></button>
+        <button type="button" id="githubProjectFilesAddBtn" class="run-button"><i class="fa-solid fa-upload" aria-hidden="true"></i><strong>Add selected files</strong></button>
+      `;
+    }
+    if (appDialog) appDialog.style.display = "flex";
+
+    const selectAll = document.getElementById("githubProjectSelectAll");
+    const count = document.getElementById("githubProjectSelectionCount");
+    const addButton = document.getElementById("githubProjectFilesAddBtn");
+    const checkboxes = [...document.querySelectorAll("[data-github-project-file]")];
+    const updateSelection = () => {
+      const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+      if (selectAll) {
+        selectAll.checked = selectedCount === checkboxes.length;
+        selectAll.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+      }
+      if (count) count.textContent = `${selectedCount} of ${checkboxes.length} selected`;
+      if (addButton) addButton.disabled = selectedCount === 0;
+      checkboxes.forEach((checkbox) => {
+        checkbox.closest(".github-project-picker-option")?.classList.toggle("is-selected", checkbox.checked);
+      });
+    };
+    selectAll?.addEventListener("change", () => {
+      checkboxes.forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+      updateSelection();
+    });
+    checkboxes.forEach((checkbox) => checkbox.addEventListener("change", updateSelection));
+    document.getElementById("githubProjectFilesCancelBtn")?.addEventListener("click", () => closeAppDialog({ files: [] }));
+    addButton?.addEventListener("click", () => {
+      const selected = checkboxes
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => availableFiles[Number(checkbox.dataset.githubProjectFile)])
+        .filter(Boolean);
+      closeAppDialog({ files: selected });
+    });
+    updateSelection();
+    setTimeout(() => selectAll?.focus(), 0);
+  });
+}
+
+async function prepareProjectFileForGitHub(file) {
+  const path = normalizeProjectFileName(file?.name || "");
+  if (!path) throw new Error("A selected project file has an invalid name.");
+  const mediaKind = getProjectMediaKind(file);
+  const source = String(file?.content || "");
+  if (!mediaKind || (source && !source.startsWith("data:"))) {
+    return { path, content: source, encoding: "utf-8", source: "project" };
+  }
+
+  let blob = file?.mediaBlob instanceof Blob ? file.mediaBlob : null;
+  if (!blob && source.startsWith("data:")) {
+    try {
+      blob = await dataUrlToBlob(source);
+    } catch (_error) {}
+  }
+  if (!blob && file?.mediaStorageId) {
+    try {
+      blob = await readPersistedMediaBlob(file.mediaStorageId);
+    } catch (_error) {}
+  }
+  if (!(blob instanceof Blob)) {
+    throw new Error(`${path} could not be restored from browser media storage. Add the original file again before uploading it.`);
+  }
+  const dataUrl = await readMediaBlobAsDataUrl(blob);
+  return {
+    path,
+    content: dataUrl.slice(dataUrl.indexOf(",") + 1),
+    encoding: "base64",
+    source: "project",
+  };
 }
 
 function showHelpChoiceDialog() {

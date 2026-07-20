@@ -38,6 +38,7 @@ const GITHUB_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim
 const GITHUB_OAUTH_CALLBACK_URL = String(process.env.GITHUB_OAUTH_CALLBACK_URL || "").trim();
 const GITHUB_OAUTH_SCOPE = String(process.env.GITHUB_OAUTH_SCOPE || "repo read:user").trim();
 const GITHUB_SESSIONS_FILE = path.join(__dirname, ".codx-github-sessions.enc");
+const GITHUB_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const githubOAuthFlows = new Map();
 const githubSessions = new Map();
 const deviceTransfers = new Map();
@@ -744,7 +745,10 @@ app.get("/auth/github", (req, res) => {
 
   res.setHeader(
     "Set-Cookie",
-    buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, state, req, 600),
+    [
+      buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, "", req, 0, "/"),
+      buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, state, req, 600, "/auth/github"),
+    ],
   );
   const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", GITHUB_CLIENT_ID);
@@ -763,25 +767,28 @@ app.get("/auth/github/callback", async (req, res) => {
   const flow = githubOAuthFlows.get(state);
   const fallbackReturnTo = normalizeGitHubReturnTo(req.query.returnTo);
   const returnTo = flow?.returnTo || fallbackReturnTo;
-  const clearStateCookie = buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, "", req, 0);
+  const clearStateCookies = [
+    buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, "", req, 0, "/auth/github"),
+    buildOAuthCookie(GITHUB_OAUTH_STATE_COOKIE, "", req, 0, "/"),
+  ];
 
   if (!flow || !safeStringEqual(state, stateCookie) || Date.now() - flow.createdAt > 10 * 60 * 1000) {
     if (state) githubOAuthFlows.delete(state);
-    res.setHeader("Set-Cookie", clearStateCookie);
+    res.setHeader("Set-Cookie", clearStateCookies);
     res.redirect(buildGitHubResultRedirect(returnTo, "invalid_state"));
     return;
   }
   githubOAuthFlows.delete(state);
 
   if (req.query.error) {
-    res.setHeader("Set-Cookie", clearStateCookie);
+    res.setHeader("Set-Cookie", clearStateCookies);
     res.redirect(buildGitHubResultRedirect(returnTo, String(req.query.error)));
     return;
   }
 
   const code = String(req.query.code || "");
   if (!code) {
-    res.setHeader("Set-Cookie", clearStateCookie);
+    res.setHeader("Set-Cookie", clearStateCookies);
     res.redirect(buildGitHubResultRedirect(returnTo, "missing_code"));
     return;
   }
@@ -820,8 +827,7 @@ app.get("/auth/github/callback", async (req, res) => {
       throw new Error(userData.message || "Unable to load the GitHub account");
     }
 
-    const sessionId = crypto.randomBytes(32).toString("base64url");
-    githubSessions.set(sessionId, {
+    const githubSession = {
       accessToken: tokenData.access_token,
       scope: String(tokenData.scope || ""),
       createdAt: Date.now(),
@@ -832,16 +838,18 @@ app.get("/auth/github/callback", async (req, res) => {
         avatarUrl: String(userData.avatar_url || ""),
         profileUrl: String(userData.html_url || ""),
       },
-    });
-    saveGitHubSessions();
+    };
+    const sealedSession = sealGitHubSession(githubSession);
+    if (!sealedSession) throw new Error("Unable to protect the GitHub session");
     res.setHeader("Set-Cookie", [
-      clearStateCookie,
-      buildOAuthCookie(GITHUB_OAUTH_COOKIE, sessionId, req, 7 * 24 * 60 * 60),
+      ...clearStateCookies,
+      buildOAuthCookie(GITHUB_OAUTH_COOKIE, "", req, 0, "/"),
+      buildOAuthCookie(GITHUB_OAUTH_COOKIE, sealedSession, req, GITHUB_SESSION_MAX_AGE_SECONDS, "/api/github"),
     ]);
     res.redirect(buildGitHubResultRedirect(returnTo, "connected"));
   } catch (error) {
     console.error("GitHub OAuth callback failed:", error.message);
-    res.setHeader("Set-Cookie", clearStateCookie);
+    res.setHeader("Set-Cookie", clearStateCookies);
     res.redirect(buildGitHubResultRedirect(returnTo, "failed"));
   }
 });
@@ -849,7 +857,10 @@ app.get("/auth/github/callback", async (req, res) => {
 app.post("/api/github/logout", (req, res) => {
   const sessionId = String(parseCookies(req)[GITHUB_OAUTH_COOKIE] || "");
   if (sessionId && githubSessions.delete(sessionId)) saveGitHubSessions();
-  res.setHeader("Set-Cookie", buildOAuthCookie(GITHUB_OAUTH_COOKIE, "", req, 0));
+  res.setHeader("Set-Cookie", [
+    buildOAuthCookie(GITHUB_OAUTH_COOKIE, "", req, 0, "/api/github"),
+    buildOAuthCookie(GITHUB_OAUTH_COOKIE, "", req, 0, "/"),
+  ]);
   res.json({ ok: true });
 });
 
@@ -1465,12 +1476,12 @@ function isSecureRequest(req) {
   return Boolean(req.secure || forwardedProtocol === "https");
 }
 
-function buildOAuthCookie(name, value, req, maxAgeSeconds) {
+function buildOAuthCookie(name, value, req, maxAgeSeconds, cookiePath = "/") {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     "HttpOnly",
     "SameSite=Lax",
-    "Path=/",
+    `Path=${cookiePath}`,
     `Max-Age=${Math.max(0, Number(maxAgeSeconds) || 0)}`,
   ];
   if (isSecureRequest(req)) parts.push("Secure");
@@ -1512,6 +1523,64 @@ function getGitHubSessionEncryptionKey() {
   return crypto.createHash("sha256").update(`codx-github-sessions:${GITHUB_CLIENT_SECRET}`).digest();
 }
 
+function sealGitHubSession(session) {
+  const key = getGitHubSessionEncryptionKey();
+  if (!key || !session?.accessToken || !session?.user?.login) return "";
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const payload = JSON.stringify({
+      version: 1,
+      expiresAt: Date.now() + GITHUB_SESSION_MAX_AGE_SECONDS * 1000,
+      session,
+    });
+    const encrypted = Buffer.concat([cipher.update(payload, "utf8"), cipher.final()]);
+    const sealed = [
+      "v1",
+      iv.toString("base64url"),
+      cipher.getAuthTag().toString("base64url"),
+      encrypted.toString("base64url"),
+    ].join(".");
+    if (sealed.length > 3800) {
+      console.warn("The protected GitHub session is too large for a browser cookie.");
+      return "";
+    }
+    return sealed;
+  } catch (error) {
+    console.warn("Unable to create a GitHub session cookie:", error.message);
+    return "";
+  }
+}
+
+function openSealedGitHubSession(value) {
+  const encoded = String(value || "");
+  if (!encoded.startsWith("v1.") || encoded.length > 3800) return null;
+  const key = getGitHubSessionEncryptionKey();
+  const parts = encoded.split(".");
+  if (!key || parts.length !== 4) return null;
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(parts[1], "base64url"));
+    decipher.setAuthTag(Buffer.from(parts[2], "base64url"));
+    const plainText = Buffer.concat([
+      decipher.update(Buffer.from(parts[3], "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    const payload = JSON.parse(plainText);
+    const session = payload?.session;
+    if (
+      payload?.version !== 1 ||
+      Date.now() >= Number(payload?.expiresAt || 0) ||
+      !session?.accessToken ||
+      !session?.user?.login
+    ) {
+      return null;
+    }
+    return session;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function loadGitHubSessions() {
   const key = getGitHubSessionEncryptionKey();
   if (!key || !fs.existsSync(GITHUB_SESSIONS_FILE)) return;
@@ -1524,7 +1593,7 @@ function loadGitHubSessions() {
     decipher.setAuthTag(authTag);
     const plainText = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
     const storedSessions = JSON.parse(plainText);
-    const expiresAfter = 7 * 24 * 60 * 60 * 1000;
+    const expiresAfter = GITHUB_SESSION_MAX_AGE_SECONDS * 1000;
     const now = Date.now();
     for (const [sessionId, session] of Array.isArray(storedSessions) ? storedSessions : []) {
       if (
@@ -1572,7 +1641,7 @@ function pruneGitHubAuthState() {
   }
   let removedSession = false;
   for (const [sessionId, session] of githubSessions.entries()) {
-    if (now - Number(session?.createdAt || 0) > 7 * 24 * 60 * 60 * 1000) {
+    if (now - Number(session?.createdAt || 0) > GITHUB_SESSION_MAX_AGE_SECONDS * 1000) {
       githubSessions.delete(sessionId);
       removedSession = true;
     }
@@ -1582,8 +1651,9 @@ function pruneGitHubAuthState() {
 
 function getGitHubSession(req) {
   pruneGitHubAuthState();
-  const sessionId = String(parseCookies(req)[GITHUB_OAUTH_COOKIE] || "");
-  return sessionId ? githubSessions.get(sessionId) || null : null;
+  const sessionCookie = String(parseCookies(req)[GITHUB_OAUTH_COOKIE] || "");
+  if (!sessionCookie) return null;
+  return openSealedGitHubSession(sessionCookie) || githubSessions.get(sessionCookie) || null;
 }
 
 function createGitHubApiError(status, message) {
@@ -1635,7 +1705,9 @@ function parseCookies(req) {
     const [rawKey, ...rawValue] = part.split("=");
     const key = String(rawKey || "").trim();
     if (!key) return acc;
-    acc[key] = decodeURIComponent(rawValue.join("=").trim());
+    if (!Object.prototype.hasOwnProperty.call(acc, key)) {
+      acc[key] = decodeURIComponent(rawValue.join("=").trim());
+    }
     return acc;
   }, {});
 }
