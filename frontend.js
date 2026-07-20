@@ -1094,12 +1094,14 @@ if (announcementPopup) {
 if (appDialog) {
   appDialog.addEventListener("click", (e) => {
     if (e.target === appDialog) {
+      if (appDialog.dataset.dialogKind === "publish-loading") return;
       closeAppDialog({ ok: false, value: null });
     }
   });
   appDialog.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      if (appDialog.dataset.dialogKind === "publish-loading") return;
       closeAppDialog({ ok: false, value: null });
       return;
     }
@@ -4420,6 +4422,7 @@ function closeAppDialog(result = null) {
   if (appDialog) delete appDialog.dataset.dialogKind;
   if (appDialogInput) {
     appDialogInput.style.display = "none";
+    appDialogInput.disabled = false;
     appDialogInput.value = "";
     appDialogInput.onkeydown = null;
   }
@@ -4448,6 +4451,8 @@ function showAppDialog({
   okText = "OK",
   cancelText = "Cancel",
   okVariant = "",
+  keepOpenOnOk = false,
+  validateInput = null,
 }) {
   return new Promise((resolve) => {
     activeDialogResolver = resolve;
@@ -4461,6 +4466,7 @@ function showAppDialog({
     }
     if (appDialogInput) {
       appDialogInput.style.display = input ? "block" : "none";
+      appDialogInput.disabled = false;
       appDialogInput.value = input ? String(inputValue || "") : "";
       appDialogInput.placeholder = input ? String(inputPlaceholder || "") : "";
     }
@@ -4475,11 +4481,22 @@ function showAppDialog({
     const okBtn = document.getElementById("appDialogOkBtn");
     if (cancelBtn) cancelBtn.onclick = () => closeAppDialog({ ok: false, value: null });
     if (okBtn) {
-      okBtn.onclick = () =>
-        closeAppDialog({
+      okBtn.onclick = () => {
+        const value = input && appDialogInput ? appDialogInput.value : true;
+        if (typeof validateInput === "function" && !validateInput(value)) return;
+        const result = {
           ok: true,
-          value: input && appDialogInput ? appDialogInput.value : true,
-        });
+          value,
+          actionButton: okBtn,
+        };
+        if (keepOpenOnOk) {
+          activeDialogResolver = null;
+          if (appDialogInput) appDialogInput.onkeydown = null;
+          resolve(result);
+          return;
+        }
+        closeAppDialog(result);
+      };
     }
     if (appDialogInput) {
       appDialogInput.onkeydown = (e) => {
@@ -4681,7 +4698,15 @@ function showPublishUrlPrompt(action = "create") {
     inputPlaceholder: "Type your custom link",
     okText: isUpdate ? "NEXT" : "CREATE LINK",
     cancelText: "CANCEL",
+    keepOpenOnOk: !isUpdate,
+    validateInput: (value) => {
+      if (String(value || "").trim()) return true;
+      showNotification("Enter a link name to publish your project.", "error");
+      appDialogInput?.focus();
+      return false;
+    },
   });
+  if (!isUpdate && appDialog) appDialog.dataset.dialogKind = "publish-request";
   const updatePreview = () => {
     const preview = document.getElementById("publishUrlPreview");
     if (!preview || !appDialogInput) return;
@@ -9000,6 +9025,7 @@ async function publishCurrentProject() {
   const mode = actionDialog.action === "update" ? "update" : "create";
   const dialog = await showPublishUrlPrompt(mode);
   if (!dialog?.ok) return;
+  let publishActionButton = mode === "create" ? dialog.actionButton : null;
   const publishId = String(dialog.value || "").trim();
   if (!publishId) {
     showNotification("Enter a link name to publish your project.", "error");
@@ -9019,17 +9045,36 @@ async function publishCurrentProject() {
       showNotification("Enter the verification key to update this link.", "error");
       return;
     }
-    const confirmUpdate = await showAppConfirmHtml(
-      "UPDATE PUBLISHED LINK",
-      `Are you sure you want to replace the project currently published at:<br><code style="display:block;margin-top:8px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(`${window.location.origin}/published/${publishId}`)}</code>`,
-      "YES, UPDATE IT",
-      "CANCEL",
-      "background:#d97706",
-    );
+    const confirmUpdatePromise = showAppDialog({
+      title: "UPDATE PUBLISHED LINK",
+      messageHtml: `Are you sure you want to replace the project currently published at:<br><code style="display:block;margin-top:8px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(`${window.location.origin}/published/${publishId}`)}</code>`,
+      input: false,
+      okText: "YES, UPDATE IT",
+      cancelText: "CANCEL",
+      okVariant: "background:#d97706",
+      keepOpenOnOk: true,
+    });
+    if (appDialog) appDialog.dataset.dialogKind = "publish-request";
+    const confirmUpdate = await confirmUpdatePromise;
     if (!confirmUpdate?.ok) return;
+    publishActionButton = confirmUpdate.actionButton;
+  }
+  if (!ensureInternetConnection()) {
+    if (appDialog?.dataset.dialogKind === "publish-request") closeAppDialog({ ok: false });
+    return;
+  }
+  const loadingButton = publishActionButton || publishProjectBtn;
+  const hasVisiblePublishDialog = Boolean(
+    publishActionButton?.isConnected && appDialog && appDialog.style.display !== "none",
+  );
+  if (hasVisiblePublishDialog) {
+    appDialog.dataset.dialogKind = "publish-loading";
+    if (appDialogInput) appDialogInput.disabled = true;
+    const cancelButton = document.getElementById("appDialogCancelBtn");
+    if (cancelButton) cancelButton.disabled = true;
   }
   try {
-    const payload = await withButtonLoading(publishProjectBtn, async (signal) => {
+    const payload = await withButtonLoading(loadingButton, async (signal) => {
       const publishFiles = await buildPublishableProjectFiles();
       const response = await fetch("/api/publish", {
         method: "POST",
@@ -9054,9 +9099,15 @@ async function publishCurrentProject() {
       }
       return responsePayload;
     });
+    if (!payload) {
+      if (hasVisiblePublishDialog) closeAppDialog({ ok: false });
+      return;
+    }
+    if (hasVisiblePublishDialog) closeAppDialog({ ok: true });
     await showPublishedProjectDialog(payload.shareLink || "", payload.verificationKey || "", mode);
     showNotification(mode === "update" ? "Published link updated successfully." : "Link published successfully.", "success");
   } catch (error) {
+    if (hasVisiblePublishDialog) closeAppDialog({ ok: false });
     if (error?.name === "AbortError") return;
     showNotification(error.message || (mode === "update" ? "Failed to update link." : "Failed to publish project."), "error");
   }
