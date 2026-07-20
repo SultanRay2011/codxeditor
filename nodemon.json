@@ -1,17 +1,17 @@
 {
   "watch": [
     "server.js",
-    "frontend.js",
-    "node-runtime.js",
-    "*.html",
-    "*.css",
     ".env"
   ],
-  "ext": "js,mjs,cjs,json,html,css,env",
+  "ext": "js,env",
   "ignore": [
     ".git/**",
     "node_modules/**",
     "public/**",
+    "frontend.js",
+    "node-runtime.js",
+    "*.html",
+    "*.css",
     "published-projects.json",
     ".codx-github-sessions.enc",
     ".codx-github-sessions.enc.tmp",

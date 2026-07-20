@@ -228,6 +228,29 @@ function getModalDoneBtn() {
   return document.getElementById("modalDoneBtn");
 }
 
+async function withButtonLoading(button, task, label = "Loading...") {
+  if (typeof task !== "function") return undefined;
+  if (!button || button.dataset.codxLoading === "true") return task();
+  const previousHtml = button.innerHTML;
+  const wasDisabled = button.disabled;
+  const previousBusy = button.getAttribute("aria-busy");
+  button.dataset.codxLoading = "true";
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = `<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>${escapeHtml(label)}</span>`;
+  try {
+    return await task();
+  } finally {
+    if (button.isConnected) {
+      button.innerHTML = previousHtml;
+      button.disabled = wasDisabled;
+      if (previousBusy === null) button.removeAttribute("aria-busy");
+      else button.setAttribute("aria-busy", previousBusy);
+      delete button.dataset.codxLoading;
+    }
+  }
+}
+
 function setHeaderMoreMenuOpen(isOpen) {
   if (!headerMoreBtn || !headerMorePanel) return;
   headerMoreBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
@@ -588,13 +611,13 @@ function handleGitHubOAuthResult() {
 }
 
 if (connectGitHubBtn) {
-  connectGitHubBtn.addEventListener("click", () => {
+  connectGitHubBtn.addEventListener("click", async () => {
     if (!githubConnectionState.configured) {
       showNotification("Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET on the server first.", "error");
       return;
     }
     if (githubConnectionState.connected) {
-      openGitHubRepositoryModal();
+      await withButtonLoading(connectGitHubBtn, openGitHubRepositoryModal);
       return;
     }
     beginGitHubOAuth();
@@ -708,20 +731,19 @@ async function renderGitHubCommitView(repo) {
         const selectedFiles = await showGitHubProjectFilePicker(uploadedFiles, uploadButton);
         if (!selectedFiles?.length) return;
         let preparedFiles;
-        if (uploadButton) uploadButton.disabled = true;
         try {
-          preparedFiles = [];
-          for (const file of selectedFiles) {
-            preparedFiles.push(await prepareProjectFileForGitHub(file));
-          }
+          preparedFiles = await withButtonLoading(uploadButton, async () => {
+            const nextFiles = [];
+            for (const file of selectedFiles) {
+              nextFiles.push(await prepareProjectFileForGitHub(file));
+            }
+            return nextFiles;
+          });
         } catch (error) {
           showNotification(error.message || "One of the selected files could not be prepared.", "error");
           return;
         } finally {
-          if (uploadButton?.isConnected) {
-            uploadButton.disabled = false;
-            if (!githubRepoModal?.hidden) uploadButton.focus();
-          }
+          if (uploadButton?.isConnected && !githubRepoModal?.hidden) uploadButton.focus();
         }
         if (
           githubRepoFileState !== targetRepoState ||
@@ -881,7 +903,10 @@ async function commitProjectFilesToGitHub(repo) {
     return;
   }
   const files = stagedFiles;
+  const previousButtonHtml = button.innerHTML;
   button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Loading...</span>';
   status.innerHTML = '<div class="github-status"><i class="fa-solid fa-spinner fa-spin"></i> Creating commit…</div>';
   try {
     const response = await fetch(`/api/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/commit`, {
@@ -895,6 +920,8 @@ async function commitProjectFilesToGitHub(repo) {
   } catch (error) {
     status.innerHTML = `<div class="github-status error">${escapeHtml(error.message)}</div>`;
   } finally {
+    button.innerHTML = previousButtonHtml;
+    button.removeAttribute("aria-busy");
     button.disabled = false;
   }
 }
@@ -914,25 +941,25 @@ githubRepoModalBody?.addEventListener("click", async (event) => {
   if (action === "reconnect") beginGitHubOAuth();
   if (action === "disconnect") {
     const disconnectButton = event.target.closest('[data-github-action="disconnect"]');
-    if (disconnectButton) disconnectButton.disabled = true;
-    try {
-      const response = await fetch("/api/github/logout", { method: "POST", credentials: "same-origin" });
-      if (!response.ok) throw new Error("GitHub could not be disconnected. Please try again.");
-      githubConnectionState = {
-        ...githubConnectionState,
-        connected: false,
-        user: null,
-        scope: "",
-      };
-      cacheGitHubConnectionState();
-      updateGitHubConnectButton();
-      closeGitHubRepositoryModal();
-      await refreshGitHubConnectionStatus();
-      showNotification("GitHub account disconnected.", "info");
-    } catch (error) {
-      showNotification(error.message || "GitHub could not be disconnected. Please try again.", "error");
-      if (disconnectButton?.isConnected) disconnectButton.disabled = false;
-    }
+    await withButtonLoading(disconnectButton, async () => {
+      try {
+        const response = await fetch("/api/github/logout", { method: "POST", credentials: "same-origin" });
+        if (!response.ok) throw new Error("GitHub could not be disconnected. Please try again.");
+        githubConnectionState = {
+          ...githubConnectionState,
+          connected: false,
+          user: null,
+          scope: "",
+        };
+        cacheGitHubConnectionState();
+        updateGitHubConnectButton();
+        closeGitHubRepositoryModal();
+        await refreshGitHubConnectionStatus();
+        showNotification("GitHub account disconnected.", "info");
+      } catch (error) {
+        showNotification(error.message || "GitHub could not be disconnected. Please try again.", "error");
+      }
+    });
   }
 });
 
@@ -2762,6 +2789,43 @@ let collabHeartbeatAckTimer = null;
 let collabHasConnectedOnce = false;
 let collabPendingLocalSync = false;
 let collabLocalSyncRevision = 0;
+const COLLAB_RECOVERY_STORAGE_PREFIX = "codxCollabRecoveryV1:";
+let collabRecoveryToken = "";
+let collabRecoverySessionId = "";
+
+function getStoredCollabRecoveryToken(sessionId = activeSessionId) {
+  const normalizedSessionId = String(sessionId || "").trim().toUpperCase();
+  if (!normalizedSessionId) return "";
+  if (collabRecoveryToken && collabRecoverySessionId === normalizedSessionId) return collabRecoveryToken;
+  try {
+    collabRecoveryToken = String(sessionStorage.getItem(`${COLLAB_RECOVERY_STORAGE_PREFIX}${normalizedSessionId}`) || "");
+  } catch (_error) {}
+  collabRecoverySessionId = normalizedSessionId;
+  return collabRecoveryToken;
+}
+
+function storeCollabRecoveryToken(sessionId, token) {
+  const normalizedSessionId = String(sessionId || "").trim().toUpperCase();
+  const nextToken = String(token || "");
+  if (!normalizedSessionId || !nextToken) return;
+  collabRecoveryToken = nextToken;
+  collabRecoverySessionId = normalizedSessionId;
+  try {
+    sessionStorage.setItem(`${COLLAB_RECOVERY_STORAGE_PREFIX}${normalizedSessionId}`, nextToken);
+  } catch (_error) {}
+}
+
+function clearCollabRecoveryToken(sessionId = activeSessionId) {
+  const normalizedSessionId = String(sessionId || "").trim().toUpperCase();
+  if (!normalizedSessionId || collabRecoverySessionId === normalizedSessionId) {
+    collabRecoveryToken = "";
+    collabRecoverySessionId = "";
+  }
+  if (!normalizedSessionId) return;
+  try {
+    sessionStorage.removeItem(`${COLLAB_RECOVERY_STORAGE_PREFIX}${normalizedSessionId}`);
+  } catch (_error) {}
+}
 const defaultCollabPermissions = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -8616,7 +8680,8 @@ async function zipAllSavedProjects() {
   const button = document.getElementById("zipAllProjectsBtn");
   if (button) {
     button.disabled = true;
-    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>ZIPPING...</strong>';
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>Loading...</strong>';
   }
 
   try {
@@ -8856,7 +8921,8 @@ async function importAllSavedProjects() {
   const button = document.getElementById("importAllProjectsBtn");
   if (button) {
     button.disabled = true;
-    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>IMPORTING...</strong>';
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><strong>Loading...</strong>';
   }
 
   try {
@@ -8917,6 +8983,7 @@ async function importAllSavedProjects() {
     const currentButton = document.getElementById("importAllProjectsBtn");
     if (currentButton) {
       currentButton.disabled = false;
+      currentButton.removeAttribute("aria-busy");
       currentButton.innerHTML = '<i class="fa-solid fa-file-import"></i><strong>IMPORT ALL PROJECTS</strong>';
     }
   }
@@ -8963,27 +9030,30 @@ async function publishCurrentProject() {
     if (!confirmUpdate?.ok) return;
   }
   try {
-    const publishFiles = await buildPublishableProjectFiles();
-    const response = await fetch("/api/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode,
-        publishId,
-        verificationKey,
-        files: publishFiles,
-        activeFileName: activeFile ? activeFile.name : "",
-      }),
+    const payload = await withButtonLoading(publishProjectBtn, async () => {
+      const publishFiles = await buildPublishableProjectFiles();
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          publishId,
+          verificationKey,
+          files: publishFiles,
+          activeFileName: activeFile ? activeFile.name : "",
+        }),
+      });
+      const responsePayload = await response.json().catch(() => ({}));
+      if (!response.ok || !responsePayload.ok) {
+        throw new Error(responsePayload.error || "Failed to publish project.");
+      }
+      if (responsePayload.shareLink) {
+        try {
+          await navigator.clipboard.writeText(responsePayload.shareLink);
+        } catch (_err) {}
+      }
+      return responsePayload;
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.ok) {
-      throw new Error(payload.error || "Failed to publish project.");
-    }
-    if (payload.shareLink) {
-      try {
-        await navigator.clipboard.writeText(payload.shareLink);
-      } catch (_err) {}
-    }
     await showPublishedProjectDialog(payload.shareLink || "", payload.verificationKey || "", mode);
     showNotification(mode === "update" ? "Published link updated successfully." : "Link published successfully.", "success");
   } catch (error) {
@@ -9129,9 +9199,9 @@ function renderProjectLibrary(mode = "saved") {
   });
 
   document.querySelectorAll(".apply-template-btn").forEach((btn) => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const template = starterTemplates.find((entry) => entry.id === btn.dataset.template);
-      if (template) applyStarterTemplate(template);
+      if (template) await withButtonLoading(btn, () => applyStarterTemplate(template));
     };
   });
 
@@ -19148,7 +19218,7 @@ async function exportNewZipFile() {
   }
   const zipFileName = /\.zip$/i.test(trimmedName) ? trimmedName : `${trimmedName}.zip`;
   try {
-    const content = await createProjectZipBlob();
+    const content = await withButtonLoading(exportZipBtn, createProjectZipBlob);
     downloadZipBlob(content, zipFileName);
     showNotification(`Project exported as ${zipFileName}!`, "success");
     return true;
@@ -19235,7 +19305,7 @@ async function updateExistingZipFile() {
   if (!confirmation?.ok) return false;
 
   try {
-    const content = await createProjectZipBlob(existingZip);
+    const content = await withButtonLoading(exportZipBtn, () => createProjectZipBlob(existingZip));
     if (selection.handle && typeof selection.handle.createWritable === "function") {
       try {
         const writable = await selection.handle.createWritable();
@@ -19391,8 +19461,11 @@ async function handleZipImport(event) {
   }
   const file = event.target.files[0];
   if (!file) return;
-  await importProjectFromZipFile(file);
-  event.target.value = "";
+  try {
+    await withButtonLoading(importZipBtn, () => importProjectFromZipFile(file));
+  } finally {
+    event.target.value = "";
+  }
 }
 
 // PART 11 - FULLSCREEN
@@ -23073,6 +23146,7 @@ function showKickConfirmation(targetName) {
 
 function showKickedOutModal() {
   resetTransientCollabUiState();
+  clearCollabRecoveryToken(activeSessionId);
   activeSessionId = null;
   collabPendingLocalSync = false;
   removeWaitingRoomPopup();
@@ -23138,6 +23212,7 @@ function recoverHostedCollabSession() {
         resolve(false);
         return;
       }
+      if (response.recoveryToken) storeCollabRecoveryToken(activeSessionId, response.recoveryToken);
       collabParticipants = response.participants || [{ ...myInfo, role: "host" }];
       collabHostName = response.hostName || myInfo.name;
       collabPermissions = normalizeCollabPermissions(response.permissions || collabPermissions);
@@ -23151,17 +23226,29 @@ function recoverHostedCollabSession() {
       resolve(true);
     };
     const timeout = setTimeout(() => finish(null), 10000);
-    collabSocket.emit("collab:create", {
-      sessionId: activeSessionId,
-      name: myInfo.name,
-      theme: myInfo.theme || "#4CAF50",
-      cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
-      deviceId: getOrCreateDeviceId(),
-      files: projectFiles,
-      activeFileName: activeFile ? activeFile.name : null,
-      permissions: collabPermissions,
-      baseUrl: window.location.origin,
-    }, finish);
+    const sendRecovery = (recoveryToken = "") => {
+      collabSocket.emit("collab:create", {
+        sessionId: activeSessionId,
+        name: myInfo.name,
+        theme: myInfo.theme || "#4CAF50",
+        cursorStyle: normalizeCollabCursorStyle(myInfo.cursorStyle),
+        deviceId: getOrCreateDeviceId(),
+        files: projectFiles,
+        activeFileName: activeFile ? activeFile.name : null,
+        permissions: collabPermissions,
+        baseUrl: window.location.origin,
+        ...(recoveryToken ? { recoveryToken } : {}),
+      }, (response) => {
+        const invalidRecovery = !response?.ok && recoveryToken && /recovery information/i.test(String(response?.error || ""));
+        if (invalidRecovery) {
+          clearCollabRecoveryToken(activeSessionId);
+          sendRecovery("");
+          return;
+        }
+        finish(response);
+      });
+    };
+    sendRecovery(getStoredCollabRecoveryToken(activeSessionId));
   });
 }
 
@@ -23184,6 +23271,7 @@ function resumeCollabSession(successMessage) {
         if (normalizedResumeError.includes("session was ended")) {
           clearCollabResumeRetry();
           collabResumeFailureCount = 0;
+          clearCollabRecoveryToken(activeSessionId);
           activeSessionId = null;
           collabPendingLocalSync = false;
           resetTransientCollabUiState();
@@ -23335,6 +23423,12 @@ function ensureCollabSocket() {
   });
   collabSocket.io.on("reconnect_attempt", () => {
     if (activeSessionId) maybeShowCollabOfflineNotice();
+  });
+
+  collabSocket.on("collab:recovery", (payload) => {
+    const sessionId = String(payload?.sessionId || "").trim().toUpperCase();
+    if (!sessionId || sessionId !== String(activeSessionId || "").trim().toUpperCase() || !isHost()) return;
+    storeCollabRecoveryToken(sessionId, payload?.recoveryToken);
   });
 
   collabSocket.on("collab:state", (payload) => {
@@ -23514,6 +23608,7 @@ function ensureCollabSocket() {
 
   collabSocket.on("collab:banned", () => {
     resetTransientCollabUiState();
+    clearCollabRecoveryToken(activeSessionId);
     activeSessionId = null;
     collabPendingLocalSync = false;
     removeWaitingRoomPopup();
@@ -23793,7 +23888,9 @@ function ensureCollabSocket() {
 
   collabSocket.on("collab:link-regenerated", (payload) => {
     if (!payload) return;
+    const previousSessionId = activeSessionId;
     activeSessionId = payload.sessionId || activeSessionId;
+    if (previousSessionId && previousSessionId !== activeSessionId) clearCollabRecoveryToken(previousSessionId);
     collabShareLink = payload.shareLink || collabShareLink;
     window.history.replaceState({}, "", `/frontend.html/${activeSessionId}`);
     addTimelineEntry("Invite link was regenerated.", "session");
@@ -23843,6 +23940,7 @@ function ensureCollabSocket() {
 
   collabSocket.on("collab:session-ended", (payload) => {
     resetTransientCollabUiState();
+    clearCollabRecoveryToken(activeSessionId);
     activeSessionId = null;
     collabPendingLocalSync = false;
     removeWaitingRoomPopup();
@@ -25012,6 +25110,7 @@ function createNumericSession() {
       const pin = res.sessionPin || sid;
       const link = res.shareLink || `${window.location.origin}/frontend.html/${sid}`;
       activeSessionId = sid;
+      if (res.recoveryToken) storeCollabRecoveryToken(sid, res.recoveryToken);
       collabShareLink = link;
       collabSessionPin = pin;
       myInfo = { name: sessionData.host, theme: sessionData.theme, cursorStyle: normalizeCollabCursorStyle(sessionData.cursorStyle) };

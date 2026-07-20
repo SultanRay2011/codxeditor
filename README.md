@@ -102,6 +102,12 @@ The **More → Connect to GitHub** button uses GitHub's browser-based OAuth logi
 
 The default `repo read:user` scope allows updates to public and private repositories the account can access. Disconnect and reconnect after changing scopes. For production, set `GITHUB_OAUTH_CALLBACK_URL` to the public HTTPS callback URL registered with GitHub. Keep `.env` and the client secret private and keep the same client secret across deployments; rotating it intentionally expires existing CodX Editor GitHub sessions.
 
+### Restart-safe development
+
+`npm run dev` serves HTML, CSS, and browser JavaScript changes without restarting the Node.js backend, so active editor features and collaboration rooms stay connected while frontend work is refreshed in the browser. Changes to `server.js` or `.env` still restart the backend automatically.
+
+When a backend restart is required, active collaboration hosts reconnect and restore the room link, PIN, permissions, participant controls, chat history, file access, and pair-programming state. Admin authentication also remains valid across normal restarts. In production, keep `SESSION_RECOVERY_SECRET` stable across deployments; changing it intentionally expires protected collaboration recovery data and admin sessions.
+
 ## Project Structure
 
 - `frontend.html` - main editor page

@@ -2010,6 +2010,14 @@ textarea::-webkit-scrollbar-thumb:hover {
   transform: none;
 }
 
+button[aria-busy="true"] {
+  cursor: progress;
+}
+
+button[aria-busy="true"] .fa-spinner {
+  flex: 0 0 auto;
+}
+
 .codx-notification {
   position: fixed;
   right: 20px;

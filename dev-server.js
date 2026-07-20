@@ -3,8 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const rootDirectory = __dirname;
-const watchedExtensions = new Set([".js", ".mjs", ".cjs", ".json", ".html", ".css"]);
-const watchedNames = new Set([".env"]);
+const restartRequiredNames = new Set(["server.js", ".env"]);
 const ignoredNames = new Set([
   ".codx-github-sessions.enc",
   ".codx-github-sessions.enc.tmp",
@@ -17,6 +16,7 @@ let restartTimer = null;
 let forceStopTimer = null;
 let restartRequested = false;
 let isStopping = false;
+let watcher = null;
 
 function startServer() {
   restartRequested = false;
@@ -67,25 +67,32 @@ function shouldRestart(fileName) {
   const normalizedName = String(fileName || "").replace(/\\/g, "/");
   if (!normalizedName || normalizedName.includes("/")) return false;
   if (ignoredNames.has(normalizedName) || normalizedName.endsWith(".log")) return false;
-  return watchedNames.has(normalizedName) || watchedExtensions.has(path.extname(normalizedName).toLowerCase());
+  return restartRequiredNames.has(normalizedName);
 }
 
-const watcher = fs.watch(rootDirectory, { persistent: true }, (_eventType, fileName) => {
-  if (shouldRestart(fileName)) restartServer(String(fileName));
-});
+function startDevelopmentServer() {
+  watcher = fs.watch(rootDirectory, { persistent: true }, (_eventType, fileName) => {
+    if (shouldRestart(fileName)) restartServer(String(fileName));
+  });
+  console.log("[dev] Static editor changes are served without restarting active features.");
+  console.log("[dev] Watching server.js and .env for backend restarts.");
+  startServer();
+}
 
 function stopDevelopmentServer(signal) {
   if (isStopping) return;
   isStopping = true;
   clearTimeout(restartTimer);
-  watcher.close();
+  watcher?.close();
   if (serverProcess) serverProcess.kill("SIGTERM");
   setTimeout(() => process.exit(0), 100).unref();
   console.log(`[dev] Received ${signal}. Development server stopped.`);
 }
 
-process.once("SIGINT", () => stopDevelopmentServer("SIGINT"));
-process.once("SIGTERM", () => stopDevelopmentServer("SIGTERM"));
+if (require.main === module) {
+  process.once("SIGINT", () => stopDevelopmentServer("SIGINT"));
+  process.once("SIGTERM", () => stopDevelopmentServer("SIGTERM"));
+  startDevelopmentServer();
+}
 
-console.log("[dev] Watching HTML, CSS, JavaScript, JSON, and .env files.");
-startServer();
+module.exports = { shouldRestart };

@@ -287,7 +287,13 @@ function restoreConsoleVisibility() {
 async function toggle() {
   if (toggleInProgress) return;
   toggleInProgress = true;
-  if (toggleButton) toggleButton.disabled = true;
+  if (toggleButton) {
+    toggleButton.disabled = true;
+    toggleButton.setAttribute("aria-busy", "true");
+  }
+  if (toggleLabel) toggleLabel.textContent = "Loading...";
+  const loadingIcon = toggleButton?.querySelector("i");
+  if (loadingIcon) loadingIcon.className = "fa-solid fa-spinner fa-spin";
   try {
     if (enabled) {
       if (commandStarting) {
@@ -315,7 +321,11 @@ async function toggle() {
     }
   } finally {
     toggleInProgress = false;
-    if (toggleButton) toggleButton.disabled = false;
+    setEnabled(enabled);
+    if (toggleButton) {
+      toggleButton.disabled = false;
+      toggleButton.removeAttribute("aria-busy");
+    }
   }
 }
 

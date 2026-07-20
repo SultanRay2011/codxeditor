@@ -26,11 +26,16 @@ const socketMeta = new Map();
 const editorPresenceSockets = new Set();
 const adminActivity = [];
 const adminSessions = new Map();
+const sessionRecoveryEmitTimers = new Map();
 const publishedProjects = new Map();
 const PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
 const ADMIN_COOKIE = "codx_admin_session";
+const ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
+const COLLAB_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const COLLAB_RECOVERY_MAX_TOKEN_LENGTH = 900000;
+const COLLAB_RECOVERY_GRACE_MS = 5 * 60 * 1000;
 const GITHUB_OAUTH_COOKIE = "codx_github_session";
 const GITHUB_OAUTH_STATE_COOKIE = "codx_github_oauth_state";
 const GITHUB_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "").trim();
@@ -86,6 +91,7 @@ const FONT_AWESOME_CDN_HREF = `https://cdnjs.cloudflare.com/ajax/libs/font-aweso
 let fontAwesomeCatalogCache = null;
 const FONTSOURCE_API_URL = "https://api.fontsource.org/v1/fonts";
 let fontsourceCatalogCache = null;
+let serverShuttingDown = false;
 const DEFAULT_PERMISSIONS = {
   disableGroupChat: false,
   disableAllChat: false,
@@ -1073,22 +1079,20 @@ app.post("/admin/api/auth", (req, res) => {
     res.status(401).json({ ok: false, error: "Invalid admin username or password." });
     return;
   }
-  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-  adminSessions.set(token, Date.now());
-  res.setHeader(
-    "Set-Cookie",
-    `${ADMIN_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`,
-  );
+  const token = createAdminSessionToken();
+  res.setHeader("Set-Cookie", buildOAuthCookie(
+    ADMIN_COOKIE,
+    token,
+    req,
+    ADMIN_SESSION_MAX_AGE_SECONDS,
+  ));
   res.json({ ok: true });
 });
 
 app.post("/admin/api/logout", (req, res) => {
   const token = parseCookies(req)[ADMIN_COOKIE];
   if (token) adminSessions.delete(token);
-  res.setHeader(
-    "Set-Cookie",
-    `${ADMIN_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
-  );
+  res.setHeader("Set-Cookie", buildOAuthCookie(ADMIN_COOKIE, "", req, 0));
   res.json({ ok: true });
 });
 
@@ -1098,7 +1102,7 @@ app.use("/admin/api", (req, res, next) => {
     return;
   }
   const token = parseCookies(req)[ADMIN_COOKIE];
-  if (!token || !adminSessions.has(token)) {
+  if (!isValidAdminSessionToken(token)) {
     res.status(401).json({ ok: false, error: "Admin authentication required." });
     return;
   }
@@ -1516,6 +1520,90 @@ function safeStringEqual(left, right) {
     leftBuffer.length > 0 &&
     crypto.timingSafeEqual(leftBuffer, rightBuffer)
   );
+}
+
+function getRuntimeSessionEncryptionKey(purpose) {
+  const configuredSecret = String(
+    process.env.SESSION_RECOVERY_SECRET ||
+    process.env.APP_SESSION_SECRET ||
+    GITHUB_CLIENT_SECRET ||
+    `${ADMIN_USERNAME}:${ADMIN_PASSWORD}`,
+  );
+  if (!configuredSecret) return null;
+  return crypto
+    .createHash("sha256")
+    .update(`codx-runtime:${String(purpose || "session")}:${configuredSecret}`)
+    .digest();
+}
+
+function sealRuntimeSessionPayload(payload, purpose, maxAgeMs) {
+  const key = getRuntimeSessionEncryptionKey(purpose);
+  if (!key || !payload) return "";
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const plainText = JSON.stringify({
+      version: 1,
+      expiresAt: Date.now() + Math.max(1000, Number(maxAgeMs) || 0),
+      payload,
+    });
+    const encrypted = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
+    return [
+      "v1",
+      iv.toString("base64url"),
+      cipher.getAuthTag().toString("base64url"),
+      encrypted.toString("base64url"),
+    ].join(".");
+  } catch (error) {
+    console.warn(`Unable to protect ${purpose} state:`, error.message);
+    return "";
+  }
+}
+
+function openRuntimeSessionPayload(value, purpose, maxLength = 4000) {
+  const encoded = String(value || "");
+  if (!encoded.startsWith("v1.") || encoded.length > maxLength) return null;
+  const key = getRuntimeSessionEncryptionKey(purpose);
+  const parts = encoded.split(".");
+  if (!key || parts.length !== 4) return null;
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(parts[1], "base64url"));
+    decipher.setAuthTag(Buffer.from(parts[2], "base64url"));
+    const plainText = Buffer.concat([
+      decipher.update(Buffer.from(parts[3], "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    const envelope = JSON.parse(plainText);
+    if (envelope?.version !== 1 || Date.now() >= Number(envelope?.expiresAt || 0)) return null;
+    return envelope.payload || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function createAdminSessionToken() {
+  const token = sealRuntimeSessionPayload(
+    { kind: "admin", issuedAt: Date.now(), nonce: crypto.randomBytes(12).toString("hex") },
+    "admin-session",
+    ADMIN_SESSION_MAX_AGE_SECONDS * 1000,
+  );
+  if (token) return token;
+  const legacyToken = `${Date.now()}-${crypto.randomBytes(12).toString("hex")}`;
+  adminSessions.set(legacyToken, Date.now());
+  return legacyToken;
+}
+
+function isValidAdminSessionToken(token) {
+  if (!token) return false;
+  const payload = openRuntimeSessionPayload(token, "admin-session", 4000);
+  if (payload?.kind === "admin") return true;
+  const legacyCreatedAt = Number(adminSessions.get(token) || 0);
+  if (!legacyCreatedAt) return false;
+  if (Date.now() - legacyCreatedAt > ADMIN_SESSION_MAX_AGE_SECONDS * 1000) {
+    adminSessions.delete(token);
+    return false;
+  }
+  return true;
 }
 
 function getGitHubSessionEncryptionKey() {
@@ -2098,6 +2186,7 @@ function sanitizeParticipant(p) {
     joinedAt: p.joinedAt || Date.now(),
     allowedFiles: Array.isArray(p.allowedFiles) ? [...p.allowedFiles] : null,
     disabledFeatures: Array.isArray(p.disabledFeatures) ? [...p.disabledFeatures] : [],
+    reconnecting: Boolean(p.reconnecting || !p.socketId),
   };
 }
 
@@ -2213,6 +2302,218 @@ function sanitizePairForMembers(session, pair) {
   };
 }
 
+function sanitizeRecoveryParticipant(participant, files) {
+  const safe = sanitizeParticipant(participant || {});
+  const role = ["host", "co-host", "participant"].includes(String(safe.role))
+    ? String(safe.role)
+    : "participant";
+  return {
+    ...safe,
+    name: String(safe.name || "").trim().slice(0, 20),
+    theme: String(safe.theme || "#2196F3").slice(0, 32),
+    role,
+    currentFile: (files || []).some((file) => String(file?.name || "") === String(safe.currentFile || ""))
+      ? String(safe.currentFile)
+      : null,
+    allowedFiles: normalizeAllowedFiles(files, safe.allowedFiles),
+    disabledFeatures: normalizeDisabledFeatures(safe.disabledFeatures),
+    deviceId: String(participant?.deviceId || "").trim().slice(0, 160),
+  };
+}
+
+function sanitizeRecoveryPair(pair) {
+  return {
+    id: String(pair?.id || "").slice(0, 80),
+    members: Array.isArray(pair?.members)
+      ? pair.members.map((name) => String(name || "").trim().slice(0, 20)).filter(Boolean).slice(0, 2)
+      : [],
+    driver: String(pair?.driver || "").trim().slice(0, 20),
+    navigator: String(pair?.navigator || "").trim().slice(0, 20),
+    mode: pair?.mode === "live" ? "live" : "driver",
+    status: "active",
+    connectionPaused: true,
+    helpRequested: Boolean(pair?.helpRequested),
+    createdAt: Number(pair?.createdAt || Date.now()),
+    chat: Array.isArray(pair?.chat) ? cloneFiles(pair.chat.slice(-200)) : [],
+    suggestions: Array.isArray(pair?.suggestions) ? cloneFiles(pair.suggestions.slice(-100)) : [],
+    tasks: Array.isArray(pair?.tasks) ? cloneFiles(pair.tasks.slice(-100)) : [],
+    activity: Array.isArray(pair?.activity) ? cloneFiles(pair.activity.slice(-120)) : [],
+    pendingSwitch: pair?.pendingSwitch
+      ? {
+          from: String(pair.pendingSwitch.from || "").slice(0, 20),
+          to: String(pair.pendingSwitch.to || "").slice(0, 20),
+          ts: Number(pair.pendingSwitch.ts || Date.now()),
+        }
+      : null,
+  };
+}
+
+function createCollabRecoverySnapshot(sessionId, session) {
+  const files = Array.isArray(session?.files) ? session.files : [];
+  const participants = (session?.participants || [])
+    .map((participant) => sanitizeRecoveryParticipant(participant, files))
+    .filter((participant) => participant.name)
+    .slice(0, 100);
+  const privateThreads = Object.entries(session?.chat?.private || {})
+    .slice(-40)
+    .map(([threadKey, messages]) => [
+      String(threadKey || "").slice(0, 80),
+      Array.isArray(messages) ? cloneFiles(messages.slice(-150)) : [],
+    ]);
+  return {
+    kind: "collab-recovery",
+    sessionId,
+    hostName: String(session?.hostName || "").trim().slice(0, 20),
+    hostDeviceId: String(session?.hostDeviceId || "").trim().slice(0, 160),
+    pin: normalizeSessionId(session?.pin),
+    baseUrl: String(session?.baseUrl || "").slice(0, 500),
+    permissions: normalizePermissions(session?.permissions, files),
+    participants,
+    chat: {
+      group: Array.isArray(session?.chat?.group) ? cloneFiles(session.chat.group.slice(-300)) : [],
+      private: Object.fromEntries(privateThreads),
+    },
+    bans: Array.isArray(session?.bans) ? session.bans.map(sanitizeBanEntry).slice(-200) : [],
+    fileAccessByName: cloneFiles(session?.fileAccessByName || {}),
+    pairing: {
+      pairs: ensurePairingState(session).pairs.map(sanitizeRecoveryPair).filter((pair) => pair.id && pair.members.length === 2),
+    },
+    issuedAt: Date.now(),
+  };
+}
+
+function createCollabRecoveryToken(sessionId, session) {
+  if (!session) return "";
+  const snapshot = createCollabRecoverySnapshot(sessionId, session);
+  let token = sealRuntimeSessionPayload(snapshot, "collab-recovery", COLLAB_RECOVERY_MAX_AGE_MS);
+  if (token.length <= COLLAB_RECOVERY_MAX_TOKEN_LENGTH) return token;
+
+  snapshot.chat.group = snapshot.chat.group.slice(-75);
+  snapshot.chat.private = Object.fromEntries(
+    Object.entries(snapshot.chat.private).slice(-20).map(([key, messages]) => [key, messages.slice(-50)]),
+  );
+  snapshot.pairing.pairs = snapshot.pairing.pairs.map((pair) => ({
+    ...pair,
+    chat: pair.chat.slice(-50),
+    suggestions: pair.suggestions.slice(-30),
+    tasks: pair.tasks.slice(-30),
+    activity: pair.activity.slice(-40),
+  }));
+  token = sealRuntimeSessionPayload(snapshot, "collab-recovery", COLLAB_RECOVERY_MAX_AGE_MS);
+  if (token.length <= COLLAB_RECOVERY_MAX_TOKEN_LENGTH) return token;
+  console.warn(`Collaboration recovery state for ${sessionId} is too large to send safely.`);
+  return "";
+}
+
+function scheduleCollabRecoveryState(sessionId) {
+  if (!sessionId || sessionRecoveryEmitTimers.has(sessionId) || serverShuttingDown) return;
+  const timer = setTimeout(() => {
+    sessionRecoveryEmitTimers.delete(sessionId);
+    const session = sessions.get(sessionId);
+    if (!session?.hostSocketId) return;
+    const recoveryToken = createCollabRecoveryToken(sessionId, session);
+    if (recoveryToken) {
+      io.to(session.hostSocketId).emit("collab:recovery", { sessionId, recoveryToken });
+    }
+  }, 0);
+  timer.unref?.();
+  sessionRecoveryEmitTimers.set(sessionId, timer);
+}
+
+function restoreCollabSessionFromToken(payload, sessionId, socket) {
+  const snapshot = openRuntimeSessionPayload(
+    payload?.recoveryToken,
+    "collab-recovery",
+    COLLAB_RECOVERY_MAX_TOKEN_LENGTH,
+  );
+  if (snapshot?.kind !== "collab-recovery" || normalizeSessionId(snapshot.sessionId) !== sessionId) return null;
+
+  const name = String(payload?.name || "").trim();
+  const deviceId = String(payload?.deviceId || "").trim();
+  if (!name || normalizeName(snapshot.hostName) !== normalizeName(name)) return null;
+  if (snapshot.hostDeviceId && !safeStringEqual(snapshot.hostDeviceId, deviceId)) return null;
+
+  const files = cloneFiles(payload?.files);
+  const activeFileName = files.some((file) => String(file?.name || "") === String(payload?.activeFileName || ""))
+    ? String(payload.activeFileName)
+    : String(files[0]?.name || "") || null;
+  const participantNames = new Set();
+  const participants = (Array.isArray(snapshot.participants) ? snapshot.participants : [])
+    .map((participant) => sanitizeRecoveryParticipant(participant, files))
+    .filter((participant) => {
+      const key = normalizeName(participant.name);
+      if (!key || participantNames.has(key)) return false;
+      participantNames.add(key);
+      return true;
+    })
+    .map((participant) => ({ ...participant, socketId: "", reconnecting: true }));
+
+  let host = participants.find((participant) => normalizeName(participant.name) === normalizeName(name));
+  if (!host) {
+    host = sanitizeRecoveryParticipant({ name, deviceId, role: "host" }, files);
+    participants.unshift({ ...host, socketId: "", reconnecting: true });
+    host = participants[0];
+    participantNames.add(normalizeName(name));
+  }
+  participants.forEach((participant) => {
+    if (participant.role === "host") participant.role = "participant";
+  });
+  Object.assign(host, {
+    socketId: socket.id,
+    name,
+    theme: String(payload?.theme || host.theme || "#4CAF50"),
+    cursorStyle: normalizeCollabCursorStyle(payload?.cursorStyle || host.cursorStyle),
+    role: "host",
+    deviceId,
+    currentFile: activeFileName,
+    reconnecting: false,
+  });
+
+  const fileAccessByName = {};
+  Object.entries(snapshot.fileAccessByName || {}).forEach(([participantName, allowedFiles]) => {
+    const normalized = normalizeAllowedFiles(files, allowedFiles);
+    if (Array.isArray(normalized)) fileAccessByName[normalizeName(participantName)] = normalized;
+  });
+  const devicesByName = new Map(participants.map((participant) => [normalizeName(participant.name), participant.deviceId]));
+  const pairs = (Array.isArray(snapshot?.pairing?.pairs) ? snapshot.pairing.pairs : [])
+    .map(sanitizeRecoveryPair)
+    .filter((pair) => pair.members.length === 2 && pair.members.every((memberName) => participantNames.has(normalizeName(memberName))))
+    .map((pair) => ({
+      ...pair,
+      connectionPaused: true,
+      _disconnectTimers: {},
+      _reconnectDevices: Object.fromEntries(pair.members.map((memberName) => [
+        normalizeName(memberName),
+        String(devicesByName.get(normalizeName(memberName)) || ""),
+      ])),
+    }));
+  const recoveredPin = normalizeSessionId(snapshot.pin);
+  const pin = PIN_SESSION_ID_RE.test(recoveredPin) && !findSessionIdByPin(recoveredPin)
+    ? recoveredPin
+    : generateSessionPin();
+
+  return {
+    files,
+    activeFileName,
+    participants,
+    hostSocketId: socket.id,
+    hostName: name,
+    hostDeviceId: deviceId,
+    pin,
+    baseUrl: String(payload?.baseUrl || snapshot.baseUrl || ""),
+    permissions: normalizePermissions(snapshot.permissions, files),
+    chat: {
+      group: Array.isArray(snapshot?.chat?.group) ? cloneFiles(snapshot.chat.group.slice(-300)) : [],
+      private: cloneFiles(snapshot?.chat?.private || {}),
+    },
+    pendingJoins: [],
+    bans: Array.isArray(snapshot.bans) ? snapshot.bans.map(sanitizeBanEntry).slice(-200) : [],
+    fileAccessByName,
+    pairing: { invites: [], pairs, inviteCooldowns: {} },
+    recoveryStartedAt: Date.now(),
+  };
+}
+
 function emitPairingState(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return;
@@ -2228,6 +2529,7 @@ function emitPairingState(sessionId) {
       pair ? sanitizePairForMembers(session, pair) : null,
     );
   });
+  scheduleCollabRecoveryState(sessionId);
 }
 
 function clearPairTimers(pair) {
@@ -2544,6 +2846,7 @@ function emitParticipants(sessionId) {
     session.participants.map(sanitizeParticipant),
   );
   emitAdminUpdate("participants");
+  scheduleCollabRecoveryState(sessionId);
 }
 
 function emitSessionMeta(sessionId) {
@@ -2564,6 +2867,7 @@ function emitSessionMeta(sessionId) {
     shareLink: buildShareLink(session.baseUrl || "", sessionId),
   });
   emitAdminUpdate("meta");
+  scheduleCollabRecoveryState(sessionId);
 }
 
 function endSession(sessionId, reason = "Session ended.") {
@@ -2671,7 +2975,6 @@ io.on("connection", (socket) => {
       const activeFileName = payload?.activeFileName || null;
       const baseUrl = String(payload?.baseUrl || "");
       const deviceId = String(payload?.deviceId || "").trim();
-      const pin = generateSessionPin();
 
       if (!isValidSessionId(sessionId)) {
         ack?.({ ok: false, error: "Invalid session id." });
@@ -2690,30 +2993,36 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const participants = [{
-        socketId: socket.id,
-        name,
-        theme,
-        cursorStyle,
-        role: "host",
-        mutedChat: false,
-        frozenEditing: false,
-        renameDisabled: false,
-        priority: false,
-        currentFile: activeFileName || null,
-        joinedAt: Date.now(),
-        allowedFiles: null,
-        disabledFeatures: [],
-        deviceId,
-      }];
-      sessions.set(sessionId, {
+      const recoveredSession = requestedId
+        ? restoreCollabSessionFromToken(payload, sessionId, socket)
+        : null;
+      if (payload?.recoveryToken && !recoveredSession) {
+        ack?.({ ok: false, error: "The collaboration recovery information is invalid or expired." });
+        return;
+      }
+      const freshSession = recoveredSession || {
         files,
         activeFileName,
-        participants,
+        participants: [{
+          socketId: socket.id,
+          name,
+          theme,
+          cursorStyle,
+          role: "host",
+          mutedChat: false,
+          frozenEditing: false,
+          renameDisabled: false,
+          priority: false,
+          currentFile: activeFileName || null,
+          joinedAt: Date.now(),
+          allowedFiles: null,
+          disabledFeatures: [],
+          deviceId,
+        }],
         hostSocketId: socket.id,
         hostName: name,
         hostDeviceId: deviceId,
-        pin,
+        pin: generateSessionPin(),
         baseUrl,
         permissions: normalizePermissions(payload?.permissions, files),
         chat: { group: [], private: {} },
@@ -2721,20 +3030,30 @@ io.on("connection", (socket) => {
         bans: [],
         fileAccessByName: {},
         pairing: { invites: [], pairs: [], inviteCooldowns: {} },
-      });
+      };
+      sessions.set(sessionId, freshSession);
 
       socket.join(sessionId);
       socketMeta.set(socket.id, { sessionId, name, theme, cursorStyle, deviceId });
+      const recoveryToken = createCollabRecoveryToken(sessionId, freshSession);
       ack?.({
         ok: true,
         sessionId,
-        sessionPin: pin,
-        shareLink: buildShareLink(baseUrl, sessionId),
+        sessionPin: freshSession.pin,
+        shareLink: buildShareLink(freshSession.baseUrl, sessionId),
         hostName: name,
-        permissions: sessions.get(sessionId).permissions,
-        participants: participants.map(sanitizeParticipant),
+        permissions: freshSession.permissions,
+        participants: freshSession.participants.map(sanitizeParticipant),
+        recoveryToken,
+        restored: Boolean(recoveredSession),
       });
-      logAdminEvent("Session created", `${name} created session ${sessionId}.`, sessionId);
+      logAdminEvent(
+        recoveredSession ? "Session recovered" : "Session created",
+        recoveredSession
+          ? `${name} recovered session ${sessionId} after a server restart.`
+          : `${name} created session ${sessionId}.`,
+        sessionId,
+      );
       emitParticipants(sessionId);
       emitSessionMeta(sessionId);
       emitPairingState(sessionId);
@@ -2954,6 +3273,7 @@ io.on("connection", (socket) => {
         participant.theme = theme || participant.theme;
         participant.cursorStyle = cursorStyle || participant.cursorStyle;
         participant.deviceId = deviceId || participant.deviceId || "";
+        participant.reconnecting = false;
       } else {
         participant = {
           socketId: socket.id,
@@ -2970,6 +3290,7 @@ io.on("connection", (socket) => {
           allowedFiles: getStoredParticipantFileAccess(session, name),
           disabledFeatures: [],
           deviceId,
+          reconnecting: false,
         };
         session.participants.push(participant);
       }
@@ -3083,6 +3404,7 @@ io.on("connection", (socket) => {
         session.chat.group.push(message);
         if (session.chat.group.length > 300) session.chat.group.shift();
         io.to(sessionId).emit("collab:chat:group", message);
+        scheduleCollabRecoveryState(sessionId);
         ack?.({ ok: true });
         return;
       }
@@ -3123,6 +3445,7 @@ io.on("connection", (socket) => {
 
       io.to(target.socketId).emit("collab:chat:private", message);
       io.to(socket.id).emit("collab:chat:private", message);
+      scheduleCollabRecoveryState(sessionId);
       ack?.({ ok: true });
     } catch {
       ack?.({ ok: false, error: "Failed to send message." });
@@ -3335,6 +3658,7 @@ io.on("connection", (socket) => {
       const participant = access.session.participants.find((entry) => normalizeName(entry.name) === normalizeName(name));
       if (participant) io.to(participant.socketId).emit("collab:pair:chat", message);
     });
+    scheduleCollabRecoveryState(sessionId);
     ack?.({ ok: true });
   });
 
@@ -3936,6 +4260,7 @@ io.on("connection", (socket) => {
       if (!session.chat) session.chat = { group: [], private: {} };
       session.chat.group = [];
       io.to(sessionId).emit("collab:chat:cleared", { mode: "group" });
+      scheduleCollabRecoveryState(sessionId);
       logAdminEvent("Group chat cleared", `Group chat was cleared in session ${sessionId}.`, sessionId);
       ack?.({ ok: true });
     } catch {
@@ -4304,6 +4629,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    if (serverShuttingDown) {
+      editorPresenceSockets.delete(socket.id);
+      socketMeta.delete(socket.id);
+      return;
+    }
     const removedEditorPresence = editorPresenceSockets.delete(socket.id);
     const meta = socketMeta.get(socket.id);
     socketMeta.delete(socket.id);
@@ -4407,6 +4737,28 @@ server.on("error", (err) => {
 
 startServer(PORT);
 
+function stopServerGracefully(signal) {
+  if (serverShuttingDown) return;
+  serverShuttingDown = true;
+  sessionRecoveryEmitTimers.forEach((timer) => clearTimeout(timer));
+  sessionRecoveryEmitTimers.clear();
+  console.log(`Received ${signal}. Closing CodX Editor connections safely...`);
+
+  const exitCleanly = () => process.exit(0);
+  io.close(() => {
+    if (!server.listening) {
+      exitCleanly();
+      return;
+    }
+    server.close(exitCleanly);
+  });
+  const forceExitTimer = setTimeout(exitCleanly, 5000);
+  forceExitTimer.unref?.();
+}
+
+process.once("SIGTERM", () => stopServerGracefully("SIGTERM"));
+process.once("SIGINT", () => stopServerGracefully("SIGINT"));
+
 setInterval(() => {
   const now = Date.now();
   deviceTransfers.forEach((transfer, code) => {
@@ -4423,6 +4775,26 @@ setInterval(() => {
   Array.from(sessions.entries()).forEach(([sessionId, session]) => {
     if (Number(session?.permissions?.sessionEndsAt || 0) > 0 && Number(session.permissions.sessionEndsAt) <= now) {
       endSession(sessionId, "The collaboration session timer ended.");
+    }
+    if (Number(session?.recoveryStartedAt || 0) > 0 && now - Number(session.recoveryStartedAt) >= COLLAB_RECOVERY_GRACE_MS) {
+      const reconnectingNames = new Set(
+        (session.participants || [])
+          .filter((participant) => !participant.socketId)
+          .map((participant) => normalizeName(participant.name)),
+      );
+      if (reconnectingNames.size) {
+        session.participants = session.participants.filter((participant) => Boolean(participant.socketId));
+        const pairing = ensurePairingState(session);
+        pairing.pairs = pairing.pairs.filter((pair) => {
+          const shouldRemove = (pair.members || []).some((name) => reconnectingNames.has(normalizeName(name)));
+          if (shouldRemove) clearPairTimers(pair);
+          return !shouldRemove;
+        });
+      }
+      delete session.recoveryStartedAt;
+      emitParticipants(sessionId);
+      emitSessionMeta(sessionId);
+      emitPairingState(sessionId);
     }
   });
 }, 1000);
