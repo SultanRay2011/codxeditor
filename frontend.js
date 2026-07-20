@@ -229,8 +229,9 @@ function getModalDoneBtn() {
 }
 
 const activeButtonLoadingTasks = new WeakMap();
+const activeButtonLoadingRecords = new Set();
 
-function waitForButtonLoadingPaint() {
+function waitForButtonLoadingPaint(signal) {
   return new Promise((resolve) => {
     let settled = false;
     let fallbackTimer = 0;
@@ -238,8 +239,14 @@ function waitForButtonLoadingPaint() {
       if (settled) return;
       settled = true;
       if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      signal?.removeEventListener("abort", finish);
       resolve();
     };
+    if (signal?.aborted) {
+      finish();
+      return;
+    }
+    signal?.addEventListener("abort", finish, { once: true });
     if (document.hidden || typeof window.requestAnimationFrame !== "function") {
       window.setTimeout(finish, 0);
       return;
@@ -251,25 +258,32 @@ function waitForButtonLoadingPaint() {
 
 async function withButtonLoading(button, task, label = "LOADING...") {
   if (typeof task !== "function") return undefined;
-  if (!button) return task();
-  const activeTask = activeButtonLoadingTasks.get(button);
-  if (activeTask) return activeTask;
+  if (!button) return task(new AbortController().signal);
+  const activeRecord = activeButtonLoadingTasks.get(button);
+  if (activeRecord) return activeRecord.promise;
   const previousHtml = button.innerHTML;
   const wasDisabled = button.disabled;
   const previousBusy = button.getAttribute("aria-busy");
+  const controller = new AbortController();
   button.dataset.codxLoading = "true";
   button.disabled = true;
   button.setAttribute("aria-busy", "true");
   button.textContent = label;
   const loadingTask = (async () => {
-    await waitForButtonLoadingPaint();
-    return task();
+    await waitForButtonLoadingPaint(controller.signal);
+    if (controller.signal.aborted) return false;
+    return task(controller.signal);
   })();
-  activeButtonLoadingTasks.set(button, loadingTask);
+  const record = { button, controller, promise: loadingTask };
+  activeButtonLoadingTasks.set(button, record);
+  activeButtonLoadingRecords.add(record);
   try {
     return await loadingTask;
   } finally {
-    activeButtonLoadingTasks.delete(button);
+    if (activeButtonLoadingTasks.get(button) === record) {
+      activeButtonLoadingTasks.delete(button);
+    }
+    activeButtonLoadingRecords.delete(record);
     delete button.dataset.codxLoading;
     if (button.isConnected) {
       button.innerHTML = previousHtml;
@@ -279,6 +293,31 @@ async function withButtonLoading(button, task, label = "LOADING...") {
     }
   }
 }
+
+function cancelActiveButtonLoadingTasks() {
+  activeButtonLoadingRecords.forEach((record) => record.controller.abort());
+}
+
+function showNoInternetConnection() {
+  showNotification("No Internet Connection", "error");
+}
+
+function ensureInternetConnection() {
+  if (navigator.onLine !== false) return true;
+  cancelActiveButtonLoadingTasks();
+  showNoInternetConnection();
+  return false;
+}
+
+window.addEventListener("offline", () => {
+  cancelActiveButtonLoadingTasks();
+  showNoInternetConnection();
+});
+
+window.addEventListener("online", () => {
+  cancelActiveButtonLoadingTasks();
+  showNotification("Internet Connection Restored", "success");
+});
 
 function setHeaderMoreMenuOpen(isOpen) {
   if (!headerMoreBtn || !headerMorePanel) return;
@@ -8955,6 +8994,7 @@ async function publishCurrentProject() {
     showNotification("The host disabled publish/share for participants.", "error");
     return;
   }
+  if (!ensureInternetConnection()) return;
   const actionDialog = await showPublishActionPrompt();
   if (!actionDialog?.ok) return;
   const mode = actionDialog.action === "update" ? "update" : "create";
@@ -8989,11 +9029,12 @@ async function publishCurrentProject() {
     if (!confirmUpdate?.ok) return;
   }
   try {
-    const payload = await withButtonLoading(publishProjectBtn, async () => {
+    const payload = await withButtonLoading(publishProjectBtn, async (signal) => {
       const publishFiles = await buildPublishableProjectFiles();
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify({
           mode,
           publishId,
@@ -9016,6 +9057,7 @@ async function publishCurrentProject() {
     await showPublishedProjectDialog(payload.shareLink || "", payload.verificationKey || "", mode);
     showNotification(mode === "update" ? "Published link updated successfully." : "Link published successfully.", "success");
   } catch (error) {
+    if (error?.name === "AbortError") return;
     showNotification(error.message || (mode === "update" ? "Failed to update link." : "Failed to publish project."), "error");
   }
 }
@@ -25044,11 +25086,25 @@ function showCreatedSessionPin(pin) {
 }
 
 function createNumericSession() {
+  if (!ensureInternetConnection()) return Promise.resolve(false);
   if (!ensureCollabSocket()) return Promise.resolve(false);
   resetTransientCollabUiState();
   const actionButton = getModalDoneBtn();
 
-  return withButtonLoading(actionButton, () => new Promise((resolve) => {
+  return withButtonLoading(actionButton, (signal) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", handleAbort);
+      resolve(result);
+    };
+    const handleAbort = () => finish(false);
+    signal.addEventListener("abort", handleAbort, { once: true });
+    if (signal.aborted) {
+      finish(false);
+      return;
+    }
     collabSocket.emit(
       "collab:create",
       {
@@ -25062,9 +25118,13 @@ function createNumericSession() {
         baseUrl: window.location.origin,
       },
       (res) => {
+        if (signal.aborted) {
+          finish(false);
+          return;
+        }
         if (!res || !res.ok) {
           showNotification((res && res.error) || "Failed to create session", "error");
-          resolve(false);
+          finish(false);
           return;
         }
 
@@ -25088,28 +25148,46 @@ function createNumericSession() {
         enforceCollabPermissionsUI();
         startSyncing();
         showCreatedSessionPin(pin);
-        resolve(true);
+        finish(true);
       },
     );
   }));
 }
 
 function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
+  if (!ensureInternetConnection()) return Promise.resolve(false);
   if (!ensureCollabSocket()) return Promise.resolve(false);
   resetTransientCollabUiState();
   errorMsgEl.style.display = "none";
   const actionButton = getModalDoneBtn();
 
-  return withButtonLoading(actionButton, () => new Promise((resolve) => {
+  return withButtonLoading(actionButton, (signal) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", handleAbort);
+      resolve(result);
+    };
+    const handleAbort = () => finish(false);
+    signal.addEventListener("abort", handleAbort, { once: true });
+    if (signal.aborted) {
+      finish(false);
+      return;
+    }
     collabSocket.emit(
       "collab:join",
       { sessionId: sid, name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle), deviceId: getOrCreateDeviceId() },
       (res) => {
+        if (signal.aborted) {
+          finish(false);
+          return;
+        }
         if (!res || !res.ok) {
           if (res && res.pending) {
             myInfo = { name, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
             showJoinPendingState(res.sessionId || sid, name, res.hostName);
-            resolve(true);
+            finish(true);
             return;
           }
           const rawError = String((res && res.error) || "");
@@ -25117,7 +25195,7 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
             ? "Invalid code"
             : rawError || "Cannot join session.";
           errorMsgEl.style.display = "block";
-          resolve(false);
+          finish(false);
           return;
         }
 
@@ -25153,7 +25231,7 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
           lastAnnouncementText = String(collabPermissions.announcementBar).trim();
           showAnnouncementPopup(lastAnnouncementText);
         }
-        resolve(true);
+        finish(true);
       },
     );
   }));
