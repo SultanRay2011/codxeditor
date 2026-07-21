@@ -2096,3 +2096,132 @@ p {
     transition: none !important;
   }
 }
+
+/* ============================================================
+   Project key blocks + admin polish
+   ============================================================ */
+
+/* Verification / project key on published project cards. */
+.project-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -2px;
+  padding: 8px 8px 8px 11px;
+  border: 1px solid #c7e6d2;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f0fbf4, #e7f7ed);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.project-key.is-missing {
+  border-color: var(--border);
+  background: #f6f8f7;
+}
+.project-key-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+.project-key.is-missing .project-key-label {
+  color: var(--muted);
+}
+.project-key-label i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #34d17a, var(--accent));
+  box-shadow: 0 0 0 3px rgba(20, 148, 71, 0.14);
+}
+.project-key.is-missing .project-key-label i {
+  background: #b9c6bf;
+  box-shadow: none;
+}
+.project-key-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #0c6d38;
+  font-family: var(--font-code, monospace);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-key-value.muted {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.key-copy-btn {
+  flex: 0 0 auto;
+  background: var(--accent);
+  color: #ffffff;
+  letter-spacing: 0.08em;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.key-copy-btn:hover {
+  background: var(--accent-dark);
+  transform: translateY(-1px);
+}
+
+/* Compact key row inside the "freshly published" latest links. */
+.latest-link-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.latest-link-key span {
+  color: var(--accent-dark);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.latest-link-key code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #0c6d38;
+  font-family: var(--font-code, monospace);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.latest-link-key .key-copy-btn {
+  padding: 4px 7px;
+}
+
+/* ---- General card polish ---- */
+.session,
+.project-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.session:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 18px 40px rgba(16, 60, 36, 0.1);
+}
+.project-card:hover {
+  box-shadow: 0 20px 46px rgba(16, 60, 36, 0.12);
+}
+.copy-link-btn:hover,
+.copy-pin-btn:hover,
+.project-copy-btn:hover {
+  filter: brightness(0.97);
+}
+.btn:focus-visible,
+.project-copy-btn:focus-visible,
+.key-copy-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

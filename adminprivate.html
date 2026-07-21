@@ -387,7 +387,7 @@
       }
     </style>
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/adminprivate.css?v=20260718-admin-pages1" />
+    <link rel="stylesheet" href="/adminprivate.css?v=20260721-admin-key1" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
@@ -989,6 +989,13 @@
                   <span>${escapeHtml(project.shareLink)}</span>
                   <button class="project-copy-btn" data-link="${escapeHtml(project.shareLink)}" aria-label="Copy published project link">COPY</button>
                 </div>
+                <div class="project-key ${project.verificationKey ? "" : "is-missing"}">
+                  <div class="project-key-label"><i></i> PROJECT KEY</div>
+                  ${project.verificationKey
+                    ? `<code class="project-key-value">${escapeHtml(project.verificationKey)}</code>
+                       <button class="project-copy-btn key-copy-btn" data-copy="${escapeHtml(project.verificationKey)}" aria-label="Copy project verification key">COPY</button>`
+                    : `<span class="project-key-value muted">Created before keys — not available</span>`}
+                </div>
                 <div class="project-dates">
                   <time datetime="${escapeHtml(formatIsoDate(project.createdAt))}">
                     <span>Published</span>
@@ -1035,6 +1042,9 @@
                 </div>
                 <time datetime="${escapeHtml(formatIsoDate(project.createdAt))}">${escapeHtml(formatExactDate(project.createdAt))} <span>&middot; ${escapeHtml(formatRelativeTime(project.createdAt))}</span></time>
                 <a href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(project.shareLink)}</a>
+                ${project.verificationKey
+                  ? `<div class="latest-link-key"><span>KEY</span><code>${escapeHtml(project.verificationKey)}</code><button class="project-copy-btn key-copy-btn" data-copy="${escapeHtml(project.verificationKey)}" aria-label="Copy project key">COPY</button></div>`
+                  : ""}
               </div>
               <div class="latest-link-actions">
                 <button class="project-copy-btn" data-link="${escapeHtml(project.shareLink)}" aria-label="Copy ${escapeHtml(project.projectName || "project")} link">COPY</button>
@@ -1212,9 +1222,10 @@
             target.textContent = "COPIED";
             setTimeout(() => (target.textContent = "COPY PIN"), 1000);
           } else if (target.classList.contains("project-copy-btn")) {
-            await copyText(target.dataset.link);
+            await copyText(target.dataset.copy || target.dataset.link);
+            const original = target.textContent;
             target.textContent = "COPIED";
-            setTimeout(() => (target.textContent = "COPY"), 1000);
+            setTimeout(() => (target.textContent = original), 1000);
           } else if (target.classList.contains("lock-btn")) {
             await sessionAction(target.dataset.id, "lock-toggle");
           } else if (target.classList.contains("freeze-btn")) {

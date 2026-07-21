@@ -1132,6 +1132,7 @@ app.get("/admin/api/projects", (req, res) => {
         id,
         projectName: String(project?.projectName || "CodX Editor Project"),
         pageTitle: extractHtmlTitle(htmlFile?.content || ""),
+        verificationKey: String(project?.verificationKey || ""),
         shareLink: `${origin}/published/${encodeURIComponent(id)}`,
         editorLink: `/frontend.html?adminProject=${encodeURIComponent(id)}`,
         fileCount: files.length,
