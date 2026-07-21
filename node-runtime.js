@@ -16,6 +16,7 @@ const nodeServerPreview = document.getElementById("nodeServerPreview");
 const nodeServerFrame = document.getElementById("nodeServerFrame");
 const nodeServerAddress = document.getElementById("nodeServerAddress");
 const nodeServerReloadButton = document.getElementById("nodeServerReloadBtn");
+const nodeServerOpenButton = document.getElementById("nodeServerOpenBtn");
 const nodeViewToggleButton = document.getElementById("nodeViewToggleBtn");
 const nodeViewToggleLabel = document.getElementById("nodeViewToggleLabel");
 const nodeViewToggleIcon = document.getElementById("nodeViewToggleIcon");
@@ -123,6 +124,9 @@ function showServerPreview(port, runtimeUrl) {
   if (!nodeServerPreview || !nodeServerFrame || !runtimeUrl) return;
   activeServerUrl = runtimeUrl;
   if (nodeServerAddress) nodeServerAddress.textContent = `http://localhost:${port}`;
+  if (nodeServerOpenButton) {
+    nodeServerOpenButton.href = `/node-preview.html?port=${encodeURIComponent(port)}`;
+  }
   nodeServerFrame.src = runtimeUrl;
   nodeServerPreview.hidden = false;
   preview?.classList.add("node-server-live");
@@ -220,7 +224,9 @@ async function bootRuntime() {
       throw new Error("Node.js requires a hard refresh after the isolation headers are enabled (Ctrl+Shift+R). Use Chrome or Edge.");
     }
     writeTerminal("Booting browser-isolated Node.js...\n", "info");
-    instance = await WebContainer.boot({ coep: "credentialless" });
+    // `require-corp` matches the editor page's isolation and produces preview
+    // URLs that render both in-pane and when opened in a standalone browser tab.
+    instance = await WebContainer.boot({ coep: "require-corp" });
     instance.on("server-ready", (port, url) => {
       window.codxNodeRuntime.lastServer = { port, url, displayUrl: `http://localhost:${port}` };
       writeServerLink(port, url);

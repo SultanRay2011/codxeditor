@@ -19,7 +19,7 @@
         window.location.replace("/welcome.html");
       }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
     <link rel="icon" type="image/png" href="/cx.png" />
     <title>CodX Editor</title>
     <link
@@ -630,7 +630,7 @@
           <span id="previewBreakpointIndicator" class="preview-breakpoint-indicator" hidden></span>
           <div id="previewDeviceShell" class="preview-device-shell">
             <div id="previewDeviceFrame" class="preview-device-frame">
-              <iframe id="output" title="Preview output"></iframe>
+              <iframe id="output" title="Preview output" credentialless></iframe>
             </div>
           </div>
         </div>
@@ -702,6 +702,9 @@
                 <button type="button" id="nodeServerReloadBtn" class="node-server-btn" title="Reload the running server" aria-label="Reload the running server">
                   <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
                 </button>
+                <a id="nodeServerOpenBtn" class="node-server-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open the running server in a new tab" aria-label="Open the running server in a new tab">
+                  <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+                </a>
               </div>
             </div>
             <iframe id="nodeServerFrame" title="Node.js server preview" allow="cross-origin-isolated"></iframe>
@@ -1955,10 +1958,10 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js" crossorigin="anonymous"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260721-bugfix-update1"></script>
-    <script type="module" src="/node-runtime.js?v=20260721-node-toggle2"></script>
+    <script src="/frontend.js?v=20260721-corp-newtab1"></script>
+    <script type="module" src="/node-runtime.js?v=20260721-corp-newtab1"></script>
   </body>
 </html>

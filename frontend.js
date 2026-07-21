@@ -10812,6 +10812,8 @@ function applyGoogleFontImport(cssUrl) {
   linkEl = document.createElement("link");
   linkEl.id = "editorGoogleFontImport";
   linkEl.rel = "stylesheet";
+  // Required so the stylesheet loads under the editor's require-corp isolation.
+  linkEl.crossOrigin = "anonymous";
   linkEl.href = cssUrl;
   linkEl.onload = () => {
     updatePreviewBox();
@@ -26417,6 +26419,8 @@ function ensureFontPreviewImport(fontName) {
   const link = document.createElement("link");
   link.id = linkId;
   link.rel = "stylesheet";
+  // Required so the stylesheet loads under the editor's require-corp isolation.
+  link.crossOrigin = "anonymous";
   link.href = getGoogleFontImportUrl(safeName);
   document.head.appendChild(link);
 }

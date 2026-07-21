@@ -509,7 +509,26 @@ function findActiveDeviceTransfer(code) {
 app.use(express.json({ limit: "25mb" }));
 app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+  // The editor and the Node.js preview pages use `require-corp` so a running
+  // WebContainer server can be opened in a real browser tab (its preview URLs
+  // work as full documents). Everything else (published projects, marketing
+  // pages) stays on `credentialless` so their external images/fonts keep
+  // loading without needing CORP headers.
+  let requestPath = "";
+  try {
+    requestPath = decodeURIComponent(String(req.path || ""));
+  } catch {
+    requestPath = String(req.path || "");
+  }
+  const needsRequireCorp =
+    requestPath === "/frontend.html" ||
+    requestPath.startsWith("/frontend.html/") ||
+    requestPath === "/node-preview.html" ||
+    requestPath.startsWith("/vendor/webcontainer");
+  res.setHeader(
+    "Cross-Origin-Embedder-Policy",
+    needsRequireCorp ? "require-corp" : "credentialless",
+  );
   next();
 });
 const PRIVATE_STATIC_PATHS = new Set([
