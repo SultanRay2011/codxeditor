@@ -2843,6 +2843,10 @@ iframe {
 }
 
 .node-terminal-server-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   color: #7ee787;
   font-weight: 700;
   text-decoration: underline;

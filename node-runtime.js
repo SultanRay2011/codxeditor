@@ -65,14 +65,19 @@ function writeServerLink(port, runtimeUrl) {
     // The preview page will show a useful message if storage is unavailable.
   }
   writeTerminal("\nServer ready: ", "success");
-  const link = document.createElement("a");
+  // A WebContainer server lives inside this editor tab, so it can't be opened
+  // as a separate browser tab (that just shows a blank page). Clicking the
+  // address shows it live in the in-pane preview instead.
+  const link = document.createElement("button");
+  link.type = "button";
   link.className = "node-terminal-server-link";
-  link.href = `/node-preview.html?port=${encodeURIComponent(port)}`;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
   link.textContent = `http://localhost:${port}`;
-  link.title = "Open Node.js server in a new tab";
-  terminalOutput.append(link, document.createTextNode("\n"));
+  link.title = "Show the running server in the preview";
+  link.addEventListener("click", () => setServerView("preview"));
+  terminalOutput.append(
+    link,
+    document.createTextNode(" — showing in the preview above (use SHOW TERMINAL / SHOW PREVIEW to switch)\n"),
+  );
   terminalOutput.scrollTop = terminalOutput.scrollHeight;
 }
 
