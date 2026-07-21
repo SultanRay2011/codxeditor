@@ -9763,3 +9763,116 @@ textarea::-webkit-scrollbar-thumb:hover,
     0 14px 34px rgba(0, 0, 0, 0.35),
     0 0 0 1px color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
+
+/* ============================================================
+   Modal card polish — refined shadows, entrance motion, and a
+   restyled tutorial coaching card. (Fixed and Updated Bugs)
+   ============================================================ */
+@keyframes codxModalCardPop {
+  from { opacity: 0; transform: translateY(14px) scale(0.975); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes codxModalOverlayFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Overlays: soft backdrop blur + fade-in (tutorial overlay excluded so
+   highlighted editor elements stay crisp). */
+#settingsModal,
+#developerConsoleModal,
+#fontPickerModal,
+#fontAwesomeIconModal,
+#projectLibraryModal,
+#commandPaletteModal,
+#previewZoomModal,
+#githubRepoModal,
+#collabModal,
+#appDialog,
+#announcementPopup {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: codxModalOverlayFade 0.18s ease;
+}
+
+/* Cards: larger radius, layered depth, and a gentle pop-in. */
+#settingsModal > div,
+#fontPickerModal > div,
+#fontAwesomeIconModal > div,
+#projectLibraryModal > div,
+#githubRepoModal > div,
+#previewZoomModal > div,
+#appDialog > div,
+#announcementPopup > div {
+  border-radius: 16px !important;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.4),
+    0 0 0 1px color-mix(in srgb, var(--accent-color) 6%, transparent) !important;
+  animation: codxModalCardPop 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+/* Close buttons across modals: rounded hover target. */
+#closeSettingsBtn:hover,
+#closeTutorialBtn:hover {
+  color: var(--text-primary) !important;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent) !important;
+  border-radius: 8px;
+}
+#closeSettingsBtn,
+#closeTutorialBtn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+/* ---- Tutorial coaching card (highlighted request) ---- */
+#tutorialCard {
+  padding: 26px 26px 24px !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-color) 8%, var(--bg-secondary)) 0%,
+      var(--bg-secondary) 42%) !important;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.6),
+    0 3px 12px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--accent-color) 22%, transparent) !important;
+  animation: codxModalCardPop 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+/* Accent bar along the top of the tutorial card. */
+#tutorialCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 22px;
+  right: 22px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg,
+    var(--accent-color),
+    color-mix(in srgb, var(--accent-color) 40%, transparent));
+}
+#tutorialCard #tutorialIcon {
+  filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--accent-color) 45%, transparent));
+}
+#tutorialCard #tutorialTitle {
+  letter-spacing: 0.2px;
+}
+#tutorialCard .run-button {
+  border-radius: 10px;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+#tutorialCard .run-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+#tutorialProgress {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}

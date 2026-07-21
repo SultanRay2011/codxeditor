@@ -28,6 +28,8 @@ const themeColorText = document.getElementById("themeColorText");
 const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
 const editorTextSizeInput = document.getElementById("editorTextSize");
 const textSizeValue = document.getElementById("textSizeValue");
+const editorTabSizeInput = document.getElementById("editorTabSize");
+const tabSizeValue = document.getElementById("tabSizeValue");
 const tagSuggestionsCheckbox = document.getElementById("tagSuggestions");
 const zenShowFilesCheckbox = document.getElementById("zenShowFiles");
 const fullscreenPreviewPanelCheckbox = document.getElementById("fullscreenPreviewPanel");
@@ -562,9 +564,7 @@ function closeCommandPalette(restoreFocus = true) {
 
 commandPaletteBtn?.addEventListener("click", () => openCommandPalette());
 developerToolsBtn?.addEventListener("click", openDeveloperConsole);
-commandPaletteModal?.addEventListener("click", (event) => {
-  if (event.target === commandPaletteModal) closeCommandPalette();
-});
+// Clicking outside a modal card no longer closes it; use Escape or the close button.
 commandPaletteInput?.addEventListener("input", () => {
   commandPaletteActiveIndex = 0;
   renderCommandPalette();
@@ -1003,7 +1003,7 @@ async function commitProjectFilesToGitHub(repo) {
 }
 
 closeGitHubRepoModalBtn?.addEventListener("click", closeGitHubRepositoryModal);
-githubRepoModal?.addEventListener("click", (event) => { if (event.target === githubRepoModal) closeGitHubRepositoryModal(); });
+// Clicking outside the modal card no longer closes it; use Escape or the close button.
 githubRepoModal?.addEventListener("keydown", (event) => {
   event.stopPropagation();
   if (event.key === "Escape") {
@@ -1084,20 +1084,8 @@ window.codxUpsertNodeRuntimeFile = (name, content) => {
 if (announcementPopupOkBtn) {
   announcementPopupOkBtn.onclick = closeAnnouncementPopup;
 }
-if (announcementPopup) {
-  announcementPopup.addEventListener("click", (e) => {
-    if (e.target === announcementPopup) {
-      closeAnnouncementPopup();
-    }
-  });
-}
+// Clicking outside a modal card no longer closes it; use Escape or the close button.
 if (appDialog) {
-  appDialog.addEventListener("click", (e) => {
-    if (e.target === appDialog) {
-      if (appDialog.dataset.dialogKind === "publish-loading") return;
-      closeAppDialog({ ok: false, value: null });
-    }
-  });
   appDialog.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -1125,13 +1113,7 @@ if (appDialog) {
   });
 }
 let developerMediaSourceVisible = false;
-if (developerConsoleModal) {
-  developerConsoleModal.addEventListener("click", (e) => {
-    if (e.target === developerConsoleModal) {
-      closeDeveloperConsole();
-    }
-  });
-}
+// Clicking outside a modal card no longer closes it; use Escape or the close button.
 if (closeDeveloperConsoleBtn) {
   closeDeveloperConsoleBtn.onclick = closeDeveloperConsole;
 }
@@ -1145,6 +1127,20 @@ const settingsPreviewSampleCode = `function helloWorld() {
   console.log("Hello, World!");
 }`;
 const INDENT_UNIT = "    ";
+const MIN_EDITOR_TAB_SIZE = 1;
+const MAX_EDITOR_TAB_SIZE = 8;
+const DEFAULT_EDITOR_TAB_SIZE = 4;
+// The number of spaces the Tab key inserts. Kept in sync with the
+// "Tab size" setting; falls back to the default when unset.
+let editorTabSize = DEFAULT_EDITOR_TAB_SIZE;
+function normalizeEditorTabSize(value) {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed)) return DEFAULT_EDITOR_TAB_SIZE;
+  return Math.min(MAX_EDITOR_TAB_SIZE, Math.max(MIN_EDITOR_TAB_SIZE, parsed));
+}
+function getIndentUnit() {
+  return " ".repeat(editorTabSize > 0 ? editorTabSize : DEFAULT_EDITOR_TAB_SIZE);
+}
 let isZenMode = false;
 const editorTextarea = document.getElementById("activeEditor");
 const editorWrapperEl = editorTextarea
@@ -3855,9 +3851,7 @@ function showStarterTemplatePreview(template) {
       modal.querySelector(".starter-template-preview-stage").dataset.device = button.dataset.previewDevice;
     });
   });
-  modal.addEventListener("click", (event) => {
-    if (event.target === modal) closeStarterTemplatePreview();
-  });
+  // Clicking outside the modal card no longer closes it; use Escape or the close button.
   modal._escapeHandler = (event) => {
     if (event.key === "Escape") closeStarterTemplatePreview();
   };
@@ -6724,9 +6718,7 @@ closePreviewZoomBtn?.addEventListener("click", closePreviewZoomModal);
 previewZoomOutBtn?.addEventListener("click", () => setPreviewZoom(previewZoomPercent - 25));
 previewZoomInBtn?.addEventListener("click", () => setPreviewZoom(previewZoomPercent + 25));
 previewZoomResetBtn?.addEventListener("click", () => setPreviewZoom(100));
-previewZoomModal?.addEventListener("click", (event) => {
-  if (event.target === previewZoomModal) closePreviewZoomModal();
-});
+// Clicking outside the modal card no longer closes it; use Escape or the close button.
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && isPreviewInspecting) setPreviewInspecting(false);
   if (event.key === "Escape" && previewZoomModal && !previewZoomModal.hidden) {
@@ -7287,6 +7279,7 @@ const defaultSettings = {
   fontLetterSpacing: "0",
   fontLineHeight: "1.5",
   themeColor: "#238636",
+  tabSize: "4",
   tagSuggestions: true,
   zenShowFiles: true,
   fullscreenPreviewPanel: true,
@@ -9982,11 +9975,23 @@ function clearConsole() {
   showNotification("Console cleared", "info");
 }
 
+let pendingPreviewFrame = null;
 function debouncedUpdatePreview() {
   clearTimeout(autoRunTimeout);
   const activeContent = String(activeFile?.content || "");
-  if (isLargeEditorContent(activeContent)) return;
-  autoRunTimeout = setTimeout(updatePreview, AUTO_RUN_TYPING_IDLE_MS);
+  // Large files keep the slower idle-based refresh to avoid thrashing.
+  if (isLargeEditorContent(activeContent)) {
+    autoRunTimeout = setTimeout(updatePreview, AUTO_RUN_TYPING_IDLE_MS);
+    return;
+  }
+  // For normal files, refresh on the next animation frame so the preview
+  // tracks each keystroke in real time while still coalescing rapid bursts
+  // that land within the same frame.
+  if (pendingPreviewFrame !== null) return;
+  pendingPreviewFrame = requestAnimationFrame(() => {
+    pendingPreviewFrame = null;
+    updatePreview();
+  });
 }
 
 function scheduleSessionUpdate() {
@@ -10598,6 +10603,11 @@ function loadSettings() {
       themeColorText.value = settings.themeColor || defaultSettings.themeColor;
       editorTextSizeInput.value = settings.textSize || defaultSettings.textSize;
       textSizeValue.textContent = (settings.textSize || defaultSettings.textSize) + "px";
+      editorTabSize = normalizeEditorTabSize(settings.tabSize ?? defaultSettings.tabSize);
+      if (editorTabSizeInput) editorTabSizeInput.value = String(editorTabSize);
+      if (tabSizeValue) {
+        tabSizeValue.textContent = `${editorTabSize} ${editorTabSize === 1 ? "space" : "spaces"}`;
+      }
       if (tagSuggestionsCheckbox) {
         tagSuggestionsCheckbox.checked =
           settings.tagSuggestions !== undefined
@@ -10660,6 +10670,11 @@ function resetToDefaultSettings() {
   themeColorText.value = defaultSettings.themeColor;
   editorTextSizeInput.value = defaultSettings.textSize;
   textSizeValue.textContent = defaultSettings.textSize + "px";
+  editorTabSize = normalizeEditorTabSize(defaultSettings.tabSize);
+  if (editorTabSizeInput) editorTabSizeInput.value = String(editorTabSize);
+  if (tabSizeValue) {
+    tabSizeValue.textContent = `${editorTabSize} ${editorTabSize === 1 ? "space" : "spaces"}`;
+  }
   if (tagSuggestionsCheckbox) tagSuggestionsCheckbox.checked = defaultSettings.tagSuggestions;
   editorFontFamilySelect.value = defaultSettings.fontFamily;
   editorFontEmbedInput.value = defaultSettings.fontEmbed;
@@ -10862,6 +10877,7 @@ function applySettingsToEditors() {
   const selectedLineHeight = useGoogleCustomization ? editorFontLineHeightInput?.value || defaultSettings.fontLineHeight : defaultSettings.fontLineHeight;
 
   editor.style.fontSize = editorTextSizeInput.value + "px";
+  editor.style.tabSize = String(editorTabSize);
   editor.style.fontFamily = getEffectiveEditorFontFamily();
   editor.style.fontWeight = selectedWeight;
   editor.style.fontStyle = selectedItalic ? "italic" : "normal";
@@ -10951,6 +10967,15 @@ editorTextSizeInput.addEventListener("input", (e) => {
   updatePreviewBox();
 });
 
+if (editorTabSizeInput) {
+  editorTabSizeInput.addEventListener("input", (e) => {
+    const size = normalizeEditorTabSize(e.target.value);
+    if (tabSizeValue) {
+      tabSizeValue.textContent = `${size} ${size === 1 ? "space" : "spaces"}`;
+    }
+  });
+}
+
 editorFontFamilySelect.addEventListener("change", updatePreviewBox);
 editorFontEmbedInput.addEventListener("input", () => {
   const cssUrl = extractGoogleFontsCssUrl(editorFontEmbedInput.value);
@@ -10999,9 +11024,7 @@ closeSettingsBtn.addEventListener("click", () => {
   settingsModal.style.display = "none";
 });
 
-settingsModal.addEventListener("click", (e) => {
-  if (e.target === settingsModal) settingsModal.style.display = "none";
-});
+// Clicking outside the modal card no longer closes it; use Escape or the close button.
 
 applySettingsBtn.addEventListener("click", () => {
   const rawFontEmbed = editorFontEmbedInput.value.trim();
@@ -11014,10 +11037,15 @@ applySettingsBtn.addEventListener("click", () => {
   applyGoogleFontImport(cssUrl);
   updateFontControlsState();
 
+  editorTabSize = normalizeEditorTabSize(
+    editorTabSizeInput ? editorTabSizeInput.value : defaultSettings.tabSize,
+  );
+
   const settings = {
     bgColor: editorBgColorInput.value,
     themeColor: themeColorInput.value,
     textSize: editorTextSizeInput.value,
+    tabSize: String(editorTabSize),
     fontFamily: editorFontFamilySelect.value,
     fontEmbed: rawFontEmbed,
     fontWeight: normalizeEditorFontWeight(editorFontWeightInput?.value || defaultSettings.fontWeight),
@@ -13475,7 +13503,31 @@ function updatePreview() {
   }
 
   iframe.removeAttribute("src");
+  // Preserve the preview's scroll position so live, per-keystroke refreshes
+  // don't snap the rendered page back to the top while the user is typing.
+  let preservedPreviewScroll = null;
+  try {
+    const previewWindow = iframe.contentWindow;
+    if (previewWindow) {
+      preservedPreviewScroll = {
+        x: previewWindow.scrollX || 0,
+        y: previewWindow.scrollY || 0,
+      };
+    }
+  } catch (_) {
+    preservedPreviewScroll = null;
+  }
   iframe.srcdoc = html;
+  if (preservedPreviewScroll && (preservedPreviewScroll.x || preservedPreviewScroll.y)) {
+    iframe.addEventListener("load", function restorePreviewScroll() {
+      iframe.removeEventListener("load", restorePreviewScroll);
+      try {
+        iframe.contentWindow?.scrollTo(preservedPreviewScroll.x, preservedPreviewScroll.y);
+      } catch (_) {
+        /* cross-origin or detached document; ignore */
+      }
+    });
+  }
   setTimeout(bindPreviewNavigationHandlers, 0);
 }
 
@@ -18436,12 +18488,16 @@ function handleEditorTabIndentation(editor, options = {}) {
   const end = Number(editor.selectionEnd || start);
   const hasSelection = end > start;
 
+  const indentUnit = getIndentUnit();
+  const unindentPattern = new RegExp(`(?: {1,${editorTabSize}}|\\t)$`);
+  const leadingUnindentPattern = new RegExp(`^(?: {1,${editorTabSize}}|\\t)`);
+
   if (!hasSelection) {
     const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
     const currentLinePrefix = editor.value.slice(lineStart, start);
 
     if (unindent) {
-      const removable = currentLinePrefix.match(/(?: {1,4}|\t)$/)?.[0] || "";
+      const removable = currentLinePrefix.match(unindentPattern)?.[0] || "";
       if (!removable) return true;
       const removeStart = start - removable.length;
       applyEditorMutation(editor, removeStart, start, "", removeStart, removeStart);
@@ -18452,9 +18508,9 @@ function handleEditorTabIndentation(editor, options = {}) {
       editor,
       start,
       end,
-      INDENT_UNIT,
-      start + INDENT_UNIT.length,
-      start + INDENT_UNIT.length,
+      indentUnit,
+      start + indentUnit.length,
+      start + indentUnit.length,
     );
     return true;
   }
@@ -18471,16 +18527,16 @@ function handleEditorTabIndentation(editor, options = {}) {
 
   const nextLines = lines.map((line, index) => {
     if (unindent) {
-      const removable = line.match(/^(?: {1,4}|\t)/)?.[0] || "";
+      const removable = line.match(leadingUnindentPattern)?.[0] || "";
       if (!removable) return line;
       const delta = -removable.length;
       if (index === 0) firstLineDelta = delta;
       totalDelta += delta;
       return line.slice(removable.length);
     }
-    if (index === 0) firstLineDelta = INDENT_UNIT.length;
-    totalDelta += INDENT_UNIT.length;
-    return INDENT_UNIT + line;
+    if (index === 0) firstLineDelta = indentUnit.length;
+    totalDelta += indentUnit.length;
+    return indentUnit + line;
   });
 
   if (totalDelta === 0) return true;
@@ -26116,6 +26172,75 @@ async function tryOpenAdminPublishedProject() {
   }
 }
 
+// Open a published project's source in the editor after the verification key
+// was accepted on the published page (see injectOpenSourceOverlay in server.js).
+function tryOpenSourceProject() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("openSource") !== "1") return false;
+  let payload = null;
+  try {
+    payload = JSON.parse(sessionStorage.getItem("codxOpenSourceProject") || "null");
+  } catch (_error) {
+    payload = null;
+  }
+  try {
+    sessionStorage.removeItem("codxOpenSourceProject");
+  } catch (_error) {
+    /* storage may be unavailable */
+  }
+  url.searchParams.delete("openSource");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  if (!payload || !Array.isArray(payload.files) || !payload.files.length) {
+    showNotification(
+      "Source project data was not available. Reopen it from the published page.",
+      "error",
+    );
+    return false;
+  }
+  const label = payload.projectName || payload.id || "published project";
+  const opened = applyProjectState(
+    { files: payload.files, activeFileName: payload.activeFileName },
+    `source of “${label}”`,
+  );
+  if (!opened) return false;
+  activeSavedProjectName = null;
+  document.title = `${payload.projectName || "Source"} | CodX Editor`;
+  showNotification(`Opened source code for “${label}”.`, "success");
+  // A published/copied page renders only the front end; its Node.js backend
+  // cannot run on a static page. If backend files came through with the source,
+  // point the user at the in-browser Node.js runtime so the backend can run.
+  if (projectHasNodeBackend(payload.files)) {
+    setTimeout(() => {
+      showNotification(
+        "This project includes a Node.js backend. Enable Node.js (⚡) and run it to start the server.",
+        "info",
+      );
+    }, 1400);
+  }
+  return true;
+}
+
+// Detect whether a set of project files includes a runnable Node.js backend
+// (a package.json, a common server entry file, or server-style JS).
+function projectHasNodeBackend(files) {
+  const list = Array.isArray(files) ? files : [];
+  return list.some((file) => {
+    const name = String(file?.name || "").toLowerCase().replace(/^\.\//, "");
+    const baseName = name.split("/").pop() || "";
+    if (baseName === "package.json") return true;
+    if (["server.js", "app.js", "index.js", "main.js"].includes(baseName)) {
+      return String(file?.type || "").toLowerCase() === "js" || baseName.endsWith(".js");
+    }
+    if (String(file?.type || "").toLowerCase() === "js") {
+      const content = String(file?.content || "");
+      return /require\(\s*['"](?:http|https|express|fs|path|net|koa|fastify)['"]\s*\)|createServer\s*\(|app\.listen\s*\(/.test(
+        content,
+      );
+    }
+    return false;
+  });
+}
+
 // PART 15 - APPLICATION INITIALIZATION
 window.addEventListener("load", () => {
   initializeEditorPresence();
@@ -26126,7 +26251,11 @@ window.addEventListener("load", () => {
   initializeEditor();
   initializeAutomaticLocalization();
   Promise.resolve()
-    .then(() => (sessionFlowStarted ? false : tryOpenAdminPublishedProject()))
+    .then(() => {
+      if (sessionFlowStarted) return false;
+      if (tryOpenSourceProject()) return true;
+      return tryOpenAdminPublishedProject();
+    })
     .then((openedAdminProject) =>
       (openedAdminProject || sessionFlowStarted)
         ? openedAdminProject
@@ -26178,13 +26307,7 @@ if (publishProjectBtn) {
 if (closeProjectLibraryBtn) {
   closeProjectLibraryBtn.addEventListener("click", closeProjectLibrary);
 }
-if (projectLibraryModal) {
-  projectLibraryModal.addEventListener("click", (event) => {
-    if (event.target === projectLibraryModal) {
-      closeProjectLibrary();
-    }
-  });
-}
+// Clicking outside the modal card no longer closes it; use Escape or the close button.
 
 // PART 16 - FONT PICKER
 const fontPickerBtn = document.getElementById("fontPickerBtn");
@@ -26538,11 +26661,7 @@ if (closeFontPickerBtn && fontPickerModal) {
 }
 
 if (fontPickerModal) {
-  fontPickerModal.addEventListener("click", (e) => {
-    if (e.target === fontPickerModal) {
-      fontPickerModal.style.display = "none";
-    }
-  });
+  // Clicking outside the modal card no longer closes it; use Escape or the close button.
 }
 
 if (fontSearchInput) {
@@ -26645,9 +26764,7 @@ function closeFontAwesomeIconCatalog() {
 
 getIconsBtn?.addEventListener("click", openFontAwesomeIconCatalog);
 closeFontAwesomeIconBtn?.addEventListener("click", closeFontAwesomeIconCatalog);
-fontAwesomeIconModal?.addEventListener("click", (event) => {
-  if (event.target === fontAwesomeIconModal) closeFontAwesomeIconCatalog();
-});
+// Clicking outside the modal card no longer closes it; use Escape or the close button.
 fontAwesomeIconSearch?.addEventListener("input", renderFontAwesomeIcons);
 fontAwesomeStyleFilter?.addEventListener("change", renderFontAwesomeIcons);
 fontAwesomeIconGrid?.addEventListener("click", (event) => {

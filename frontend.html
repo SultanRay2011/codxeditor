@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260720-editor-polish1" />
+    <link rel="stylesheet" href="/frontend.css?v=20260721-bugfix-update1" />
   </head>
   <body class="mobile-pane-editor">
     <a
@@ -892,6 +892,34 @@
             step="1"
             style="width: 100%; cursor: pointer"
             aria-label="Adjust text size"
+          />
+        </div>
+
+        <!-- Tab Size -->
+        <div style="margin-bottom: 20px">
+          <label
+            for="editorTabSize"
+            style="
+              display: block;
+              margin-bottom: 8px;
+              font-weight: bold;
+              color: var(--text-primary);
+            "
+          >
+            Tab Size: <span id="tabSizeValue">4 spaces</span>
+          </label>
+          <p style="margin: 0 0 8px; color: var(--text-muted); font-size: 12px">
+            Number of spaces inserted when you press the Tab key.
+          </p>
+          <input
+            type="range"
+            id="editorTabSize"
+            min="1"
+            max="8"
+            value="4"
+            step="1"
+            style="width: 100%; cursor: pointer"
+            aria-label="Adjust the number of spaces the Tab key inserts"
           />
         </div>
 
@@ -1902,7 +1930,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260720-publish-loading1"></script>
+    <script src="/frontend.js?v=20260721-bugfix-update1"></script>
     <script type="module" src="/node-runtime.js?v=20260720-scoped-loading1"></script>
   </body>
 </html>

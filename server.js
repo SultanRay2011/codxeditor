@@ -1396,6 +1396,44 @@ app.get("/published/:id", (req, res) => {
   res.send(buildPublishedHtml(project, requestedFile, sentTitle));
 });
 
+// Return a published project's source files when the correct verification key
+// is supplied. Powers the "OPEN SOURCE CODE" button on published pages.
+app.post("/api/published/:id/source", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.id || "").trim();
+  const project = findPublishedProjectEntry(id)?.project;
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const existingKey = String(project.verificationKey || "").trim();
+  const providedKey = String(req.body?.verificationKey || "").trim();
+  if (!existingKey) {
+    res.status(403).json({
+      ok: false,
+      error: "This link was created before verification keys were added, so its source cannot be opened.",
+    });
+    return;
+  }
+  if (!providedKey) {
+    res.status(400).json({ ok: false, error: "Enter the verification key for this link." });
+    return;
+  }
+  if (providedKey.toUpperCase() !== existingKey.toUpperCase()) {
+    res.status(403).json({ ok: false, error: "Verification key does not match this link." });
+    return;
+  }
+  res.json({
+    ok: true,
+    project: {
+      id: project.id,
+      projectName: project.projectName,
+      files: cloneFiles(project.files),
+      activeFileName: project.activeFileName,
+    },
+  });
+});
+
 // Fallback: unknown GET routes go to custom 404 page.
 app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, "404.html"));
@@ -2036,7 +2074,124 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     html = `${publishBaseReset}${html}`;
   }
 
+  html = injectOpenSourceOverlay(html, String(project?.id || ""));
+
   return html;
+}
+
+// Inject the floating "OPEN SOURCE CODE" button + verification modal into a
+// published page. The modal validates the project's verification key and, on
+// success, opens the full CodX Editor with the project's code and files.
+function injectOpenSourceOverlay(html, projectId) {
+  if (!projectId) return html;
+  const safeId = escapeHtmlAttribute(projectId);
+  const overlay = `
+<div id="codxOpenSourceRoot" data-project-id="${safeId}">
+  <button type="button" id="codxOpenSourceBtn" class="codx-os-launch" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zM14.6 16.6 19.2 12l-4.6-4.6L16 6l6 6-6 6z"/></svg>
+    <span>OPEN SOURCE CODE</span>
+  </button>
+  <div id="codxOpenSourceModal" class="codx-os-modal" role="dialog" aria-modal="true" aria-labelledby="codxOsTitle" hidden>
+    <div class="codx-os-card" role="document">
+      <button type="button" class="codx-os-close" id="codxOsClose" aria-label="Close">&times;</button>
+      <div class="codx-os-icon"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 1 3 5v6c0 5 3.8 9.7 9 11 5.2-1.3 9-6 9-11V5l-9-4zm0 10.9h7c-.5 3.9-3.3 7.4-7 8.6V12H5V6.3l7-3.1v8.7z"/></svg></div>
+      <h2 id="codxOsTitle">Open source code</h2>
+      <p class="codx-os-sub">Enter this project's verification key to open its code and files in CodX Editor.</p>
+      <form id="codxOsForm" autocomplete="off">
+        <label class="codx-os-label" for="codxOsKey">Verification key</label>
+        <input id="codxOsKey" class="codx-os-input" type="text" name="verificationKey" placeholder="cxprojkey-XXXXXX" autocapitalize="characters" spellcheck="false" />
+        <div id="codxOsError" class="codx-os-error" role="alert" hidden></div>
+        <div class="codx-os-actions">
+          <button type="button" class="codx-os-btn codx-os-btn-ghost" id="codxOsCancel">CANCEL</button>
+          <button type="submit" class="codx-os-btn codx-os-btn-primary" id="codxOsSubmit">OPEN EDITOR</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<style>
+#codxOpenSourceRoot{--codx-os-bg:#1e1e1e;--codx-os-bg2:#252526;--codx-os-border:#3c3c3c;--codx-os-text:#e6e6e6;--codx-os-muted:#9aa0a6;--codx-os-accent:#238636;--codx-os-accent-hover:#2ea043;font-family:'Segoe UI',Tahoma,system-ui,sans-serif;}
+#codxOpenSourceRoot *{box-sizing:border-box;}
+.codx-os-launch{position:fixed;top:16px;right:16px;z-index:2147483000;display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid var(--codx-os-border);border-radius:9px;background:rgba(30,30,30,.92);color:var(--codx-os-text);font-size:12px;font-weight:700;letter-spacing:.4px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);backdrop-filter:blur(6px);transition:transform .15s ease,border-color .15s ease,background .15s ease;}
+.codx-os-launch:hover{transform:translateY(-1px);border-color:var(--codx-os-accent);background:rgba(35,134,54,.16);}
+.codx-os-launch svg{color:var(--codx-os-accent);}
+.codx-os-modal{position:fixed;inset:0;z-index:2147483001;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);animation:codxOsFade .18s ease;}
+.codx-os-modal[hidden]{display:none;}
+@keyframes codxOsFade{from{opacity:0}to{opacity:1}}
+.codx-os-card{position:relative;width:min(420px,100%);background:linear-gradient(180deg,var(--codx-os-bg2),var(--codx-os-bg));border:1px solid var(--codx-os-border);border-radius:16px;padding:28px 26px 24px;color:var(--codx-os-text);box-shadow:0 24px 70px rgba(0,0,0,.6);animation:codxOsPop .2s cubic-bezier(.2,.9,.3,1.2);}
+@keyframes codxOsPop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.codx-os-close{position:absolute;top:12px;right:14px;width:30px;height:30px;border:none;background:transparent;color:var(--codx-os-muted);font-size:24px;line-height:1;border-radius:7px;cursor:pointer;transition:color .15s ease,background .15s ease;}
+.codx-os-close:hover{color:#fff;background:rgba(255,255,255,.08);}
+.codx-os-icon{width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:13px;background:rgba(35,134,54,.16);color:var(--codx-os-accent);margin-bottom:14px;}
+#codxOsTitle{margin:0 0 6px;font-size:20px;font-weight:700;color:#fff;}
+.codx-os-sub{margin:0 0 18px;font-size:13px;line-height:1.55;color:var(--codx-os-muted);}
+.codx-os-label{display:block;margin-bottom:7px;font-size:12px;font-weight:600;letter-spacing:.3px;color:var(--codx-os-muted);text-transform:uppercase;}
+.codx-os-input{width:100%;padding:11px 13px;border:1px solid var(--codx-os-border);border-radius:9px;background:#1a1a1a;color:var(--codx-os-text);font-size:14px;font-family:'JetBrains Mono','Consolas',monospace;letter-spacing:.5px;outline:none;transition:border-color .15s ease,box-shadow .15s ease;}
+.codx-os-input:focus{border-color:var(--codx-os-accent);box-shadow:0 0 0 3px rgba(35,134,54,.25);}
+.codx-os-error{margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(192,57,43,.14);border:1px solid rgba(192,57,43,.4);color:#ff8b7d;font-size:12.5px;line-height:1.45;}
+.codx-os-error[hidden]{display:none;}
+.codx-os-actions{display:flex;gap:10px;margin-top:20px;}
+.codx-os-btn{flex:1;padding:11px 12px;border-radius:9px;font-size:13px;font-weight:700;letter-spacing:.4px;cursor:pointer;border:1px solid transparent;transition:background .15s ease,border-color .15s ease,opacity .15s ease;}
+.codx-os-btn-ghost{background:transparent;border-color:var(--codx-os-border);color:var(--codx-os-text);}
+.codx-os-btn-ghost:hover{border-color:var(--codx-os-muted);background:rgba(255,255,255,.05);}
+.codx-os-btn-primary{background:var(--codx-os-accent);color:#fff;}
+.codx-os-btn-primary:hover{background:var(--codx-os-accent-hover);}
+.codx-os-btn[disabled]{opacity:.6;cursor:progress;}
+@media (max-width:520px){.codx-os-launch span{display:none;}.codx-os-launch{padding:10px;}}
+</style>
+<script>
+(function(){
+  var root=document.getElementById("codxOpenSourceRoot");
+  if(!root)return;
+  var projectId=root.getAttribute("data-project-id")||"";
+  var openBtn=document.getElementById("codxOpenSourceBtn");
+  var modal=document.getElementById("codxOpenSourceModal");
+  var closeBtn=document.getElementById("codxOsClose");
+  var cancelBtn=document.getElementById("codxOsCancel");
+  var form=document.getElementById("codxOsForm");
+  var keyInput=document.getElementById("codxOsKey");
+  var errorBox=document.getElementById("codxOsError");
+  var submitBtn=document.getElementById("codxOsSubmit");
+  function showError(msg){errorBox.textContent=msg;errorBox.hidden=false;}
+  function clearError(){errorBox.hidden=true;errorBox.textContent="";}
+  function openModal(){clearError();modal.hidden=false;setTimeout(function(){keyInput.focus();},30);}
+  function closeModal(){modal.hidden=true;keyInput.value="";clearError();}
+  openBtn.addEventListener("click",openModal);
+  closeBtn.addEventListener("click",closeModal);
+  cancelBtn.addEventListener("click",closeModal);
+  // Clicking outside the card does nothing; use the close button, Cancel, or Escape.
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!modal.hidden)closeModal();});
+  form.addEventListener("submit",function(e){
+    e.preventDefault();
+    var key=(keyInput.value||"").trim();
+    if(!key){showError("Enter the verification key for this link.");return;}
+    clearError();
+    submitBtn.disabled=true;submitBtn.textContent="CHECKING...";
+    fetch("/api/published/"+encodeURIComponent(projectId)+"/source",{
+      method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({verificationKey:key})
+    }).then(function(r){return r.json().catch(function(){return{};}).then(function(d){return{ok:r.ok,data:d};});})
+    .then(function(res){
+      if(!res.ok||!res.data||!res.data.ok||!res.data.project){
+        throw new Error((res.data&&res.data.error)||"Unable to open the source code.");
+      }
+      try{
+        sessionStorage.setItem("codxOpenSourceProject",JSON.stringify(res.data.project));
+      }catch(err){
+        throw new Error("This project is too large to open in this browser session.");
+      }
+      window.location.href="/frontend.html?openSource=1";
+    }).catch(function(err){
+      showError(err.message||"Unable to open the source code.");
+      submitBtn.disabled=false;submitBtn.textContent="OPEN EDITOR";
+    });
+  });
+})();
+</script>`;
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${overlay}\n</body>`);
+  }
+  return `${html}${overlay}`;
 }
 
 function escapeHtmlAttribute(value) {
