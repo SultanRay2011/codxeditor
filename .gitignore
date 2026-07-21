@@ -24,6 +24,10 @@ temp/
 .codx-github-sessions.enc
 .codx-github-sessions.enc.tmp
 
+# Runtime data — must NOT be tracked, or redeploys reset published links
+published-projects.json
+published-projects.json.tmp
+
 # Operating system files
 .DS_Store
 Thumbs.db
