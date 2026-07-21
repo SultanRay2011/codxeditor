@@ -15,8 +15,11 @@ const clearConsoleButton = document.getElementById("clearConsoleBtn");
 const nodeServerPreview = document.getElementById("nodeServerPreview");
 const nodeServerFrame = document.getElementById("nodeServerFrame");
 const nodeServerAddress = document.getElementById("nodeServerAddress");
-const nodeServerOpenButton = document.getElementById("nodeServerOpenBtn");
 const nodeServerReloadButton = document.getElementById("nodeServerReloadBtn");
+const nodeViewToggleButton = document.getElementById("nodeViewToggleBtn");
+const nodeViewToggleLabel = document.getElementById("nodeViewToggleLabel");
+const nodeViewToggleIcon = document.getElementById("nodeViewToggleIcon");
+const consoleOutputHeading = document.getElementById("consoleOutputHeading");
 
 let activeServerUrl = "";
 
@@ -89,18 +92,37 @@ function clearServerLinks() {
   hideServerPreview();
 }
 
-// Show the running Node.js server live inside the editor's preview pane so the
-// user immediately sees their site — no need to open a separate browser tab.
+// Switch the console area between the terminal and the live server preview.
+// The WebContainer preview only renders embedded in this isolated page, so it
+// is shown in-pane here rather than opened as a (blank) top-level browser tab.
+function setServerView(view) {
+  const showPreview = view === "preview";
+  preview?.classList.toggle("node-view-preview", showPreview);
+  if (nodeViewToggleButton) {
+    nodeViewToggleButton.setAttribute("aria-pressed", showPreview ? "true" : "false");
+  }
+  if (nodeViewToggleLabel) {
+    nodeViewToggleLabel.textContent = showPreview ? "SHOW TERMINAL" : "SHOW PREVIEW";
+  }
+  if (nodeViewToggleIcon) {
+    nodeViewToggleIcon.className = showPreview ? "fa-solid fa-terminal" : "fa-solid fa-display";
+  }
+  if (consoleOutputHeading) {
+    consoleOutputHeading.textContent = showPreview ? "Live Server" : "Node.js Terminal";
+  }
+}
+
+// Reveal the running Node.js server live inside the editor so the user sees
+// their site immediately, and expose the terminal/preview toggle button.
 function showServerPreview(port, runtimeUrl) {
   if (!nodeServerPreview || !nodeServerFrame || !runtimeUrl) return;
   activeServerUrl = runtimeUrl;
   if (nodeServerAddress) nodeServerAddress.textContent = `http://localhost:${port}`;
-  if (nodeServerOpenButton) {
-    nodeServerOpenButton.href = `/node-preview.html?port=${encodeURIComponent(port)}`;
-  }
   nodeServerFrame.src = runtimeUrl;
   nodeServerPreview.hidden = false;
   preview?.classList.add("node-server-live");
+  // Land on the preview so the running site is visible right away.
+  setServerView("preview");
 }
 
 function hideServerPreview() {
@@ -108,6 +130,8 @@ function hideServerPreview() {
   if (nodeServerFrame) nodeServerFrame.removeAttribute("src");
   if (nodeServerPreview) nodeServerPreview.hidden = true;
   preview?.classList.remove("node-server-live");
+  preview?.classList.remove("node-view-preview");
+  if (consoleOutputHeading) consoleOutputHeading.textContent = "Console Output";
 }
 
 function normalizeRuntimeFileName(value) {
@@ -376,6 +400,11 @@ nodeServerReloadButton?.addEventListener("click", () => {
     // Re-assign the src to force the running server to reload in the preview.
     nodeServerFrame.src = activeServerUrl;
   }
+});
+
+nodeViewToggleButton?.addEventListener("click", () => {
+  const showingPreview = preview?.classList.contains("node-view-preview");
+  setServerView(showingPreview ? "terminal" : "preview");
 });
 
 setCommandControls(false);

@@ -30,7 +30,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260721-node-preview1" />
+    <link rel="stylesheet" href="/frontend.css?v=20260721-node-toggle1" />
   </head>
   <body class="mobile-pane-editor">
     <a
@@ -634,42 +634,43 @@
             </div>
           </div>
         </div>
-        <div id="nodeServerPreview" class="node-server-preview" hidden>
-          <div class="node-server-bar">
-            <span class="node-server-dot" aria-hidden="true"></span>
-            <span class="node-server-address" id="nodeServerAddress">http://localhost:8000</span>
-            <div class="node-server-actions">
-              <button type="button" id="nodeServerReloadBtn" class="node-server-btn" title="Reload the running server" aria-label="Reload the running server">
-                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
-              </button>
-              <a id="nodeServerOpenBtn" class="node-server-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open the running server in a new tab" aria-label="Open the running server in a new tab">
-                <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
-              </a>
-            </div>
-          </div>
-          <iframe id="nodeServerFrame" title="Node.js server preview" allow="cross-origin-isolated"></iframe>
-        </div>
         <div class="console-container" id="consoleContainer">
           <div
             style="
               display: flex;
               justify-content: space-between;
               align-items: center;
+              gap: 8px;
               padding: 8px;
               border-bottom: 1px solid var(--border-color);
               background: var(--bg-secondary);
             "
           >
-            <strong style="color: var(--text-primary)">Console Output</strong>
-            <button
-              id="clearConsoleBtn"
-              class="run-button"
-              onclick="clearConsole()"
-              style="padding: 4px 10px; font-size: 11px"
-              aria-label="Clear console"
-            >
-              <i class="fa-solid fa-trash"></i> <strong>CLEAR</strong>
-            </button>
+            <strong id="consoleOutputHeading" style="color: var(--text-primary)">Console Output</strong>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <button
+                id="nodeViewToggleBtn"
+                type="button"
+                class="run-button node-view-toggle"
+                hidden
+                aria-pressed="true"
+                aria-label="Switch between the terminal and the live server preview"
+                title="Switch between the terminal and the live server preview"
+                style="padding: 4px 10px; font-size: 11px"
+              >
+                <i id="nodeViewToggleIcon" class="fa-solid fa-terminal" aria-hidden="true"></i>
+                <strong id="nodeViewToggleLabel">SHOW TERMINAL</strong>
+              </button>
+              <button
+                id="clearConsoleBtn"
+                class="run-button"
+                onclick="clearConsole()"
+                style="padding: 4px 10px; font-size: 11px"
+                aria-label="Clear console"
+              >
+                <i class="fa-solid fa-trash"></i> <strong>CLEAR</strong>
+              </button>
+            </div>
           </div>
           <div
             id="consoleOutput"
@@ -692,6 +693,18 @@
                 <strong>STOP</strong>
               </button>
             </form>
+          </div>
+          <div id="nodeServerPreview" class="node-server-preview" hidden>
+            <div class="node-server-bar">
+              <span class="node-server-dot" aria-hidden="true"></span>
+              <span class="node-server-address" id="nodeServerAddress">http://localhost:8000</span>
+              <div class="node-server-actions">
+                <button type="button" id="nodeServerReloadBtn" class="node-server-btn" title="Reload the running server" aria-label="Reload the running server">
+                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+            <iframe id="nodeServerFrame" title="Node.js server preview" allow="cross-origin-isolated"></iframe>
           </div>
         </div>
       </div>
@@ -1946,6 +1959,6 @@
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
     <script src="/frontend.js?v=20260721-bugfix-update1"></script>
-    <script type="module" src="/node-runtime.js?v=20260721-node-preview1"></script>
+    <script type="module" src="/node-runtime.js?v=20260721-node-toggle1"></script>
   </body>
 </html>

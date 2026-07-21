@@ -2665,22 +2665,31 @@ iframe {
   border-top: 0;
 }
 
-/* Live Node.js server preview shown inside the editor's preview pane. */
+/* Live Node.js server preview shown inside the editor's console area.
+   The header toggle switches this and the terminal one-at-a-time. */
 .node-server-preview {
   display: none;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
   background: #ffffff;
 }
-.preview.node-runtime-active.node-server-live .node-server-preview {
-  display: flex;
-  flex: 1 1 60%;
+/* When toggled to the preview, the live server fills the area and the
+   terminal is hidden; toggling back does the reverse. */
+.preview.node-runtime-active.node-server-live.node-view-preview .node-terminal {
+  display: none !important;
 }
-/* When the live server is showing, the terminal shares the space below it. */
-.preview.node-runtime-active.node-server-live .console-container {
-  flex: 0 0 40%;
-  min-height: 130px;
-  border-top: 1px solid var(--border-color);
+.preview.node-runtime-active.node-server-live.node-view-preview .node-server-preview {
+  display: flex;
+}
+/* The terminal/preview toggle button only appears once a server is live. */
+.node-view-toggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+.preview.node-runtime-active.node-server-live .node-view-toggle {
+  display: inline-flex;
 }
 .node-server-bar {
   display: flex;
