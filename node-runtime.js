@@ -12,6 +12,13 @@ const toggleButton = document.getElementById("enableNodeRuntimeBtn");
 const toggleLabel = document.getElementById("enableNodeRuntimeBtnLabel");
 const previewTitle = document.getElementById("previewTitle");
 const clearConsoleButton = document.getElementById("clearConsoleBtn");
+const nodeServerPreview = document.getElementById("nodeServerPreview");
+const nodeServerFrame = document.getElementById("nodeServerFrame");
+const nodeServerAddress = document.getElementById("nodeServerAddress");
+const nodeServerOpenButton = document.getElementById("nodeServerOpenBtn");
+const nodeServerReloadButton = document.getElementById("nodeServerReloadBtn");
+
+let activeServerUrl = "";
 
 let instance = null;
 let bootPromise = null;
@@ -79,6 +86,28 @@ function clearServerLinks() {
     link.replaceWith(document.createTextNode(`${link.textContent || "Server"} (stopped)`));
   });
   if (window.codxNodeRuntime) window.codxNodeRuntime.lastServer = null;
+  hideServerPreview();
+}
+
+// Show the running Node.js server live inside the editor's preview pane so the
+// user immediately sees their site — no need to open a separate browser tab.
+function showServerPreview(port, runtimeUrl) {
+  if (!nodeServerPreview || !nodeServerFrame || !runtimeUrl) return;
+  activeServerUrl = runtimeUrl;
+  if (nodeServerAddress) nodeServerAddress.textContent = `http://localhost:${port}`;
+  if (nodeServerOpenButton) {
+    nodeServerOpenButton.href = `/node-preview.html?port=${encodeURIComponent(port)}`;
+  }
+  nodeServerFrame.src = runtimeUrl;
+  nodeServerPreview.hidden = false;
+  preview?.classList.add("node-server-live");
+}
+
+function hideServerPreview() {
+  activeServerUrl = "";
+  if (nodeServerFrame) nodeServerFrame.removeAttribute("src");
+  if (nodeServerPreview) nodeServerPreview.hidden = true;
+  preview?.classList.remove("node-server-live");
 }
 
 function normalizeRuntimeFileName(value) {
@@ -166,6 +195,7 @@ async function bootRuntime() {
     instance.on("server-ready", (port, url) => {
       window.codxNodeRuntime.lastServer = { port, url, displayUrl: `http://localhost:${port}` };
       writeServerLink(port, url);
+      showServerPreview(port, url);
     });
     instance.on("error", (error) => writeTerminal(`\nRuntime error: ${error.message || error}\n`, "error"));
     await syncEditorFilesToRuntime();
@@ -339,6 +369,13 @@ clearConsoleButton?.addEventListener("click", () => {
 
 terminalStopButton?.addEventListener("click", () => {
   stopActiveProcess().catch((error) => writeTerminal(`\n${error?.message || error}\n`, "error"));
+});
+
+nodeServerReloadButton?.addEventListener("click", () => {
+  if (nodeServerFrame && activeServerUrl) {
+    // Re-assign the src to force the running server to reload in the preview.
+    nodeServerFrame.src = activeServerUrl;
+  }
 });
 
 setCommandControls(false);
