@@ -28,7 +28,23 @@ const adminActivity = [];
 const adminSessions = new Map();
 const sessionRecoveryEmitTimers = new Map();
 const publishedProjects = new Map();
-const PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
+// Runtime state (published projects, GitHub sessions) is written here. On hosts
+// with an ephemeral filesystem (e.g. Render without a disk), files under the app
+// directory are wiped on every restart — which silently deletes published links.
+// Point DATA_DIR at a persistent disk mount so this data survives restarts.
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : __dirname;
+if (DATA_DIR !== __dirname) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (error) {
+    console.error("Failed to create DATA_DIR, falling back to app directory:", error);
+  }
+}
+const PUBLISHED_PROJECTS_FILE = path.join(DATA_DIR, "published-projects.json");
+// A copy that may ship with the deploy; used once to seed the persistent store.
+const BUNDLED_PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
 const ADMIN_COOKIE = "codx_admin_session";
@@ -42,7 +58,7 @@ const GITHUB_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "").trim();
 const GITHUB_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
 const GITHUB_OAUTH_CALLBACK_URL = String(process.env.GITHUB_OAUTH_CALLBACK_URL || "").trim();
 const GITHUB_OAUTH_SCOPE = String(process.env.GITHUB_OAUTH_SCOPE || "repo read:user").trim();
-const GITHUB_SESSIONS_FILE = path.join(__dirname, ".codx-github-sessions.enc");
+const GITHUB_SESSIONS_FILE = path.join(DATA_DIR, ".codx-github-sessions.enc");
 const GITHUB_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const githubOAuthFlows = new Map();
 const githubSessions = new Map();
@@ -1500,6 +1516,19 @@ function normalizePublishedTitle(title) {
 
 function loadPublishedProjects() {
   try {
+    // First run on a fresh persistent disk: seed from the copy shipped with the
+    // deploy so any already-published links are preserved through the switch.
+    if (
+      !fs.existsSync(PUBLISHED_PROJECTS_FILE) &&
+      PUBLISHED_PROJECTS_FILE !== BUNDLED_PUBLISHED_PROJECTS_FILE &&
+      fs.existsSync(BUNDLED_PUBLISHED_PROJECTS_FILE)
+    ) {
+      try {
+        fs.copyFileSync(BUNDLED_PUBLISHED_PROJECTS_FILE, PUBLISHED_PROJECTS_FILE);
+      } catch (seedError) {
+        console.error("Failed to seed published projects onto DATA_DIR:", seedError);
+      }
+    }
     if (!fs.existsSync(PUBLISHED_PROJECTS_FILE)) return;
     const raw = fs.readFileSync(PUBLISHED_PROJECTS_FILE, "utf8");
     const parsed = JSON.parse(raw);
@@ -1524,7 +1553,11 @@ function loadPublishedProjects() {
 function savePublishedProjects() {
   try {
     const serialized = JSON.stringify(Array.from(publishedProjects.values()), null, 2);
-    fs.writeFileSync(PUBLISHED_PROJECTS_FILE, serialized, "utf8");
+    // Write atomically (temp file + rename) so a restart mid-write can't corrupt
+    // or truncate the store and lose every published link.
+    const tempFile = `${PUBLISHED_PROJECTS_FILE}.tmp`;
+    fs.writeFileSync(tempFile, serialized, "utf8");
+    fs.renameSync(tempFile, PUBLISHED_PROJECTS_FILE);
   } catch (error) {
     console.error("Failed to save published projects:", error);
   }
