@@ -1429,7 +1429,12 @@ app.get("/published/:id", (req, res) => {
     req.headers["x-publish-title"] ||
     "";
   const requestedFile = String(req.query.file || "").trim();
-  res.send(buildPublishedHtml(project, requestedFile, sentTitle));
+  const publishedHtml = buildPublishedHtml(project, requestedFile, sentTitle);
+  if (publishedHtml === null) {
+    res.status(404).sendFile(path.join(__dirname, "404.html"));
+    return;
+  }
+  res.send(publishedHtml);
 });
 
 // Return a published project's source files when the correct verification key
@@ -1976,22 +1981,26 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     }) || null;
   };
 
-  const htmlFile =
-    (requestedFile
-      ? resolveFile(requestedFile, "html")
-      : resolveFile("index.html", "html") ||
-        files.find(
-          (file) =>
-            String(file?.name || "") === activeFileName &&
-            String(file?.type || "").toLowerCase() === "html",
-        )) ||
-    files.find((file) => String(file?.type || "").toLowerCase() === "html");
+  let htmlFile = null;
+  if (requestedFile) {
+    // A specific page was requested; if it doesn't exist in the project the
+    // link is broken, so don't silently fall back to another page.
+    htmlFile = resolveFile(requestedFile, "html");
+  } else {
+    htmlFile =
+      resolveFile("index.html", "html") ||
+      files.find(
+        (file) =>
+          String(file?.name || "") === activeFileName &&
+          String(file?.type || "").toLowerCase() === "html",
+      ) ||
+      files.find((file) => String(file?.type || "").toLowerCase() === "html");
+  }
 
+  // No matching page (bad ?file=) or no HTML at all → signal a 404 to the
+  // caller so the shared 404.html page is served instead of an inline notice.
   if (!htmlFile) {
-    if (requestedFile) {
-      return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Published Page Not Found</title><style>html,body{margin:0;padding:0;font-family:Segoe UI,Tahoma,sans-serif;background:#f6fff7;color:#18211b}body{padding:32px}div{max-width:760px;margin:0 auto;background:#fff;border:1px solid rgba(20,41,27,.12);border-radius:20px;padding:24px;box-shadow:0 18px 40px rgba(24,46,31,.08)}h1{margin:0 0 12px}p{color:#5b675f;line-height:1.7}</style></head><body><div><h1>Page not found</h1><p>The published project does not contain <strong>${escapeHtmlAttribute(requestedFile)}</strong>.</p></div></body></html>`;
-    }
-    return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtmlAttribute(project?.projectName || "Published Project")}</title><style>body{font-family:Segoe UI,Tahoma,sans-serif;background:#f6fff7;color:#18211b;padding:32px}.box{max-width:760px;margin:0 auto;background:#fff;border:1px solid rgba(20,41,27,.12);border-radius:20px;padding:24px;box-shadow:0 18px 40px rgba(24,46,31,.08)}h1{margin:0 0 12px}p{color:#5b675f;line-height:1.7}</style></head><body><div class="box"><h1>No HTML file to publish</h1><p>This project does not contain an HTML file, so there is nothing previewable to publish yet.</p></div></body></html>`;
+    return null;
   }
 
   const publishLinkBase = `/published/${encodeURIComponent(project.id)}`;
