@@ -238,6 +238,17 @@
               <kbd>Ctrl K</kbd>
             </button>
             <button
+              id="projectSearchBtn"
+              class="run-button header-more-action"
+              title="Find and replace across every project file"
+              aria-label="Find and replace across project files"
+              type="button"
+            >
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <strong>FIND &amp; REPLACE</strong>
+              <kbd>Ctrl Shift F</kbd>
+            </button>
+            <button
               id="developerToolsBtn"
               class="run-button header-more-action"
               title="Open preview and editor developer controls"
@@ -1634,6 +1645,99 @@
         <h2 id="projectLibraryTitle" style="margin: 0 0 18px">Project Library</h2>
         <div id="projectLibraryBody"></div>
       </div>
+    </div>
+
+    <!-- Project Search -->
+    <div
+      id="projectSearchModal"
+      class="project-search-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="projectSearchTitle"
+      hidden
+    >
+      <section class="project-search-dialog">
+        <header class="project-search-header">
+          <div class="project-search-heading">
+            <span class="project-search-heading-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+            <div>
+              <span>PROJECT TOOL</span>
+              <h2 id="projectSearchTitle">Find &amp; Replace</h2>
+            </div>
+          </div>
+          <button id="closeProjectSearchBtn" class="project-search-close" type="button" aria-label="Close project search">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </header>
+
+        <div class="project-search-controls">
+          <label class="project-search-field project-search-find-field">
+            <span>Find across every text file</span>
+            <div class="project-search-input-shell">
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+              <input
+                id="projectSearchInput"
+                type="search"
+                placeholder="Find in project code..."
+                autocomplete="off"
+                spellcheck="false"
+                aria-controls="projectSearchResults"
+              />
+              <kbd>ESC</kbd>
+            </div>
+          </label>
+
+          <div class="project-search-options" role="group" aria-label="Search matching options">
+            <button id="projectSearchCaseBtn" type="button" aria-pressed="false" title="Match case">
+              <span>Aa</span> Match case
+            </button>
+            <button id="projectSearchWholeBtn" type="button" aria-pressed="false" title="Match whole words">
+              <span>ab</span> Whole word
+            </button>
+            <button id="projectSearchRegexBtn" type="button" aria-pressed="false" title="Use a regular expression">
+              <span>.*</span> Regular expression
+            </button>
+          </div>
+
+          <label class="project-search-field">
+            <span>Replace with</span>
+            <div class="project-search-input-shell project-search-replace-shell">
+              <i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i>
+              <input
+                id="projectReplaceInput"
+                type="text"
+                placeholder="Leave empty to remove matches"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </label>
+        </div>
+
+        <div class="project-search-summary">
+          <div>
+            <strong id="projectSearchStatus">Enter text to search the project</strong>
+            <span id="projectSearchHint">Results include filenames and exact line numbers.</span>
+          </div>
+          <button id="projectReplaceAllBtn" class="project-replace-all" type="button" disabled>
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>REPLACE ALL</span>
+          </button>
+        </div>
+
+        <div
+          id="projectSearchResults"
+          class="project-search-results"
+          role="list"
+          aria-live="polite"
+          aria-label="Project search results"
+        ></div>
+
+        <footer class="project-search-footer">
+          <span><i class="fa-solid fa-arrow-pointer"></i> Select a result to open its exact line</span>
+          <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd> open search</span>
+        </footer>
+      </section>
     </div>
 
     <!-- Command Palette -->

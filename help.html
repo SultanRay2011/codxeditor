@@ -584,6 +584,7 @@
             <li><a href="#getting-started">Getting Started</a></li>
             <li><a href="#workspace">Workspace Layout</a></li>
             <li><a href="#command-palette">Command Palette</a></li>
+            <li><a href="#project-search">Find &amp; Replace</a></li>
             <li><a href="#editing">Editing Tools</a></li>
             <li><a href="#projects">Projects & Files</a></li>
             <li><a href="#github">GitHub Repositories</a></li>
@@ -695,7 +696,7 @@
                 <h3><i class="fa-solid fa-ellipsis"></i> More Menu</h3>
                 <ul>
                   <li>Project Tools contains New, Save Project, Open Saved, Templates, Publish / Share, and Connect to GitHub.</li>
-                  <li>Editor Extras contains Command Palette, Enable Node.js, Fonts, Get Icons, Homepage, and Zen Mode on laptops and desktops.</li>
+                  <li>Editor Extras contains Command Palette, Find &amp; Replace, Enable Node.js, Fonts, Get Icons, Homepage, and Zen Mode on laptops and desktops.</li>
                   <li>Get Icons loads every free Font Awesome 6.5.2 solid, regular, and brand icon, shows the cdnjs setup link, and copies ready-to-use HTML. On phones it uses compact two-column cards, scaled controls, and a full-height scrolling catalog.</li>
                   <li>The menu closes after an action, when you click outside it, or when you press <kbd>Esc</kbd>.</li>
                 </ul>
@@ -732,7 +733,7 @@
                 <ul>
                   <li>Open project files, create files, focus the code editor, and use Undo or Redo.</li>
                   <li>Run or refresh the preview, toggle fullscreen, Auto-Run, Console, or Zen Mode.</li>
-                  <li>Open saved projects, templates, publishing, ZIP import/export, collaboration, settings, fonts, icons, media, help, and Node.js.</li>
+                  <li>Open Find &amp; Replace, saved projects, templates, publishing, ZIP import/export, collaboration, settings, fonts, icons, media, help, and Node.js.</li>
                   <li>Commands reuse the editor's existing permission checks during collaboration sessions.</li>
                 </ul>
               </article>
@@ -1384,11 +1385,48 @@
             </div>
           </section>
 
+          <section class="section-card" id="project-search">
+            <h2>Find &amp; Replace</h2>
+            <p class="section-copy">
+              Find &amp; Replace searches code across every text file without requiring you to open files individually. Open it from More &rarr; Find &amp; Replace, choose it in the Command Palette, or press <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd>.
+            </p>
+            <div class="feature-grid">
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-list"></i> Exact Results</h3>
+                <ul>
+                  <li>Results are grouped by filename and display the exact line and column for each match.</li>
+                  <li>Selecting a result opens its file, navigates to the matching line, and selects the matching text.</li>
+                  <li>Search skips image, audio, and video content while including HTML, CSS, JavaScript, JSON, and other project text files.</li>
+                  <li>Large result sets are limited to the first 500 matches so the editor remains responsive.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-sliders"></i> Matching Controls</h3>
+                <ul>
+                  <li>Match Case distinguishes uppercase and lowercase text.</li>
+                  <li>Whole Word avoids matching the search inside longer identifiers.</li>
+                  <li>Regular Expression supports advanced matching patterns and reports invalid patterns clearly.</li>
+                  <li>If text is selected in the editor, opening project search can use that selection as the initial query.</li>
+                </ul>
+              </article>
+              <article class="feature-item">
+                <h3><i class="fa-solid fa-arrow-right-arrow-left"></i> Safe Replacement</h3>
+                <ul>
+                  <li>Replace changes one result while keeping the search panel and remaining results current.</li>
+                  <li>Replace All asks for confirmation and updates every editable matching file together.</li>
+                  <li>Collaboration permissions are respected; matches in locked files remain visible but cannot be replaced.</li>
+                  <li>Replacing content marks the project as changed, refreshes diagnostics and preview output, autosaves recovery data, and synchronizes collaboration state.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
           <section class="section-card" id="shortcuts">
             <h2>Shortcuts</h2>
             <div class="shortcut-list">
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd></span><span>Open or close the Command Palette</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></span><span>Open or close the Command Palette</span></div>
+              <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></span><span>Find and replace across project files</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd></span><span>Export the project as a ZIP archive</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd></span><span>Run the preview manually</span></div>
               <div class="shortcut-row"><span><kbd>Ctrl/Cmd</kbd> + <kbd>Q</kbd></span><span>Create a file in the project</span></div>

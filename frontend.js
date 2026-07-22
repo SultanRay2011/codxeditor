@@ -147,6 +147,18 @@ const commandPaletteModal = document.getElementById("commandPaletteModal");
 const commandPaletteInput = document.getElementById("commandPaletteInput");
 const commandPaletteResults = document.getElementById("commandPaletteResults");
 const commandPaletteStatus = document.getElementById("commandPaletteStatus");
+const projectSearchBtn = document.getElementById("projectSearchBtn");
+const projectSearchModal = document.getElementById("projectSearchModal");
+const closeProjectSearchBtn = document.getElementById("closeProjectSearchBtn");
+const projectSearchInput = document.getElementById("projectSearchInput");
+const projectReplaceInput = document.getElementById("projectReplaceInput");
+const projectSearchCaseBtn = document.getElementById("projectSearchCaseBtn");
+const projectSearchWholeBtn = document.getElementById("projectSearchWholeBtn");
+const projectSearchRegexBtn = document.getElementById("projectSearchRegexBtn");
+const projectSearchStatus = document.getElementById("projectSearchStatus");
+const projectSearchHint = document.getElementById("projectSearchHint");
+const projectSearchResults = document.getElementById("projectSearchResults");
+const projectReplaceAllBtn = document.getElementById("projectReplaceAllBtn");
 const mobileWorkspaceTabs = document.querySelector(".mobile-workspace-tabs");
 const mobileWorkspaceButtons = [...document.querySelectorAll("[data-mobile-pane]")];
 
@@ -355,6 +367,12 @@ if (headerMoreBtn && headerMorePanel) {
 let commandPaletteMatches = [];
 let commandPaletteActiveIndex = 0;
 let commandPalettePreviousFocus = null;
+let projectSearchMatches = [];
+let projectSearchPreviousFocus = null;
+let projectSearchRenderTimer = null;
+let projectSearchError = "";
+let projectSearchTruncated = false;
+const PROJECT_SEARCH_RESULT_LIMIT = 500;
 
 function getCommandButton(id) {
   return document.getElementById(id);
@@ -384,6 +402,7 @@ function getCommandPaletteCommands() {
     createButtonCommand("project.publish", "Publish / share project", "Create or update a public link", "fa-solid fa-share-nodes", "publishProjectBtn", "deploy link"),
     createButtonCommand("project.export", "Export project as ZIP", "Download every project file", "fa-solid fa-file-zipper", "exportZipBtn", "download backup"),
     createButtonCommand("project.import", "Import project ZIP", "Open files from a ZIP archive", "fa-solid fa-file-import", "importZipBtn", "upload restore"),
+    createButtonCommand("project.search", "Find and replace", "Find code across every project file", "fa-solid fa-magnifying-glass", "projectSearchBtn", "search project replace all files regex case whole word"),
     createButtonCommand("editor.focus", "Focus code editor", "Return the cursor to the active file", "fa-solid fa-i-cursor", "activeEditor", "code type",),
     createButtonCommand("editor.undo", "Undo edit", "Undo the last editor change", "fa-solid fa-rotate-left", "undoEditorBtn", "history"),
     createButtonCommand("editor.redo", "Redo edit", "Restore the last undone change", "fa-solid fa-rotate-right", "redoEditorBtn", "history"),
@@ -591,6 +610,388 @@ document.addEventListener("keydown", (event) => {
   event.preventDefault();
   if (commandPaletteModal?.hidden) openCommandPalette();
   else closeCommandPalette();
+});
+
+function isProjectSearchOptionEnabled(button) {
+  return button?.getAttribute("aria-pressed") === "true";
+}
+
+function setProjectSearchOption(button, enabled) {
+  if (!button) return;
+  button.setAttribute("aria-pressed", enabled ? "true" : "false");
+}
+
+function escapeProjectSearchRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildProjectSearchExpression() {
+  const query = String(projectSearchInput?.value || "");
+  if (!query) return null;
+  let source = isProjectSearchOptionEnabled(projectSearchRegexBtn)
+    ? query
+    : escapeProjectSearchRegex(query);
+  if (isProjectSearchOptionEnabled(projectSearchWholeBtn)) {
+    source = `(?<![A-Za-z0-9_$])(?:${source})(?![A-Za-z0-9_$])`;
+  }
+  const flags = `gm${isProjectSearchOptionEnabled(projectSearchCaseBtn) ? "" : "i"}`;
+  return new RegExp(source, flags);
+}
+
+function isProjectSearchableFile(file) {
+  if (!file || typeof file.content !== "string") return false;
+  return !getProjectMediaKind(file);
+}
+
+function collectProjectSearchMatches() {
+  projectSearchError = "";
+  projectSearchTruncated = false;
+  let expression;
+  try {
+    expression = buildProjectSearchExpression();
+  } catch (error) {
+    projectSearchError = error?.message || "The regular expression is not valid.";
+    return [];
+  }
+  if (!expression) return [];
+
+  const matches = [];
+  for (const file of projectFiles) {
+    if (!isProjectSearchableFile(file)) continue;
+    const content = String(file.content || "");
+    const fileExpression = new RegExp(expression.source, expression.flags);
+    let match;
+    while ((match = fileExpression.exec(content))) {
+      if (!match[0]) {
+        fileExpression.lastIndex += 1;
+        continue;
+      }
+      const location = getLineAndColumnFromIndex(content, match.index);
+      const lineStart = content.lastIndexOf("\n", Math.max(0, match.index - 1)) + 1;
+      const lineBreak = content.indexOf("\n", match.index);
+      const lineEnd = lineBreak === -1 ? content.length : lineBreak;
+      const lineText = content.slice(lineStart, lineEnd).replace(/\r$/, "");
+      matches.push({
+        fileName: file.name,
+        fileType: file.type || getFileType(file.name),
+        index: match.index,
+        length: match[0].length,
+        matchText: match[0],
+        line: location.line,
+        column: location.col,
+        lineText,
+        lineMatchLength: Math.max(1, Math.min(match[0].length, Math.max(1, lineEnd - match.index))),
+        editable: canCurrentUserEditFile(file.name),
+      });
+      if (matches.length >= PROJECT_SEARCH_RESULT_LIMIT) {
+        projectSearchTruncated = true;
+        return matches;
+      }
+    }
+  }
+  return matches;
+}
+
+function renderProjectSearchMatchLine(result) {
+  const start = Math.max(0, Number(result.column || 1) - 1);
+  const end = Math.min(result.lineText.length, start + Number(result.lineMatchLength || 1));
+  return `${escapeHtml(result.lineText.slice(0, start))}<mark>${escapeHtml(result.lineText.slice(start, end))}</mark>${escapeHtml(result.lineText.slice(end))}`;
+}
+
+function renderProjectSearchEmpty(icon, title, message) {
+  if (!projectSearchResults) return;
+  projectSearchResults.innerHTML = `<div class="project-search-empty"><i class="${icon}"></i><strong>${escapeHtml(title)}</strong><span>${escapeHtml(message)}</span></div>`;
+}
+
+function renderProjectSearchResults() {
+  if (!projectSearchResults || !projectSearchStatus || !projectSearchHint) return;
+  const query = String(projectSearchInput?.value || "");
+  projectSearchMatches = collectProjectSearchMatches();
+
+  if (!query) {
+    projectSearchStatus.textContent = "Enter text to search the project";
+    projectSearchHint.textContent = "Results include filenames and exact line numbers.";
+    if (projectReplaceAllBtn) projectReplaceAllBtn.disabled = true;
+    renderProjectSearchEmpty(
+      "fa-solid fa-magnifying-glass",
+      "Find code across the whole project",
+      "Find HTML, CSS, JavaScript, configuration, and other text without opening files one at a time.",
+    );
+    return;
+  }
+
+  if (projectSearchError) {
+    projectSearchStatus.textContent = "Regular expression needs attention";
+    projectSearchHint.textContent = projectSearchError;
+    if (projectReplaceAllBtn) projectReplaceAllBtn.disabled = true;
+    renderProjectSearchEmpty(
+      "fa-solid fa-triangle-exclamation",
+      "Invalid regular expression",
+      projectSearchError,
+    );
+    return;
+  }
+
+  const fileNames = new Set(projectSearchMatches.map((result) => result.fileName));
+  const editableCount = projectSearchMatches.filter((result) => result.editable).length;
+  projectSearchStatus.textContent = projectSearchMatches.length
+    ? `${projectSearchMatches.length}${projectSearchTruncated ? "+" : ""} match${projectSearchMatches.length === 1 ? "" : "es"} in ${fileNames.size} file${fileNames.size === 1 ? "" : "s"}`
+    : "No matches found";
+  projectSearchHint.textContent = projectSearchTruncated
+    ? `Showing the first ${PROJECT_SEARCH_RESULT_LIMIT} matches. Refine the search to narrow the result set.`
+    : "Select a result to open its exact location.";
+  if (projectReplaceAllBtn) {
+    projectReplaceAllBtn.disabled = editableCount === 0 || projectSearchTruncated;
+    projectReplaceAllBtn.title = projectSearchTruncated
+      ? "Refine the search before replacing all matches"
+      : editableCount
+      ? `Replace ${editableCount} editable match${editableCount === 1 ? "" : "es"}`
+      : "There are no editable matches";
+  }
+
+  if (!projectSearchMatches.length) {
+    renderProjectSearchEmpty(
+      "fa-regular fa-face-meh",
+      "Nothing matched",
+      "Try a shorter phrase or change the case, whole-word, or regular-expression options.",
+    );
+    return;
+  }
+
+  const groups = new Map();
+  projectSearchMatches.forEach((result) => {
+    if (!groups.has(result.fileName)) groups.set(result.fileName, []);
+    groups.get(result.fileName).push(result);
+  });
+  const fragment = document.createDocumentFragment();
+  groups.forEach((results, fileName) => {
+    const group = document.createElement("section");
+    group.className = "project-search-file-group";
+    group.innerHTML = `<div class="project-search-file-heading"><strong><i class="fa-regular fa-file-code"></i> ${escapeHtml(fileName)}</strong><span>${results.length} match${results.length === 1 ? "" : "es"}</span></div>`;
+    results.forEach((result) => {
+      const row = document.createElement("article");
+      row.className = "project-search-result";
+      row.setAttribute("role", "listitem");
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "project-search-result-open";
+      openButton.innerHTML = `<span class="project-search-result-line">${result.line}:${result.column}</span><span class="project-search-result-copy"><code>${renderProjectSearchMatchLine(result)}</code><small>Open ${escapeHtml(fileName)} at line ${result.line}</small></span>`;
+      openButton.addEventListener("click", () => openProjectSearchMatch(result));
+
+      const replaceButton = document.createElement("button");
+      replaceButton.type = "button";
+      replaceButton.className = "project-search-replace-one";
+      replaceButton.textContent = result.editable ? "REPLACE" : "LOCKED";
+      replaceButton.disabled = !result.editable;
+      replaceButton.title = result.editable
+        ? "Replace this match"
+        : "You do not currently have permission to edit this file";
+      replaceButton.addEventListener("click", () => replaceProjectSearchMatch(result));
+
+      row.append(openButton, replaceButton);
+      group.appendChild(row);
+    });
+    fragment.appendChild(group);
+  });
+  projectSearchResults.replaceChildren(fragment);
+}
+
+function scheduleProjectSearchRender() {
+  clearTimeout(projectSearchRenderTimer);
+  projectSearchRenderTimer = setTimeout(renderProjectSearchResults, 70);
+}
+
+function openProjectSearchMatch(result) {
+  const file = projectFiles.find((entry) => String(entry.name).toLowerCase() === String(result.fileName).toLowerCase());
+  if (!file || String(file.content || "").slice(result.index, result.index + result.length) !== result.matchText) {
+    renderProjectSearchResults();
+    showNotification("That result changed. The project search has been refreshed.", "info");
+    return;
+  }
+  closeProjectSearch(false);
+  if (isCompactWorkspaceLayout()) setMobileWorkspacePane("editor");
+  requestAnimationFrame(() => {
+    jumpToEditorLocation(result.fileName, result.line, result.column);
+    const editor = document.getElementById("activeEditor");
+    if (!editor) return;
+    editor.setSelectionRange(result.index, result.index + result.length);
+    editor.focus({ preventScroll: true });
+  });
+}
+
+function applyProjectSearchFileUpdates(updates) {
+  const validUpdates = updates.filter((update) => update?.file && typeof update.content === "string");
+  if (!validUpdates.length) return false;
+  const editor = document.getElementById("activeEditor");
+  const activeUpdate = validUpdates.find((update) => update.file === activeFile);
+
+  validUpdates.forEach((update) => {
+    if (update !== activeUpdate) update.file.content = update.content;
+  });
+  hasUnsavedChanges = true;
+
+  if (activeUpdate && editor && !getProjectMediaKind(activeFile)) {
+    beginEditorHistoryCapture(editor);
+    editor.value = activeUpdate.content;
+    editor.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertReplacementText",
+      data: null,
+    }));
+  } else {
+    updateProjectStatusUI();
+    if (autoRunCheckbox?.checked) debouncedUpdatePreview();
+  }
+
+  scheduleProjectAutosave();
+  __codxRescanProjectSuggestionCacheSoon();
+  refreshDiagnosticsState();
+  syncProjectWithSession();
+  renderFileList();
+  document.title = "CodX Editor";
+  return true;
+}
+
+function replaceProjectSearchMatch(result) {
+  const file = projectFiles.find((entry) => String(entry.name).toLowerCase() === String(result.fileName).toLowerCase());
+  if (!file || !canCurrentUserEditFile(file.name)) {
+    showNotification("You do not currently have permission to edit that file.", "error");
+    return;
+  }
+  const content = String(file.content || "");
+  if (content.slice(result.index, result.index + result.length) !== result.matchText) {
+    renderProjectSearchResults();
+    showNotification("That result changed. The project search has been refreshed.", "info");
+    return;
+  }
+  const replacement = String(projectReplaceInput?.value || "");
+  const nextContent = `${content.slice(0, result.index)}${replacement}${content.slice(result.index + result.length)}`;
+  if (!applyProjectSearchFileUpdates([{ file, content: nextContent }])) return;
+  renderProjectSearchResults();
+  showNotification(`Replaced one match in ${file.name}.`, "success");
+}
+
+async function replaceAllProjectSearchMatches() {
+  let expression;
+  try {
+    expression = buildProjectSearchExpression();
+  } catch (error) {
+    renderProjectSearchResults();
+    return;
+  }
+  if (!expression) return;
+  if (projectSearchTruncated) {
+    showNotification("Refine the search before replacing all matches.", "info");
+    projectSearchInput?.focus();
+    return;
+  }
+  const editableMatches = projectSearchMatches.filter((result) => result.editable);
+  if (!editableMatches.length) return;
+  const editableFiles = new Set(editableMatches.map((result) => result.fileName));
+  const decision = await showAppConfirm(
+    "REPLACE ALL MATCHES",
+    `Replace ${editableMatches.length} match${editableMatches.length === 1 ? "" : "es"} across ${editableFiles.size} editable file${editableFiles.size === 1 ? "" : "s"}? You can undo changes to the active file.`,
+    "REPLACE ALL",
+    "CANCEL",
+  );
+  if (!decision?.ok) {
+    requestAnimationFrame(() => projectSearchInput?.focus());
+    return;
+  }
+
+  const replacement = String(projectReplaceInput?.value || "");
+  const updates = [];
+  let replacementCount = 0;
+  for (const file of projectFiles) {
+    if (!isProjectSearchableFile(file) || !canCurrentUserEditFile(file.name)) continue;
+    const fileExpression = new RegExp(expression.source, expression.flags);
+    let fileCount = 0;
+    const content = String(file.content || "");
+    const nextContent = content.replace(fileExpression, (match) => {
+      if (!match) return match;
+      fileCount += 1;
+      return replacement;
+    });
+    if (!fileCount) continue;
+    replacementCount += fileCount;
+    updates.push({ file, content: nextContent });
+  }
+  if (!applyProjectSearchFileUpdates(updates)) return;
+  renderProjectSearchResults();
+  showNotification(
+    `Replaced ${replacementCount} match${replacementCount === 1 ? "" : "es"} across ${updates.length} file${updates.length === 1 ? "" : "s"}.`,
+    "success",
+  );
+  requestAnimationFrame(() => projectSearchInput?.focus());
+}
+
+function openProjectSearch(initialQuery = null) {
+  if (!projectSearchModal) return;
+  if (commandPaletteModal && !commandPaletteModal.hidden) closeCommandPalette(false);
+  projectSearchPreviousFocus = document.activeElement;
+  projectSearchModal.hidden = false;
+  document.body.classList.add("project-search-open");
+  if (typeof initialQuery === "string") {
+    projectSearchInput.value = initialQuery;
+  } else if (!projectSearchInput.value) {
+    const editor = document.getElementById("activeEditor");
+    const selection = editor && editor.selectionStart !== editor.selectionEnd
+      ? editor.value.slice(editor.selectionStart, editor.selectionEnd)
+      : "";
+    if (selection && !selection.includes("\n") && selection.length <= 160) {
+      projectSearchInput.value = selection;
+    }
+  }
+  renderProjectSearchResults();
+  requestAnimationFrame(() => {
+    projectSearchInput?.focus();
+    projectSearchInput?.select();
+  });
+}
+
+function closeProjectSearch(restoreFocus = true) {
+  if (!projectSearchModal || projectSearchModal.hidden) return;
+  projectSearchModal.hidden = true;
+  document.body.classList.remove("project-search-open");
+  clearTimeout(projectSearchRenderTimer);
+  if (restoreFocus && projectSearchPreviousFocus instanceof HTMLElement) {
+    projectSearchPreviousFocus.focus();
+  }
+}
+
+projectSearchBtn?.addEventListener("click", () => openProjectSearch());
+closeProjectSearchBtn?.addEventListener("click", () => closeProjectSearch());
+projectSearchInput?.addEventListener("input", scheduleProjectSearchRender);
+projectSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && projectSearchMatches[0]) {
+    event.preventDefault();
+    openProjectSearchMatch(projectSearchMatches[0]);
+  }
+});
+projectReplaceAllBtn?.addEventListener("click", replaceAllProjectSearchMatches);
+[projectSearchCaseBtn, projectSearchWholeBtn, projectSearchRegexBtn].forEach((button) => {
+  button?.addEventListener("click", () => {
+    setProjectSearchOption(button, !isProjectSearchOptionEnabled(button));
+    renderProjectSearchResults();
+    projectSearchInput?.focus();
+  });
+});
+projectSearchModal?.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  closeProjectSearch();
+});
+
+document.addEventListener("keydown", (event) => {
+  const isProjectSearchShortcut =
+    (event.ctrlKey || event.metaKey) &&
+    event.shiftKey &&
+    event.key.toLowerCase() === "f";
+  if (!isProjectSearchShortcut) return;
+  event.preventDefault();
+  if (projectSearchModal?.hidden) openProjectSearch();
+  else projectSearchInput?.focus();
 });
 
 const GITHUB_CONNECTION_CACHE_KEY = "codxGitHubConnectionStateV1";
