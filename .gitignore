@@ -24,8 +24,8 @@ temp/
 .codx-github-sessions.enc
 .codx-github-sessions.enc.tmp
 
-# Runtime data — must NOT be tracked, or redeploys reset published links
-published-projects.json
+# Atomic-write temp file only; the data file itself stays tracked so
+# published links are part of the deploy and survive redeploys.
 published-projects.json.tmp
 
 # Operating system files
