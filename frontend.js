@@ -4724,7 +4724,7 @@ function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "cre
         : !isUpdate
         ? `<span style="display:block;margin:16px 0 6px;font-size:12px;color:#f59e0b">Verification key was not returned. Try publishing again with a fresh custom link.</span>`
         : "";
-      appDialogMessage.innerHTML = `<span style="display:block;margin-bottom:6px">${isUpdate ? "Your link has been updated:" : "Your link has been published:"}</span><a id="publishedProjectLink" target="_blank" rel="noopener noreferrer" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(shareLink)}</a>${keyHtml}<span style="display:block;margin:16px 0 8px;font-size:12px;color:var(--text-muted)">Share it</span><div id="publishedShareShortcuts" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="run-button" data-share="whatsapp" style="background:#25d366"><i class="fa-brands fa-whatsapp"></i> <strong>WHATSAPP</strong></button><button type="button" class="run-button" data-share="discord" style="background:#5865f2"><i class="fa-brands fa-discord"></i> <strong>DISCORD</strong></button><button type="button" class="run-button" data-share="snapchat" style="background:#fffc00;color:#161616"><i class="fa-brands fa-snapchat"></i> <strong>SNAPCHAT</strong></button></div>`;
+      appDialogMessage.innerHTML = `<span style="display:block;margin-bottom:6px">${isUpdate ? "Your link has been updated:" : "Your link has been published:"}</span><a id="publishedProjectLink" target="_blank" rel="noopener noreferrer" style="display:block;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(shareLink)}</a>${keyHtml}<span style="display:block;margin:16px 0 8px;font-size:12px;color:var(--text-muted)">Share it</span><div id="publishedShareShortcuts" style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="share-icon-btn" data-share="whatsapp" title="Share on WhatsApp" aria-label="Share on WhatsApp" style="background:#25d366"><i class="fa-brands fa-whatsapp"></i></button><button type="button" class="share-icon-btn" data-share="telegram" title="Share on Telegram" aria-label="Share on Telegram" style="background:#229ed9"><i class="fa-brands fa-telegram"></i></button><button type="button" class="share-icon-btn" data-share="facebook" title="Share on Facebook" aria-label="Share on Facebook" style="background:#1877f2"><i class="fa-brands fa-facebook-f"></i></button><button type="button" class="share-icon-btn" data-share="x" title="Share on X" aria-label="Share on X" style="background:#000000"><i class="fa-brands fa-x-twitter"></i></button><button type="button" class="share-icon-btn" data-share="reddit" title="Share on Reddit" aria-label="Share on Reddit" style="background:#ff4500"><i class="fa-brands fa-reddit-alien"></i></button><button type="button" class="share-icon-btn" data-share="linkedin" title="Share on LinkedIn" aria-label="Share on LinkedIn" style="background:#0a66c2"><i class="fa-brands fa-linkedin-in"></i></button><button type="button" class="share-icon-btn" data-share="discord" title="Share on Discord" aria-label="Share on Discord" style="background:#5865f2"><i class="fa-brands fa-discord"></i></button><button type="button" class="share-icon-btn" data-share="snapchat" title="Share on Snapchat" aria-label="Share on Snapchat" style="background:#fffc00;color:#161616"><i class="fa-brands fa-snapchat"></i></button><button type="button" class="share-icon-btn" data-share="email" title="Share via Email" aria-label="Share via Email" style="background:#ea4335"><i class="fa-solid fa-envelope"></i></button><button type="button" class="share-icon-btn" data-share="copy" title="Copy link" aria-label="Copy link" style="background:#334155"><i class="fa-solid fa-link"></i></button></div>`;
     }
     const publishedProjectLink = document.getElementById("publishedProjectLink");
     if (publishedProjectLink) publishedProjectLink.href = shareLink;
@@ -4755,13 +4755,30 @@ function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "cre
       };
     }
     document.getElementById("appDialogDoneBtn").onclick = () => closeAppDialog({ ok: true });
+    const shareTargets = {
+      whatsapp: (u) => `https://wa.me/?text=${encodeURIComponent(u)}`,
+      telegram: (u) => `https://t.me/share/url?url=${encodeURIComponent(u)}`,
+      facebook: (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`,
+      x: (u) => `https://twitter.com/intent/tweet?url=${encodeURIComponent(u)}`,
+      reddit: (u) => `https://www.reddit.com/submit?url=${encodeURIComponent(u)}`,
+      linkedin: (u) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}`,
+      email: (u) =>
+        `mailto:?subject=${encodeURIComponent("My CodX Editor project")}&body=${encodeURIComponent(u)}`,
+    };
     document.querySelectorAll("#publishedShareShortcuts [data-share]").forEach((button) => {
       button.onclick = async () => {
         const service = button.dataset.share;
-        if (service === "whatsapp") {
-          window.open(`https://wa.me/?text=${encodeURIComponent(shareLink)}`, "_blank", "noopener,noreferrer");
+        if (service === "copy") {
+          await copyLink();
           return;
         }
+        const makeShareUrl = shareTargets[service];
+        if (makeShareUrl) {
+          window.open(makeShareUrl(shareLink), "_blank", "noopener,noreferrer");
+          return;
+        }
+        // Discord / Snapchat have no reliable web share link, so use the native
+        // share sheet if available, otherwise copy the link to paste manually.
         if (navigator.share) {
           try {
             await navigator.share({ title: "Published project", url: shareLink });
@@ -4769,7 +4786,8 @@ function showPublishedProjectDialog(shareLink, verificationKey = "", mode = "cre
           } catch (_err) {}
         }
         await copyLink();
-        showNotification(`Link copied — paste it into ${service === "discord" ? "Discord" : "Snapchat"}.`, "success");
+        const label = (button.getAttribute("aria-label") || service).replace(/^Share on /, "");
+        showNotification(`Link copied — paste it into ${label}.`, "success");
       };
     });
     setTimeout(() => document.getElementById("appDialogDoneBtn")?.focus(), 0);
