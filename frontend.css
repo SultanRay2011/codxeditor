@@ -3900,13 +3900,26 @@ iframe {
   animation: commandPaletteEnter 0.16s ease-out;
 }
 
+.command-palette-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-right: 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
 .command-palette-search {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 13px;
   padding: 17px 18px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: transparent;
+}
+
+.command-palette-close {
+  flex: 0 0 44px;
 }
 
 .command-palette-search > i {
@@ -10552,6 +10565,22 @@ textarea::-webkit-scrollbar-thumb:hover,
   text-shadow: none !important;
   transform: scale(1.08) !important;
   outline: none !important;
+}
+
+.modal-card-close-absolute {
+  position: absolute !important;
+  top: 13px !important;
+  right: 13px !important;
+  z-index: 5;
+}
+
+#appDialogTitle {
+  padding-right: 54px;
+}
+
+#closeAppDialogBtn[hidden],
+#closeModalBtn[hidden] {
+  display: none !important;
 }
 
 /* ---- Tutorial coaching card (highlighted request) ---- */

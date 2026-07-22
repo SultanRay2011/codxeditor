@@ -90,11 +90,13 @@ const homepageButton = document.getElementById('homepageBtn');
 const announcementPopup = document.getElementById("announcementPopup");
 const announcementPopupText = document.getElementById("announcementPopupText");
 const announcementPopupOkBtn = document.getElementById("announcementPopupOkBtn");
+const closeAnnouncementPopupBtn = document.getElementById("closeAnnouncementPopupBtn");
 const appDialog = document.getElementById("appDialog");
 const appDialogTitle = document.getElementById("appDialogTitle");
 const appDialogMessage = document.getElementById("appDialogMessage");
 const appDialogInput = document.getElementById("appDialogInput");
 const appDialogActions = document.getElementById("appDialogActions");
+const closeAppDialogBtn = document.getElementById("closeAppDialogBtn");
 const developerConsoleModal = document.getElementById("developerConsoleModal");
 const developerToolStatus = document.getElementById("developerToolStatus");
 const closeDeveloperConsoleBtn = document.getElementById("closeDeveloperConsoleBtn");
@@ -144,6 +146,7 @@ const redoEditorBtn = document.getElementById("redoEditorBtn");
 const commandPaletteBtn = document.getElementById("commandPaletteBtn");
 const developerToolsBtn = document.getElementById("developerToolsBtn");
 const commandPaletteModal = document.getElementById("commandPaletteModal");
+const closeCommandPaletteBtn = document.getElementById("closeCommandPaletteBtn");
 const commandPaletteInput = document.getElementById("commandPaletteInput");
 const commandPaletteResults = document.getElementById("commandPaletteResults");
 const commandPaletteStatus = document.getElementById("commandPaletteStatus");
@@ -587,6 +590,7 @@ function closeCommandPalette(restoreFocus = true) {
 }
 
 commandPaletteBtn?.addEventListener("click", () => openCommandPalette());
+closeCommandPaletteBtn?.addEventListener("click", () => closeCommandPalette());
 developerToolsBtn?.addEventListener("click", openDeveloperConsole);
 // Clicking outside a modal card no longer closes it; use Escape or the close button.
 commandPaletteInput?.addEventListener("input", () => {
@@ -1659,6 +1663,22 @@ window.codxUpsertNodeRuntimeFile = (name, content) => {
 if (announcementPopupOkBtn) {
   announcementPopupOkBtn.onclick = closeAnnouncementPopup;
 }
+if (closeAnnouncementPopupBtn) {
+  closeAnnouncementPopupBtn.onclick = closeAnnouncementPopup;
+}
+if (closeAppDialogBtn) {
+  closeAppDialogBtn.onclick = () => {
+    if (closeAppDialogBtn.disabled) return;
+    closeAppDialog({ ok: false, value: null });
+  };
+}
+if (appDialogActions && typeof MutationObserver === "function") {
+  new MutationObserver(syncAppDialogCloseButton).observe(appDialogActions, {
+    childList: true,
+    subtree: true,
+  });
+}
+syncAppDialogCloseButton();
 // Clicking outside a modal card no longer closes it; use Escape or the close button.
 if (appDialog) {
   appDialog.addEventListener("keydown", (event) => {
@@ -4983,6 +5003,28 @@ async function runDeveloperCommand(rawCommand) {
   appendDeveloperConsoleLine("");
 }
 
+function isModalCancelControl(button) {
+  if (!(button instanceof HTMLButtonElement)) return false;
+  const id = String(button.id || "").toLowerCase();
+  const action = String(button.dataset.modalAction || "").toLowerCase();
+  const label = String(button.textContent || "").trim().toLowerCase();
+  return id.includes("cancel") || action === "cancel" || label === "cancel";
+}
+
+function modalHasCancelControl(modal) {
+  if (!(modal instanceof HTMLElement)) return false;
+  return [...modal.querySelectorAll("button")].some(isModalCancelControl);
+}
+
+function syncAppDialogCloseButton() {
+  if (!appDialog || !closeAppDialogBtn) return;
+  const hasCancel = modalHasCancelControl(appDialog);
+  closeAppDialogBtn.hidden = hasCancel;
+  closeAppDialogBtn.disabled = appDialog.dataset.dialogKind === "publish-loading";
+  closeAppDialogBtn.setAttribute("aria-hidden", hasCancel ? "true" : "false");
+  closeAppDialogBtn.tabIndex = hasCancel ? -1 : 0;
+}
+
 function closeAppDialog(result = null) {
   stopDeviceTransferScanner();
   stopDeviceTransferCountdown();
@@ -4998,6 +5040,7 @@ function closeAppDialog(result = null) {
   if (appDialogActions) {
     appDialogActions.innerHTML = "";
   }
+  syncAppDialogCloseButton();
   const resolver = activeDialogResolver;
   activeDialogResolver = null;
   if (resolver) resolver(result);
@@ -5045,6 +5088,7 @@ function showAppDialog({
         <button type="button" id="appDialogOkBtn" class="run-button"${okVariant ? ` style="${escapeHtml(okVariant)}"` : ""}><strong>${escapeHtml(okText)}</strong></button>
       `;
     }
+    syncAppDialogCloseButton();
     if (appDialog) appDialog.style.display = "flex";
     const cancelBtn = document.getElementById("appDialogCancelBtn");
     const okBtn = document.getElementById("appDialogOkBtn");
@@ -25218,6 +25262,7 @@ function setModalActions(html) {
   actions.innerHTML = html;
   if (!String(html || "").trim()) {
     actions.style.display = "none";
+    syncCollabModalCloseButton();
     return;
   }
   actions.style.display = "flex";
@@ -25231,11 +25276,20 @@ function setModalActions(html) {
       btn.style.flex = "1";
     });
   }
+  syncCollabModalCloseButton();
 }
 
-function setCollabCloseButtonVisible(visible) {
+function syncCollabModalCloseButton() {
   if (!closeModalBtn) return;
-  closeModalBtn.style.display = visible ? "block" : "none";
+  const hasCancel = modalHasCancelControl(collabModal);
+  closeModalBtn.hidden = hasCancel;
+  closeModalBtn.style.display = hasCancel ? "none" : "grid";
+  closeModalBtn.setAttribute("aria-hidden", hasCancel ? "true" : "false");
+  closeModalBtn.tabIndex = hasCancel ? -1 : 0;
+}
+
+function setCollabCloseButtonVisible(_visible) {
+  syncCollabModalCloseButton();
 }
 
 function renderCollabStartMenu() {
