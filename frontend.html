@@ -1714,15 +1714,54 @@
           </label>
         </div>
 
+        <div class="project-search-filters" aria-label="File filters">
+          <label class="project-search-filter-field">
+            <span><i class="fa-solid fa-filter" aria-hidden="true"></i> Include files <small>optional</small></span>
+            <div class="project-search-filter-input">
+              <input
+                id="projectSearchIncludeInput"
+                type="text"
+                placeholder="*.html, src/**"
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Include file patterns"
+              />
+            </div>
+          </label>
+          <label class="project-search-filter-field">
+            <span><i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i> Exclude files <small>optional</small></span>
+            <div class="project-search-filter-input">
+              <input
+                id="projectSearchExcludeInput"
+                type="text"
+                placeholder="vendor/**, *.min.js"
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Exclude file patterns"
+              />
+            </div>
+          </label>
+          <button id="projectSearchClearFiltersBtn" class="project-search-clear-filters" type="button" title="Clear file filters" disabled>
+            <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+            <span>CLEAR</span>
+          </button>
+        </div>
+
         <div class="project-search-summary">
           <div>
             <strong id="projectSearchStatus">Enter text to search the project</strong>
             <span id="projectSearchHint">Results include filenames and exact line numbers.</span>
           </div>
-          <button id="projectReplaceAllBtn" class="project-replace-all" type="button" disabled>
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>REPLACE ALL</span>
-          </button>
+          <div class="project-search-summary-actions">
+            <button id="projectSearchUndoBtn" class="project-search-undo" type="button" hidden disabled>
+              <i class="fa-solid fa-rotate-left"></i>
+              <span>UNDO REPLACE ALL</span>
+            </button>
+            <button id="projectReplaceAllBtn" class="project-replace-all" type="button" disabled>
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>REPLACE ALL</span>
+            </button>
+          </div>
         </div>
 
         <div

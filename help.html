@@ -1406,6 +1406,8 @@
                   <li>Match Case distinguishes uppercase and lowercase text.</li>
                   <li>Whole Word avoids matching the search inside longer identifiers.</li>
                   <li>Regular Expression supports advanced matching patterns and reports invalid patterns clearly.</li>
+                  <li>Include and Exclude filters accept comma-separated file patterns such as <code>*.html</code>, <code>src/**</code>, or <code>*.min.js</code>. Exclude patterns take priority.</li>
+                  <li>Use Clear beside the filters to return to searching every text file.</li>
                   <li>If text is selected in the editor, opening project search can use that selection as the initial query.</li>
                 </ul>
               </article>
@@ -1413,7 +1415,8 @@
                 <h3><i class="fa-solid fa-arrow-right-arrow-left"></i> Safe Replacement</h3>
                 <ul>
                   <li>Replace changes one result while keeping the search panel and remaining results current.</li>
-                  <li>Replace All asks for confirmation and updates every editable matching file together.</li>
+                  <li>Replace All asks for confirmation and updates every editable matching file together, including only files allowed by the active filters.</li>
+                  <li>After Replace All, Undo Replace All restores the complete content of every affected file. If one of those files was edited afterward, CodX Editor asks before overwriting the newer work.</li>
                   <li>Collaboration permissions are respected; matches in locked files remain visible but cannot be replaced.</li>
                   <li>Replacing content marks the project as changed, refreshes diagnostics and preview output, autosaves recovery data, and synchronizes collaboration state.</li>
                 </ul>

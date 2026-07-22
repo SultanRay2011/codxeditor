@@ -158,6 +158,10 @@ const projectSearchRegexBtn = document.getElementById("projectSearchRegexBtn");
 const projectSearchStatus = document.getElementById("projectSearchStatus");
 const projectSearchHint = document.getElementById("projectSearchHint");
 const projectSearchResults = document.getElementById("projectSearchResults");
+const projectSearchIncludeInput = document.getElementById("projectSearchIncludeInput");
+const projectSearchExcludeInput = document.getElementById("projectSearchExcludeInput");
+const projectSearchClearFiltersBtn = document.getElementById("projectSearchClearFiltersBtn");
+const projectSearchUndoBtn = document.getElementById("projectSearchUndoBtn");
 const projectReplaceAllBtn = document.getElementById("projectReplaceAllBtn");
 const mobileWorkspaceTabs = document.querySelector(".mobile-workspace-tabs");
 const mobileWorkspaceButtons = [...document.querySelectorAll("[data-mobile-pane]")];
@@ -372,6 +376,7 @@ let projectSearchPreviousFocus = null;
 let projectSearchRenderTimer = null;
 let projectSearchError = "";
 let projectSearchTruncated = false;
+let projectSearchReplaceAllHistory = null;
 const PROJECT_SEARCH_RESULT_LIMIT = 500;
 
 function getCommandButton(id) {
@@ -625,6 +630,78 @@ function escapeProjectSearchRegex(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalizeProjectSearchPath(value, { preserveRoot = false } = {}) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/\/{2,}/g, "/");
+  return preserveRoot ? normalized : normalized.replace(/^\/+/, "");
+}
+
+function getProjectSearchFilterPatterns(input) {
+  return [...new Set(
+    String(input?.value || "")
+      .split(/[\n,]+/)
+      .map((pattern) => normalizeProjectSearchPath(pattern, { preserveRoot: true }))
+      .filter(Boolean),
+  )];
+}
+
+function projectSearchGlobToRegExp(rawPattern) {
+  let pattern = normalizeProjectSearchPath(rawPattern, { preserveRoot: true });
+  const anchoredAtRoot = pattern.startsWith("/");
+  pattern = pattern.replace(/^\/+/, "");
+  let source = "";
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "*") {
+      if (pattern[index + 1] === "*") {
+        if (pattern[index + 2] === "/") {
+          source += "(?:.*/)?";
+          index += 2;
+        } else {
+          source += ".*";
+          index += 1;
+        }
+      } else {
+        source += "[^/]*";
+      }
+      continue;
+    }
+    if (character === "?") {
+      source += "[^/]";
+      continue;
+    }
+    source += /[.+^${}()|[\]\\]/.test(character) ? `\\${character}` : character;
+  }
+
+  const prefix = anchoredAtRoot || pattern.includes("/") ? "^" : "(?:^|/)";
+  return new RegExp(`${prefix}${source}$`, "i");
+}
+
+function getProjectSearchFilterState() {
+  const includePatterns = getProjectSearchFilterPatterns(projectSearchIncludeInput);
+  const excludePatterns = getProjectSearchFilterPatterns(projectSearchExcludeInput);
+  return {
+    includePatterns,
+    excludePatterns,
+    includeMatchers: includePatterns.map(projectSearchGlobToRegExp),
+    excludeMatchers: excludePatterns.map(projectSearchGlobToRegExp),
+    active: Boolean(includePatterns.length || excludePatterns.length),
+  };
+}
+
+function doesProjectFileMatchSearchFilters(file, filterState = getProjectSearchFilterState()) {
+  const filePath = normalizeProjectSearchPath(file?.name);
+  if (!filePath) return false;
+  if (filterState.includeMatchers.length && !filterState.includeMatchers.some((matcher) => matcher.test(filePath))) {
+    return false;
+  }
+  return !filterState.excludeMatchers.some((matcher) => matcher.test(filePath));
+}
+
 function buildProjectSearchExpression() {
   const query = String(projectSearchInput?.value || "");
   if (!query) return null;
@@ -638,12 +715,12 @@ function buildProjectSearchExpression() {
   return new RegExp(source, flags);
 }
 
-function isProjectSearchableFile(file) {
+function isProjectSearchableFile(file, filterState = getProjectSearchFilterState()) {
   if (!file || typeof file.content !== "string") return false;
-  return !getProjectMediaKind(file);
+  return !getProjectMediaKind(file) && doesProjectFileMatchSearchFilters(file, filterState);
 }
 
-function collectProjectSearchMatches() {
+function collectProjectSearchMatches(filterState = getProjectSearchFilterState()) {
   projectSearchError = "";
   projectSearchTruncated = false;
   let expression;
@@ -657,7 +734,7 @@ function collectProjectSearchMatches() {
 
   const matches = [];
   for (const file of projectFiles) {
-    if (!isProjectSearchableFile(file)) continue;
+    if (!isProjectSearchableFile(file, filterState)) continue;
     const content = String(file.content || "");
     const fileExpression = new RegExp(expression.source, expression.flags);
     let match;
@@ -703,14 +780,41 @@ function renderProjectSearchEmpty(icon, title, message) {
   projectSearchResults.innerHTML = `<div class="project-search-empty"><i class="${icon}"></i><strong>${escapeHtml(title)}</strong><span>${escapeHtml(message)}</span></div>`;
 }
 
+function getProjectSearchReplaceAllHistory() {
+  if (!projectSearchReplaceAllHistory?.files?.length) return null;
+  const belongsToCurrentProject = projectSearchReplaceAllHistory.files.every((entry) =>
+    entry?.file && projectFiles.includes(entry.file),
+  );
+  if (!belongsToCurrentProject) {
+    projectSearchReplaceAllHistory = null;
+    return null;
+  }
+  return projectSearchReplaceAllHistory;
+}
+
+function updateProjectSearchUndoButton() {
+  if (!projectSearchUndoBtn) return;
+  const history = getProjectSearchReplaceAllHistory();
+  projectSearchUndoBtn.hidden = !history;
+  projectSearchUndoBtn.disabled = !history;
+  projectSearchUndoBtn.title = history
+    ? `Restore ${history.replacementCount} replacement${history.replacementCount === 1 ? "" : "s"} across ${history.files.length} file${history.files.length === 1 ? "" : "s"}`
+    : "No Replace All operation is available to undo";
+}
+
 function renderProjectSearchResults() {
   if (!projectSearchResults || !projectSearchStatus || !projectSearchHint) return;
   const query = String(projectSearchInput?.value || "");
-  projectSearchMatches = collectProjectSearchMatches();
+  const filterState = getProjectSearchFilterState();
+  projectSearchMatches = collectProjectSearchMatches(filterState);
+  if (projectSearchClearFiltersBtn) projectSearchClearFiltersBtn.disabled = !filterState.active;
+  updateProjectSearchUndoButton();
 
   if (!query) {
     projectSearchStatus.textContent = "Enter text to search the project";
-    projectSearchHint.textContent = "Results include filenames and exact line numbers.";
+    projectSearchHint.textContent = filterState.active
+      ? "File filters are active and will be applied when you search."
+      : "Results include filenames and exact line numbers.";
     if (projectReplaceAllBtn) projectReplaceAllBtn.disabled = true;
     renderProjectSearchEmpty(
       "fa-solid fa-magnifying-glass",
@@ -739,7 +843,9 @@ function renderProjectSearchResults() {
     : "No matches found";
   projectSearchHint.textContent = projectSearchTruncated
     ? `Showing the first ${PROJECT_SEARCH_RESULT_LIMIT} matches. Refine the search to narrow the result set.`
-    : "Select a result to open its exact location.";
+    : filterState.active
+      ? "Select a result to open it. Include and exclude filters are active."
+      : "Select a result to open its exact location.";
   if (projectReplaceAllBtn) {
     projectReplaceAllBtn.disabled = editableCount === 0 || projectSearchTruncated;
     projectReplaceAllBtn.title = projectSearchTruncated
@@ -753,7 +859,9 @@ function renderProjectSearchResults() {
     renderProjectSearchEmpty(
       "fa-regular fa-face-meh",
       "Nothing matched",
-      "Try a shorter phrase or change the case, whole-word, or regular-expression options.",
+      filterState.active
+        ? "Try changing the search options or clearing the include and exclude file filters."
+        : "Try a shorter phrase or change the case, whole-word, or regular-expression options.",
     );
     return;
   }
@@ -873,6 +981,7 @@ function replaceProjectSearchMatch(result) {
 }
 
 async function replaceAllProjectSearchMatches() {
+  renderProjectSearchResults();
   let expression;
   try {
     expression = buildProjectSearchExpression();
@@ -891,7 +1000,7 @@ async function replaceAllProjectSearchMatches() {
   const editableFiles = new Set(editableMatches.map((result) => result.fileName));
   const decision = await showAppConfirm(
     "REPLACE ALL MATCHES",
-    `Replace ${editableMatches.length} match${editableMatches.length === 1 ? "" : "es"} across ${editableFiles.size} editable file${editableFiles.size === 1 ? "" : "s"}? You can undo changes to the active file.`,
+    `Replace ${editableMatches.length} match${editableMatches.length === 1 ? "" : "es"} across ${editableFiles.size} editable file${editableFiles.size === 1 ? "" : "s"}? A one-click Undo Replace All backup will be kept for every affected file.`,
     "REPLACE ALL",
     "CANCEL",
   );
@@ -901,10 +1010,11 @@ async function replaceAllProjectSearchMatches() {
   }
 
   const replacement = String(projectReplaceInput?.value || "");
+  const filterState = getProjectSearchFilterState();
   const updates = [];
   let replacementCount = 0;
   for (const file of projectFiles) {
-    if (!isProjectSearchableFile(file) || !canCurrentUserEditFile(file.name)) continue;
+    if (!isProjectSearchableFile(file, filterState) || !canCurrentUserEditFile(file.name)) continue;
     const fileExpression = new RegExp(expression.source, expression.flags);
     let fileCount = 0;
     const content = String(file.content || "");
@@ -917,10 +1027,64 @@ async function replaceAllProjectSearchMatches() {
     replacementCount += fileCount;
     updates.push({ file, content: nextContent });
   }
+  const historyFiles = updates.map((update) => ({
+    file: update.file,
+    fileName: update.file.name,
+    before: String(update.file.content || ""),
+    after: update.content,
+  }));
   if (!applyProjectSearchFileUpdates(updates)) return;
+  projectSearchReplaceAllHistory = {
+    files: historyFiles,
+    replacementCount,
+    createdAt: Date.now(),
+  };
   renderProjectSearchResults();
   showNotification(
     `Replaced ${replacementCount} match${replacementCount === 1 ? "" : "es"} across ${updates.length} file${updates.length === 1 ? "" : "s"}.`,
+    "success",
+  );
+  requestAnimationFrame(() => projectSearchInput?.focus());
+}
+
+async function undoProjectSearchReplaceAll() {
+  const history = getProjectSearchReplaceAllHistory();
+  if (!history) {
+    updateProjectSearchUndoButton();
+    showNotification("There is no Replace All operation available to undo.", "info");
+    return;
+  }
+
+  const lockedFiles = history.files.filter((entry) => !canCurrentUserEditFile(entry.file.name));
+  if (lockedFiles.length) {
+    showNotification(
+      `Undo is unavailable because ${lockedFiles.length} affected file${lockedFiles.length === 1 ? " is" : "s are"} currently locked.`,
+      "error",
+    );
+    return;
+  }
+
+  const changedFiles = history.files.filter((entry) => String(entry.file.content || "") !== entry.after);
+  if (changedFiles.length) {
+    const decision = await showAppConfirm(
+      "RESTORE REPLACE ALL BACKUP",
+      `${changedFiles.length} affected file${changedFiles.length === 1 ? " has" : "s have"} changed since Replace All. Restoring the backup will discard those newer edits and return every affected file to its earlier content.`,
+      "RESTORE BACKUP",
+      "CANCEL",
+      "danger",
+    );
+    if (!decision?.ok) {
+      requestAnimationFrame(() => projectSearchUndoBtn?.focus());
+      return;
+    }
+  }
+
+  const updates = history.files.map((entry) => ({ file: entry.file, content: entry.before }));
+  if (!applyProjectSearchFileUpdates(updates)) return;
+  projectSearchReplaceAllHistory = null;
+  renderProjectSearchResults();
+  showNotification(
+    `Restored ${history.files.length} file${history.files.length === 1 ? "" : "s"} from the last Replace All.`,
     "success",
   );
   requestAnimationFrame(() => projectSearchInput?.focus());
@@ -963,12 +1127,22 @@ function closeProjectSearch(restoreFocus = true) {
 projectSearchBtn?.addEventListener("click", () => openProjectSearch());
 closeProjectSearchBtn?.addEventListener("click", () => closeProjectSearch());
 projectSearchInput?.addEventListener("input", scheduleProjectSearchRender);
+[projectSearchIncludeInput, projectSearchExcludeInput].forEach((input) => {
+  input?.addEventListener("input", scheduleProjectSearchRender);
+});
+projectSearchClearFiltersBtn?.addEventListener("click", () => {
+  if (projectSearchIncludeInput) projectSearchIncludeInput.value = "";
+  if (projectSearchExcludeInput) projectSearchExcludeInput.value = "";
+  renderProjectSearchResults();
+  projectSearchIncludeInput?.focus();
+});
 projectSearchInput?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && projectSearchMatches[0]) {
     event.preventDefault();
     openProjectSearchMatch(projectSearchMatches[0]);
   }
 });
+projectSearchUndoBtn?.addEventListener("click", undoProjectSearchReplaceAll);
 projectReplaceAllBtn?.addEventListener("click", replaceAllProjectSearchMatches);
 [projectSearchCaseBtn, projectSearchWholeBtn, projectSearchRegexBtn].forEach((button) => {
   button?.addEventListener("click", () => {
