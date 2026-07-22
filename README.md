@@ -108,6 +108,18 @@ The default `repo read:user` scope allows updates to public and private reposito
 
 When a backend restart is required, active collaboration hosts reconnect and restore the room link, PIN, permissions, participant controls, chat history, file access, and pair-programming state. Admin authentication also remains valid across normal restarts. In production, keep `SESSION_RECOVERY_SECRET` stable across deployments; changing it intentionally expires protected collaboration recovery data and admin sessions.
 
+### Persistent published links
+
+Published projects use PostgreSQL whenever `DATABASE_URL` is configured. On the first database-backed start, the server creates its table and imports any projects already bundled in `published-projects.json`. Creating or updating a link is acknowledged only after the database write succeeds.
+
+For the Render deployment:
+
+1. Create a Render Postgres database in the same region as the web service.
+2. Add its internal connection string to the web service as `DATABASE_URL`.
+3. Redeploy the web service. The startup log should say `Published projects storage: PostgreSQL`.
+
+Do not rely on the web service's ordinary filesystem for permanent links. Render replaces that filesystem during restarts, redeploys, and free-service spin-downs. A mounted persistent disk can be used instead by setting `DATA_DIR` to its mount path, but PostgreSQL is preferred for published projects. See [Render's data storage guidance](https://render.com/docs/faq#why-are-my-files-deleted) and [free instance limitations](https://render.com/docs/free#local-files-lost-on-redeploy).
+
 ## Project Structure
 
 - `frontend.html` - main editor page

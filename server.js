@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const { Pool } = require("pg");
 const { Server } = require("socket.io");
 
 loadEnvFile();
@@ -28,23 +29,26 @@ const adminActivity = [];
 const adminSessions = new Map();
 const sessionRecoveryEmitTimers = new Map();
 const publishedProjects = new Map();
-// Runtime state (published projects, GitHub sessions) is written here. On hosts
-// with an ephemeral filesystem (e.g. Render without a disk), files under the app
-// directory are wiped on every restart — which silently deletes published links.
-// Point DATA_DIR at a persistent disk mount so this data survives restarts.
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : __dirname;
-if (DATA_DIR !== __dirname) {
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+// DATA_DIR remains the local-development fallback and also stores encrypted
+// GitHub sessions. Production published projects use DATABASE_URL when set.
+const configuredDataDir = String(process.env.DATA_DIR || "").trim();
+let DATA_DIR = configuredDataDir ? path.resolve(configuredDataDir) : __dirname;
+if (configuredDataDir) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.accessSync(DATA_DIR, fs.constants.R_OK | fs.constants.W_OK);
   } catch (error) {
     console.error("Failed to create DATA_DIR, falling back to app directory:", error);
+    DATA_DIR = __dirname;
   }
 }
 const PUBLISHED_PROJECTS_FILE = path.join(DATA_DIR, "published-projects.json");
 // A copy that may ship with the deploy; used once to seed the persistent store.
 const BUNDLED_PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
+const PUBLISHED_PROJECTS_TABLE = "codx_published_projects";
+let publishedProjectsPool = null;
+let publishedProjectsStorage = "file";
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
 const ADMIN_COOKIE = "codx_admin_session";
@@ -1332,7 +1336,7 @@ app.post("/admin/api/session/:sessionId/end", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/publish", (req, res) => {
+app.post("/api/publish", async (req, res) => {
   const files = cloneFiles(req.body?.files);
   const activeFileName = String(req.body?.activeFileName || "");
   const projectName = String(req.body?.projectName || "CodX Editor Project").trim().slice(0, 80);
@@ -1359,6 +1363,8 @@ app.post("/api/publish", (req, res) => {
     res.status(409).json({ ok: false, error: "That published link name is already in use." });
     return;
   }
+  let projectKey = id;
+  let published;
   if (mode === "update") {
     if (!existingEntry) {
       res.status(404).json({ ok: false, error: "That published link does not exist yet." });
@@ -1380,16 +1386,17 @@ app.post("/api/publish", (req, res) => {
       res.status(403).json({ ok: false, error: "Verification key does not match this link." });
       return;
     }
-    publishedProjects.set(existingEntry.key, {
+    projectKey = existingEntry.key;
+    published = {
       ...existingEntry.project,
       projectName,
       files,
       activeFileName,
       updatedAt: Date.now(),
-    });
+    };
   } else {
     const newVerificationKey = generatePublishVerificationKey();
-    publishedProjects.set(id, {
+    published = {
       id,
       projectName,
       files,
@@ -1397,10 +1404,19 @@ app.post("/api/publish", (req, res) => {
       verificationKey: newVerificationKey,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    };
   }
-  savePublishedProjects();
-  const published = findPublishedProjectEntry(id)?.project || publishedProjects.get(id);
+  try {
+    await persistPublishedProject(projectKey, published);
+  } catch (error) {
+    console.error(`Failed to ${mode} published project ${id}:`, error);
+    res.status(503).json({
+      ok: false,
+      error: "The published link could not be saved. Please try again shortly.",
+    });
+    return;
+  }
+  publishedProjects.set(projectKey, published);
   logAdminEvent(
     mode === "update" ? "Published project updated" : "Project published",
     `${projectName || id} is available at /published/${published?.id || id}.`,
@@ -1519,6 +1535,31 @@ function normalizePublishedTitle(title) {
     .trim();
 }
 
+function normalizeStoredPublishedProject(entry) {
+  let candidate = entry;
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch (_error) {
+      return null;
+    }
+  }
+  if (!candidate || !candidate.id || !Array.isArray(candidate.files)) return null;
+  return {
+    id: String(candidate.id),
+    projectName: String(candidate.projectName || "CodX Editor Project"),
+    files: cloneFiles(candidate.files),
+    activeFileName: String(candidate.activeFileName || ""),
+    verificationKey: String(candidate.verificationKey || ""),
+    createdAt: Number(candidate.createdAt || Date.now()),
+    updatedAt: Number(candidate.updatedAt || candidate.createdAt || Date.now()),
+  };
+}
+
+function getPublishedProjectStorageKey(id) {
+  return String(id || "").trim().toLowerCase();
+}
+
 function loadPublishedProjects() {
   try {
     // First run on a fresh persistent disk: seed from the copy shipped with the
@@ -1539,33 +1580,116 @@ function loadPublishedProjects() {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return;
     parsed.forEach((entry) => {
-      if (!entry || !entry.id || !Array.isArray(entry.files)) return;
-      publishedProjects.set(String(entry.id), {
-        id: String(entry.id),
-        projectName: String(entry.projectName || "CodX Editor Project"),
-        files: cloneFiles(entry.files),
-        activeFileName: String(entry.activeFileName || ""),
-        verificationKey: String(entry.verificationKey || ""),
-        createdAt: Number(entry.createdAt || Date.now()),
-        updatedAt: Number(entry.updatedAt || entry.createdAt || Date.now()),
-      });
+      const project = normalizeStoredPublishedProject(entry);
+      if (project) publishedProjects.set(project.id, project);
     });
   } catch (error) {
     console.error("Failed to load published projects:", error);
   }
 }
 
-function savePublishedProjects() {
-  try {
-    const serialized = JSON.stringify(Array.from(publishedProjects.values()), null, 2);
-    // Write atomically (temp file + rename) so a restart mid-write can't corrupt
-    // or truncate the store and lose every published link.
-    const tempFile = `${PUBLISHED_PROJECTS_FILE}.tmp`;
-    fs.writeFileSync(tempFile, serialized, "utf8");
-    fs.renameSync(tempFile, PUBLISHED_PROJECTS_FILE);
-  } catch (error) {
-    console.error("Failed to save published projects:", error);
+async function initializePublishedProjectStorage() {
+  if (!DATABASE_URL) {
+    if (process.env.RENDER) {
+      console.warn(
+        "DATABASE_URL is not configured. Published links are using Render's temporary filesystem and can disappear after a restart.",
+      );
+    }
+    console.log(`Published projects storage: file (${PUBLISHED_PROJECTS_FILE})`);
+    return;
   }
+
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+  pool.on("error", (error) => {
+    console.error("Published projects database connection error:", error);
+  });
+
+  const client = await pool.connect();
+  let initializationError = null;
+  try {
+    await client.query("BEGIN");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${PUBLISHED_PROJECTS_TABLE} (
+        id_key TEXT PRIMARY KEY,
+        project JSONB NOT NULL,
+        updated_at BIGINT NOT NULL
+      )
+    `);
+
+    const databaseResult = await client.query(
+      `SELECT project FROM ${PUBLISHED_PROJECTS_TABLE} ORDER BY updated_at ASC`,
+    );
+    const mergedProjects = new Map();
+    databaseResult.rows.forEach((row) => {
+      const project = normalizeStoredPublishedProject(row.project);
+      if (project) mergedProjects.set(getPublishedProjectStorageKey(project.id), project);
+    });
+
+    for (const project of publishedProjects.values()) {
+      const storageKey = getPublishedProjectStorageKey(project.id);
+      if (!storageKey || mergedProjects.has(storageKey)) continue;
+      await client.query(
+        `INSERT INTO ${PUBLISHED_PROJECTS_TABLE} (id_key, project, updated_at)
+         VALUES ($1, $2::jsonb, $3)
+         ON CONFLICT (id_key) DO NOTHING`,
+        [storageKey, JSON.stringify(project), Number(project.updatedAt || Date.now())],
+      );
+      mergedProjects.set(storageKey, project);
+    }
+
+    await client.query("COMMIT");
+    publishedProjects.clear();
+    mergedProjects.forEach((project) => publishedProjects.set(project.id, project));
+    publishedProjectsPool = pool;
+    publishedProjectsStorage = "postgres";
+    console.log(`Published projects storage: PostgreSQL (${publishedProjects.size} links loaded)`);
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_rollbackError) {
+      // The original database error is the useful one to report.
+    }
+    initializationError = error;
+  } finally {
+    client.release();
+  }
+  if (initializationError) {
+    await pool.end().catch(() => {});
+    throw initializationError;
+  }
+}
+
+async function persistPublishedProject(projectKey, project) {
+  const storageKey = getPublishedProjectStorageKey(project?.id || projectKey);
+  if (!storageKey) throw new Error("Published project id is required.");
+
+  if (publishedProjectsStorage === "postgres") {
+    if (!publishedProjectsPool) throw new Error("Published projects database is unavailable.");
+    await publishedProjectsPool.query(
+      `INSERT INTO ${PUBLISHED_PROJECTS_TABLE} (id_key, project, updated_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (id_key) DO UPDATE
+       SET project = EXCLUDED.project, updated_at = EXCLUDED.updated_at`,
+      [storageKey, JSON.stringify(project), Number(project.updatedAt || Date.now())],
+    );
+    return;
+  }
+
+  const snapshot = Array.from(publishedProjects.values()).filter(
+    (entry) => getPublishedProjectStorageKey(entry?.id) !== storageKey,
+  );
+  snapshot.push(project);
+  const serialized = JSON.stringify(snapshot, null, 2);
+  // Write atomically (temp file + rename) so a restart mid-write cannot corrupt
+  // or truncate the store and lose every published link.
+  const tempFile = `${PUBLISHED_PROJECTS_FILE}.tmp`;
+  fs.writeFileSync(tempFile, serialized, "utf8");
+  fs.renameSync(tempFile, PUBLISHED_PROJECTS_FILE);
 }
 
 function isSecureRequest(req) {
@@ -4952,7 +5076,25 @@ server.on("error", (err) => {
   throw err;
 });
 
-startServer(PORT);
+initializePublishedProjectStorage()
+  .then(() => startServer(PORT))
+  .catch((error) => {
+    console.error("CodX Editor could not initialize published project storage:", error);
+    process.exit(1);
+  });
+
+let publishedProjectsClosePromise = null;
+function closePublishedProjectStorage() {
+  if (!publishedProjectsPool) return Promise.resolve();
+  if (!publishedProjectsClosePromise) {
+    const pool = publishedProjectsPool;
+    publishedProjectsPool = null;
+    publishedProjectsClosePromise = pool.end().catch((error) => {
+      console.error("Failed to close published projects database:", error);
+    });
+  }
+  return publishedProjectsClosePromise;
+}
 
 function stopServerGracefully(signal) {
   if (serverShuttingDown) return;
@@ -4961,7 +5103,9 @@ function stopServerGracefully(signal) {
   sessionRecoveryEmitTimers.clear();
   console.log(`Received ${signal}. Closing CodX Editor connections safely...`);
 
-  const exitCleanly = () => process.exit(0);
+  const exitCleanly = () => {
+    closePublishedProjectStorage().finally(() => process.exit(0));
+  };
   io.close(() => {
     if (!server.listening) {
       exitCleanly();
