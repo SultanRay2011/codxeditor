@@ -49,8 +49,11 @@ const BUNDLED_PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects
 const PUBLISHED_PROJECTS_TABLE = "codx_published_projects";
 let publishedProjectsPool = null;
 let publishedProjectsStorage = "file";
+// No hardcoded credentials: the password must come from the environment
+// (.env locally, or the host's environment variables in production).
+// When it is missing, admin sign-in is disabled rather than falling back.
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "administrator").trim();
-const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "admin1579");
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "");
 const ADMIN_COOKIE = "codx_admin_session";
 const ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
 const COLLAB_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -142,7 +145,7 @@ const DEFAULT_PERMISSIONS = {
 // in the Render dashboard) always win — a value is only applied when the key is
 // not already defined. GitHub OAuth settings live in their own .githubenv file.
 function loadEnvFile() {
-  [".env", ".githubenv"].forEach((fileName) => {
+  [".env", "github.env"].forEach((fileName) => {
     loadEnvFileAt(path.join(__dirname, fileName));
   });
 }
@@ -1122,6 +1125,15 @@ app.get("/health", (_req, res) => {
 app.post("/admin/api/auth", (req, res) => {
   const username = String(req.body?.username || "").trim();
   const password = String(req.body?.password || "");
+  // Without a configured password, block sign-in entirely so an empty
+  // password can never match an empty configured value.
+  if (!ADMIN_PASSWORD) {
+    res.status(503).json({
+      ok: false,
+      error: "Admin access is not configured. Set ADMIN_PASSWORD on the server.",
+    });
+    return;
+  }
   if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
     res.status(401).json({ ok: false, error: "Invalid admin username or password." });
     return;
