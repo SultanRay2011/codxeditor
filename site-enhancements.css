@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --site-accent: #238636;
   --site-accent-2: #16a34a;
   --site-ink: #102018;
@@ -1314,7 +1314,7 @@
 .major-feature p { margin: 0; color: var(--site-muted); line-height: 1.72; }
 .major-feature ul { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
 .major-feature li { position: relative; padding-left: 22px; color: var(--site-muted); line-height: 1.55; }
-.major-feature li::before { content: "✓"; position: absolute; left: 0; color: var(--site-accent); font-weight: 900; }
+.major-feature li::before { content: "âœ“"; position: absolute; left: 0; color: var(--site-accent); font-weight: 900; }
 
 .feature-visual {
   position: relative;
@@ -1480,4 +1480,203 @@
   .sourced-feature-visual img { height: 235px; padding: 22px 20px 28px; }
   .sourced-feature-visual figcaption { left: 12px; bottom: 12px; }
   .welcome-choice-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   Advanced polish for the public pages
+   Builds on each page's own --site-accent pair so Home, About,
+   Contact, Help, Privacy, Terms, Welcome and 404 stay distinct.
+   Only genuine card elements are restyled - .container is a
+   layout wrapper on several pages, so it is deliberately left
+   alone to avoid nesting a card inside a card.
+   ============================================================ */
+
+/* ---------- Page surface ---------- */
+body[class*="page-"] {
+  background-image:
+    radial-gradient(760px 420px at 88% -8%, color-mix(in srgb, var(--site-accent) 9%, transparent), transparent 70%),
+    radial-gradient(620px 360px at -6% 8%, color-mix(in srgb, var(--site-accent-2) 8%, transparent), transparent 70%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* ---------- Cards: layered depth + gentle entrance ---------- */
+@keyframes siteRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.content-section,
+.about-container,
+.contact-container,
+.policy-container,
+.terms-container {
+  border-radius: 20px !important;
+  box-shadow:
+    0 1px 2px rgba(17, 50, 29, 0.05),
+    0 18px 46px rgba(17, 50, 29, 0.10),
+    0 0 0 1px color-mix(in srgb, var(--site-accent) 6%, transparent) !important;
+  animation: siteRise 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* ---------- Section headings get an accent rule ---------- */
+.content-section h2,
+.about-container h2,
+.contact-container h2,
+.policy-container h2,
+.terms-container h2 {
+  position: relative;
+  padding-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+.content-section h2::after,
+.about-container h2::after,
+.contact-container h2::after,
+.policy-container h2::after,
+.terms-container h2::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 52px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--site-accent), var(--site-accent-2));
+}
+.content-section h2[style*="center"]::after,
+.content-section h2.centered::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ---------- Readable prose ---------- */
+.content-section p,
+.about-container p,
+.contact-container p,
+.policy-container p,
+.terms-container p,
+.content-section li,
+.policy-container li,
+.terms-container li {
+  line-height: 1.78;
+}
+.content-section li,
+.policy-container li,
+.terms-container li {
+  margin-bottom: 9px;
+}
+.content-section ul li::marker,
+.policy-container ul li::marker,
+.terms-container ul li::marker {
+  color: var(--site-accent);
+}
+
+/* ---------- Links inside content ---------- */
+.content-section a:not([class]),
+.about-container a:not([class]),
+.contact-container a:not([class]),
+.policy-container a:not([class]),
+.terms-container a:not([class]) {
+  color: var(--site-accent);
+  text-decoration-color: color-mix(in srgb, var(--site-accent) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: color 0.18s ease, text-decoration-color 0.18s ease;
+}
+.content-section a:not([class]):hover,
+.about-container a:not([class]):hover,
+.contact-container a:not([class]):hover,
+.policy-container a:not([class]):hover,
+.terms-container a:not([class]):hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------- Last-updated stamp ---------- */
+.last-updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 15px;
+  border: 1px solid color-mix(in srgb, var(--site-accent) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--site-accent) 8%, transparent);
+  color: color-mix(in srgb, var(--site-accent) 72%, #10231a);
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+/* ---------- Content tables ---------- */
+.content-section table,
+.policy-container table,
+.terms-container table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid var(--site-line);
+  border-radius: 14px;
+}
+.content-section table th,
+.policy-container table th,
+.terms-container table th {
+  background: color-mix(in srgb, var(--site-accent) 10%, #f7fbf9);
+  color: #16281e;
+  font-weight: 750;
+  text-align: left;
+}
+.content-section table th,
+.content-section table td,
+.policy-container table th,
+.policy-container table td,
+.terms-container table th,
+.terms-container table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--site-line);
+}
+
+/* ---------- Illustrations ---------- */
+.page-illustration {
+  filter: drop-shadow(0 14px 30px rgba(17, 50, 29, 0.12));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.page-illustration:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+/* ---------- Footer ---------- */
+.site-footer__brand-link img {
+  transition: transform 0.25s ease;
+}
+.site-footer__brand-link:hover img {
+  transform: rotate(-6deg) scale(1.06);
+}
+
+/* ---------- Focus visibility ---------- */
+body[class*="page-"] a:focus-visible,
+body[class*="page-"] button:focus-visible,
+body[class*="page-"] input:focus-visible,
+body[class*="page-"] textarea:focus-visible,
+body[class*="page-"] select:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* ---------- Selection uses the page accent ---------- */
+body[class*="page-"] ::selection {
+  background: color-mix(in srgb, var(--site-accent) 26%, transparent);
+}
+
+/* ---------- Motion preferences ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .content-section,
+  .about-container,
+  .contact-container,
+  .policy-container,
+  .terms-container {
+    animation: none;
+  }
+  .page-illustration:hover {
+    transform: none;
+  }
 }
