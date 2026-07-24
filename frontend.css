@@ -11032,3 +11032,58 @@ textarea::-webkit-scrollbar-thumb:hover,
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+
+/* One-click auto-fix inside a console runtime diagnostic */
+.codx-runtime-autofix {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+.codx-runtime-autofix-summary {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.codx-runtime-autofix-preview {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.codx-runtime-fix-btn {
+  justify-self: start;
+  padding: 8px 15px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.codx-runtime-fix-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.codx-runtime-fix-btn:disabled {
+  background: #3f8f5a;
+  cursor: default;
+  opacity: 0.85;
+}
+.codx-runtime-autofix.is-applied {
+  border-color: #3f8f5a;
+}

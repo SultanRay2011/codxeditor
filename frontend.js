@@ -10533,6 +10533,104 @@ function inferRuntimeRootCause(payload, context) {
   };
 }
 
+function escapeForRuntimeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Work out a concrete, single-line edit that would clear this error. Only
+// returns something when the change is unambiguous, so the FIX ERROR button
+// never guesses. Every fix reports the exact before/after for review.
+function buildRuntimeAutoFix(payload, context) {
+  if (!context?.file) return null;
+  const message = String(payload.message || "");
+  const lines = String(context.file.content || "").split(/\r?\n/);
+  const errorIndex = context.line - 1;
+  const errorLine = lines[errorIndex];
+  if (typeof errorLine !== "string") return null;
+
+  const edit = (lineIndex, nextText, summary) => ({
+    lineNumber: lineIndex + 1,
+    lineIndex,
+    before: String(lines[lineIndex] || "").trim(),
+    after: String(nextText || "").trim(),
+    text: nextText,
+    summary,
+  });
+
+  // 1. Reassigning a const -> declare it with let instead.
+  if (/assignment to constant variable/i.test(message)) {
+    const name = errorLine.match(/([A-Za-z_$][\w$]*)\s*(?:=|\+\+|--|[+\-*/%]=)/)?.[1];
+    if (name) {
+      const pattern = new RegExp(`\\bconst(\\s+${escapeForRuntimeRegExp(name)}\\b)`);
+      const declIndex = lines.findIndex((text) => pattern.test(text));
+      if (declIndex !== -1) {
+        const next = lines[declIndex].replace(pattern, "let$1");
+        if (next !== lines[declIndex]) {
+          return edit(declIndex, next, `Declare "${name}" with let instead of const so it can be reassigned.`);
+        }
+      }
+    }
+  }
+
+  // 2. Misspelled name -> rename to the closest identifier already in the file.
+  const notDefined = message.match(/\b([A-Za-z_$][\w$]*) is not defined\b/i);
+  if (notDefined) {
+    const wrong = notDefined[1];
+    const suggestion = findClosestRuntimeIdentifier(wrong, context.file);
+    const wordPattern = new RegExp(`\\b${escapeForRuntimeRegExp(wrong)}\\b`, "g");
+    if (suggestion && suggestion !== wrong && wordPattern.test(errorLine)) {
+      const next = errorLine.replace(new RegExp(`\\b${escapeForRuntimeRegExp(wrong)}\\b`, "g"), suggestion);
+      return edit(errorIndex, next, `Rename "${wrong}" to "${suggestion}", which already exists in this file.`);
+    }
+  }
+
+  // 3. Reading a property of null/undefined -> guard it with optional chaining.
+  const propertyRead = message.match(
+    /Cannot read propert(?:y|ies) (?:of )?(?:null|undefined)?\s*\(?(?:reading )?['"]([^'"]+)['"]\)?/i,
+  );
+  if (propertyRead) {
+    const property = propertyRead[1];
+    const safe = escapeForRuntimeRegExp(property);
+    const alreadyGuarded = new RegExp(`\\?\\.\\s*${safe}\\b`).test(errorLine);
+    const accessPattern = new RegExp(`(?<!\\?)\\.\\s*${safe}\\b`);
+    if (!alreadyGuarded && accessPattern.test(errorLine)) {
+      const next = errorLine.replace(accessPattern, `?.${property}`);
+      return edit(
+        errorIndex,
+        next,
+        `Read "${property}" only when the value exists, using optional chaining (?.).`,
+      );
+    }
+  }
+
+  return null;
+}
+
+// Apply the edit to the real project file and let the editor's normal update
+// path handle history, highlighting and the live preview.
+function applyRuntimeAutoFix(context, autoFix) {
+  const targetFile = projectFiles.find((file) => file && file.name === context.fileName);
+  if (!targetFile) return false;
+  const lines = String(targetFile.content || "").split(/\r?\n/);
+  if (typeof lines[autoFix.lineIndex] !== "string") return false;
+  // Refuse if the line moved since the diagnostic was produced.
+  if (lines[autoFix.lineIndex].trim() !== autoFix.before) return false;
+
+  lines[autoFix.lineIndex] = autoFix.text;
+  const nextContent = lines.join("\n");
+  targetFile.content = nextContent;
+
+  if (!activeFile || activeFile.name !== targetFile.name) {
+    switchFile(targetFile.name);
+  }
+  if (editorTextarea && activeFile && activeFile.name === targetFile.name) {
+    editorTextarea.value = nextContent;
+    editorTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  jumpToEditorLocation(targetFile.name, autoFix.lineNumber, 1);
+  return true;
+}
+
 function renderRuntimeDiagnostic(payload, rawError) {
   if (!consoleOutput) return;
   const frames = parseRuntimeStackFrames(payload.stack);
@@ -10627,6 +10725,45 @@ function renderRuntimeDiagnostic(payload, rawError) {
   fixText.textContent = diagnosis.fix;
   fix.append(fixLabel, fixText);
   root.appendChild(fix);
+
+  const autoFix = context ? buildRuntimeAutoFix(payload, context) : null;
+  if (autoFix) {
+    const autoFixBox = document.createElement("div");
+    autoFixBox.className = "codx-runtime-autofix";
+
+    const autoFixSummary = document.createElement("span");
+    autoFixSummary.className = "codx-runtime-autofix-summary";
+    autoFixSummary.textContent = autoFix.summary;
+
+    const preview = document.createElement("pre");
+    preview.className = "codx-runtime-autofix-preview";
+    preview.textContent = `line ${autoFix.lineNumber}\n- ${autoFix.before}\n+ ${autoFix.after}`;
+
+    const applyButton = document.createElement("button");
+    applyButton.type = "button";
+    applyButton.className = "codx-runtime-fix-btn";
+    applyButton.textContent = "FIX ERROR";
+    applyButton.title = autoFix.summary;
+    applyButton.addEventListener("click", (event) => {
+      // Keep the click from also triggering the card's jump-to-line handler.
+      event.stopPropagation();
+      if (applyRuntimeAutoFix(context, autoFix)) {
+        applyButton.textContent = "FIXED";
+        applyButton.disabled = true;
+        autoFixBox.classList.add("is-applied");
+        showNotification(autoFix.summary, "success");
+      } else {
+        showNotification(
+          "That line changed since the error was reported, so the fix was not applied.",
+          "error",
+        );
+      }
+    });
+    applyButton.addEventListener("keydown", (event) => event.stopPropagation());
+
+    autoFixBox.append(autoFixSummary, preview, applyButton);
+    root.appendChild(autoFixBox);
+  }
 
   const rawDetails = document.createElement("details");
   rawDetails.className = "codx-runtime-raw";
