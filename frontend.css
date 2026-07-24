@@ -10982,3 +10982,53 @@ textarea::-webkit-scrollbar-thumb:hover,
 .developer-console-shortcuts button[aria-pressed="true"] > i {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 35%, transparent);
 }
+
+/* Smart Node.js problem callouts inside the terminal */
+.node-terminal-diagnostic {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-left: 3px solid #f87171;
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.09);
+  font-family: var(--font-code);
+  white-space: normal;
+}
+.node-terminal-diagnostic strong {
+  color: #fca5a5;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.node-terminal-diagnostic span {
+  color: #d6deeb;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.node-terminal-diagnostic em {
+  color: #7ee787;
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.5;
+}
+.node-terminal-diagnostic-action {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.node-terminal-diagnostic-action:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

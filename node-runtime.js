@@ -33,6 +33,10 @@ let toggleInProgress = false;
 let activeProcess = null;
 let activeCommand = "";
 let commandStarting = false;
+// The command that last produced a running server, kept so the refresh button
+// can stop and start it again (activeCommand is cleared when a process exits).
+let lastServerCommand = "";
+let restartInProgress = false;
 let syncedEditorFileNames = new Set();
 const activeServerPorts = new Set();
 
@@ -55,6 +59,224 @@ function writeTerminal(value, className = "") {
   line.textContent = cleanValue;
   terminalOutput.appendChild(line);
   terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
+
+/* ------------------------------------------------------------------
+   Smart Node.js / npm problem detection
+   Scans terminal output for well-known failures and explains them in
+   plain language, with a one-click fix where one exists.
+   ------------------------------------------------------------------ */
+
+// Turn a require()/import specifier into the package to install:
+// "express" -> "express", "@scope/pkg/sub" -> "@scope/pkg", "lodash/get" -> "lodash"
+function toInstallablePackage(specifier) {
+  const name = String(specifier || "").trim();
+  if (!name || name.startsWith(".") || name.startsWith("/")) return "";
+  if (/^(node:|fs$|path$|http$|https$|os$|url$|crypto$|events$|stream$|util$|child_process$|net$)/.test(name)) return "";
+  const parts = name.split("/");
+  return name.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+}
+
+const NODE_DIAGNOSTIC_RULES = [
+  {
+    id: "module-not-found",
+    match: /(?:Cannot find module|Error: Cannot find package)\s+['"]([^'"]+)['"]/i,
+    build: (m) => {
+      const pkg = toInstallablePackage(m[1]);
+      if (!pkg) {
+        return {
+          title: `File not found: ${m[1]}`,
+          detail: "A require() or import points at a file that does not exist.",
+          fix: "Check the path and file name (including capitalisation).",
+        };
+      }
+      return {
+        title: `Missing package: ${pkg}`,
+        detail: `Your code imports "${m[1]}" but it is not installed.`,
+        fix: `Install it, then run your command again.`,
+        command: `npm install ${pkg}`,
+        commandLabel: `INSTALL ${pkg}`,
+      };
+    },
+  },
+  {
+    id: "port-in-use",
+    match: /EADDRINUSE[^\d]*(\d+)?/i,
+    build: (m) => ({
+      title: `Port ${m[1] || ""} is already in use`.replace(/\s+/g, " ").trim(),
+      detail: "Another server is still running on that port.",
+      fix: "Press STOP to end the running server, then start it again — or listen on a different port.",
+    }),
+  },
+  {
+    id: "npm-404",
+    match: /npm ERR!\s+404.*?['"]?([@\w./-]+)['"]?\s+is not in (?:this registry|the npm registry)/i,
+    build: (m) => ({
+      title: `Package not found: ${m[1]}`,
+      detail: "npm could not find that package in the registry.",
+      fix: "Check the spelling of the package name.",
+    }),
+  },
+  {
+    id: "eresolve",
+    match: /ERESOLVE|unable to resolve dependency tree/i,
+    build: () => ({
+      title: "Dependency conflict",
+      detail: "Two packages require incompatible versions of the same dependency.",
+      fix: "Retry the install allowing legacy peer dependencies.",
+      command: "npm install --legacy-peer-deps",
+      commandLabel: "RETRY WITH --legacy-peer-deps",
+    }),
+  },
+  {
+    id: "missing-script",
+    match: /(?:Missing script|missing script):\s*["']?([\w:-]+)["']?/i,
+    build: (m) => ({
+      title: `No "${m[1]}" script in package.json`,
+      detail: `package.json has no "${m[1]}" entry under "scripts".`,
+      fix: `Add it to "scripts", or run the file directly (for example: node server.js).`,
+    }),
+  },
+  {
+    id: "no-package-json",
+    match: /ENOENT.*package\.json|Could not read package\.json/i,
+    build: () => ({
+      title: "No package.json found",
+      detail: "This command needs a package.json in the project.",
+      fix: "Create one first.",
+      command: "npm init -y",
+      commandLabel: "CREATE package.json",
+    }),
+  },
+  {
+    id: "esm-import",
+    match: /Cannot use import statement outside a module/i,
+    build: () => ({
+      title: "import used in a CommonJS file",
+      detail: "Node is treating this file as CommonJS, which cannot use import.",
+      fix: 'Add "type": "module" to package.json, or use require() instead.',
+    }),
+  },
+  {
+    id: "require-esm",
+    match: /ERR_REQUIRE_ESM|require\(\) of ES Module/i,
+    build: () => ({
+      title: "This package is ESM-only",
+      detail: "It cannot be loaded with require().",
+      fix: 'Use import instead, and add "type": "module" to package.json.',
+    }),
+  },
+  {
+    id: "syntax-error",
+    match: /^\s*SyntaxError:\s*(.+)$/i,
+    build: (m) => ({
+      title: "Syntax error in your code",
+      detail: m[1].trim(),
+      fix: "Check the line shown just above for a missing bracket, quote or comma.",
+    }),
+  },
+  {
+    id: "reference-error",
+    match: /^\s*ReferenceError:\s*(\w+) is not defined/i,
+    build: (m) => ({
+      title: `"${m[1]}" is not defined`,
+      detail: `The name "${m[1]}" is used before it is declared or imported.`,
+      fix: `Declare it, import it, or check the spelling.`,
+    }),
+  },
+  {
+    id: "type-error",
+    match: /^\s*TypeError:\s*(.+)$/i,
+    build: (m) => ({
+      title: "Type error while running",
+      detail: m[1].trim(),
+      fix: "A value is not the type you expected — often undefined or null.",
+    }),
+  },
+  {
+    id: "network",
+    match: /ENOTFOUND|EAI_AGAIN|network.*(?:unreachable|timeout)|ETIMEDOUT/i,
+    build: () => ({
+      title: "Network problem",
+      detail: "npm could not reach the registry.",
+      fix: "Check your internet connection and try again.",
+    }),
+  },
+];
+
+let terminalLineBuffer = "";
+const reportedDiagnostics = new Set();
+
+function resetTerminalDiagnostics() {
+  terminalLineBuffer = "";
+  reportedDiagnostics.clear();
+}
+
+function detectNodeIssue(line) {
+  const text = String(line || "");
+  if (!text.trim()) return null;
+  for (const rule of NODE_DIAGNOSTIC_RULES) {
+    const found = text.match(rule.match);
+    if (!found) continue;
+    const built = rule.build(found);
+    return { id: rule.id, key: `${rule.id}:${built.title}`, ...built };
+  }
+  return null;
+}
+
+function writeTerminalDiagnostic(diagnostic) {
+  if (!terminalOutput) return;
+  const box = document.createElement("div");
+  box.className = "node-terminal-diagnostic";
+
+  const heading = document.createElement("strong");
+  heading.textContent = diagnostic.title;
+  box.appendChild(heading);
+
+  if (diagnostic.detail) {
+    const detail = document.createElement("span");
+    detail.textContent = diagnostic.detail;
+    box.appendChild(detail);
+  }
+  if (diagnostic.fix) {
+    const fix = document.createElement("em");
+    fix.textContent = `Fix: ${diagnostic.fix}`;
+    box.appendChild(fix);
+  }
+  if (diagnostic.command) {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "node-terminal-diagnostic-action";
+    action.textContent = diagnostic.commandLabel || diagnostic.command;
+    action.title = diagnostic.command;
+    action.addEventListener("click", () => {
+      if (activeProcess || commandStarting) {
+        writeTerminal("\nStop the running command first.\n", "error");
+        return;
+      }
+      runCommand(diagnostic.command).catch((error) =>
+        writeTerminal(`\n${error?.message || error}\n$ `, "error"),
+      );
+    });
+    box.appendChild(action);
+  }
+
+  terminalOutput.appendChild(box);
+  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
+
+// Buffers output so detection always runs on whole lines, never partial chunks.
+function analyzeTerminalOutput(chunk, { flush = false } = {}) {
+  terminalLineBuffer += cleanTerminalOutput(chunk);
+  const lines = terminalLineBuffer.split("\n");
+  terminalLineBuffer = flush ? "" : lines.pop() || "";
+  if (flush && lines.length === 0) return;
+  lines.forEach((line) => {
+    const diagnostic = detectNodeIssue(line);
+    if (!diagnostic || reportedDiagnostics.has(diagnostic.key)) return;
+    reportedDiagnostics.add(diagnostic.key);
+    writeTerminalDiagnostic(diagnostic);
+  });
 }
 
 function writeServerLink(port, runtimeUrl) {
@@ -229,6 +451,8 @@ async function bootRuntime() {
     instance = await WebContainer.boot({ coep: "require-corp" });
     instance.on("server-ready", (port, url) => {
       window.codxNodeRuntime.lastServer = { port, url, displayUrl: `http://localhost:${port}` };
+      // Remember what started this server so it can be restarted later.
+      if (activeCommand) lastServerCommand = activeCommand;
       writeServerLink(port, url);
       showServerPreview(port, url);
     });
@@ -287,6 +511,7 @@ async function runCommand(command) {
   }
   commandStarting = true;
   activeCommand = trimmed;
+  resetTerminalDiagnostics();
   setCommandControls(true);
   let spawnedProcess = null;
   let code = 1;
@@ -311,10 +536,17 @@ async function runCommand(command) {
     commandStarting = false;
     setCommandControls(true);
     const outputComplete = spawnedProcess.output
-      .pipeTo(new WritableStream({ write: (data) => writeTerminal(data) }))
+      .pipeTo(new WritableStream({
+        write: (data) => {
+          writeTerminal(data);
+          analyzeTerminalOutput(data);
+        },
+      }))
       .catch(() => {});
     code = await spawnedProcess.exit;
     await outputComplete;
+    // Check any final line that arrived without a trailing newline.
+    analyzeTerminalOutput("", { flush: true });
     await syncDependencyFilesBack();
   } finally {
     commandStarting = false;
@@ -406,11 +638,46 @@ terminalStopButton?.addEventListener("click", () => {
   stopActiveProcess().catch((error) => writeTerminal(`\n${error?.message || error}\n`, "error"));
 });
 
-nodeServerReloadButton?.addEventListener("click", () => {
-  if (nodeServerFrame && activeServerUrl) {
-    // Re-assign the src to force the running server to reload in the preview.
-    nodeServerFrame.src = activeServerUrl;
+// Stop the running server and start it again, so code changes are picked up.
+// Falls back to reloading the page when there is no command to restart.
+async function restartServerProcess() {
+  if (restartInProgress) return;
+  const command = activeCommand || lastServerCommand;
+  if (!command) {
+    if (nodeServerFrame && activeServerUrl) nodeServerFrame.src = activeServerUrl;
+    return;
   }
+
+  restartInProgress = true;
+  if (nodeServerReloadButton) {
+    nodeServerReloadButton.disabled = true;
+    nodeServerReloadButton.setAttribute("aria-busy", "true");
+  }
+  try {
+    writeTerminal(`\nRestarting ${command}...\n`, "info");
+    await stopActiveProcess({ announce: false });
+    // Wait for the previous run to finish tearing down before starting again,
+    // otherwise runCommand rejects because a command is still active.
+    for (let attempt = 0; attempt < 100 && (activeProcess || commandStarting); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    // A server keeps running, so don't await completion here.
+    runCommand(command).catch((error) =>
+      writeTerminal(`\n${error?.message || error}\n$ `, "error"),
+    );
+  } catch (error) {
+    writeTerminal(`\n${error?.message || error}\n$ `, "error");
+  } finally {
+    restartInProgress = false;
+    if (nodeServerReloadButton) {
+      nodeServerReloadButton.disabled = false;
+      nodeServerReloadButton.removeAttribute("aria-busy");
+    }
+  }
+}
+
+nodeServerReloadButton?.addEventListener("click", () => {
+  restartServerProcess();
 });
 
 nodeViewToggleButton?.addEventListener("click", () => {
@@ -423,6 +690,7 @@ window.codxNodeRuntime = {
   toggle,
   runCommand,
   stop: stopActiveProcess,
+  restart: restartServerProcess,
   lastServer: null,
   get enabled() { return enabled; },
   get runningCommand() { return activeCommand; },
