@@ -840,14 +840,14 @@
   color: #fff !important;
 }
 
-/* Content spans the page instead of sitting in a narrow boxed card. */
+/* Full width, but keeping the original card treatment. */
 .site-refurbished :is(.ad-container, .about-container, .contact-container, .policy-container, .terms-container) {
   width: 100%;
   margin-inline: auto;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: 1px solid color-mix(in srgb, var(--site-accent) 22%, var(--site-line)) !important;
+  border-radius: 26px !important;
+  background: var(--site-surface) !important;
+  box-shadow: var(--site-shadow) !important;
 }
 
 .site-refurbished :is(h1, h2, h3) { text-wrap: balance; }
