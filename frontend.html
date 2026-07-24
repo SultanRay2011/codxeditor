@@ -19,6 +19,18 @@
         window.location.replace("/welcome.html");
       }
     </script>
+    <script>
+      try {
+        const savedEditorSettings = JSON.parse(localStorage.getItem("editorSettings") || "{}");
+        const savedWorkspaceTheme = String(savedEditorSettings.workspaceTheme || "codx-dark");
+        const availableWorkspaceThemes = ["codx-dark", "midnight", "graphite", "forest", "daylight"];
+        document.documentElement.dataset.workspaceTheme = availableWorkspaceThemes.includes(savedWorkspaceTheme)
+          ? savedWorkspaceTheme
+          : "codx-dark";
+      } catch (_err) {
+        document.documentElement.dataset.workspaceTheme = "codx-dark";
+      }
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
     <link rel="icon" type="image/png" href="/cx.png" />
     <title>CodX Editor</title>
@@ -30,7 +42,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260721-share-icons1" />
+    <link rel="stylesheet" href="/frontend.css?v=20260722-devtools-format1" />
   </head>
   <body class="mobile-pane-editor">
     <a
@@ -806,6 +818,109 @@
           Editor Settings
         </h2>
 
+        <!-- Workspace Theme -->
+        <div class="workspace-theme-setting">
+          <div class="workspace-theme-heading">
+            <div>
+              <span class="workspace-theme-kicker">APPEARANCE</span>
+              <h3>Workspace Theme</h3>
+              <p>Choose a complete color palette for the editor workspace.</p>
+            </div>
+            <span id="workspaceThemeName" class="workspace-theme-current">CodX Dark</span>
+          </div>
+          <input id="workspaceTheme" type="hidden" value="codx-dark" />
+          <div class="workspace-theme-grid" role="radiogroup" aria-label="Workspace theme">
+            <button
+              class="workspace-theme-card"
+              type="button"
+              role="radio"
+              aria-checked="true"
+              data-workspace-theme-option="codx-dark"
+              style="--theme-surface: #0d1117; --theme-panel: #21262d; --theme-accent: #238636"
+            >
+              <span class="workspace-theme-card-preview" aria-hidden="true">
+                <span></span><i></i><i></i><i></i>
+              </span>
+              <span class="workspace-theme-card-copy">
+                <strong>CodX Dark</strong>
+                <small>Classic dark workspace</small>
+              </span>
+              <i class="fa-solid fa-check workspace-theme-check" aria-hidden="true"></i>
+            </button>
+            <button
+              class="workspace-theme-card"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-workspace-theme-option="midnight"
+              style="--theme-surface: #080d1a; --theme-panel: #18233a; --theme-accent: #4f8cff"
+            >
+              <span class="workspace-theme-card-preview" aria-hidden="true">
+                <span></span><i></i><i></i><i></i>
+              </span>
+              <span class="workspace-theme-card-copy">
+                <strong>Midnight</strong>
+                <small>Deep blue focus</small>
+              </span>
+              <i class="fa-solid fa-check workspace-theme-check" aria-hidden="true"></i>
+            </button>
+            <button
+              class="workspace-theme-card"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-workspace-theme-option="graphite"
+              style="--theme-surface: #111315; --theme-panel: #262a30; --theme-accent: #a970ff"
+            >
+              <span class="workspace-theme-card-preview" aria-hidden="true">
+                <span></span><i></i><i></i><i></i>
+              </span>
+              <span class="workspace-theme-card-copy">
+                <strong>Graphite</strong>
+                <small>Neutral and refined</small>
+              </span>
+              <i class="fa-solid fa-check workspace-theme-check" aria-hidden="true"></i>
+            </button>
+            <button
+              class="workspace-theme-card"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-workspace-theme-option="forest"
+              style="--theme-surface: #08140f; --theme-panel: #183126; --theme-accent: #2fbf71"
+            >
+              <span class="workspace-theme-card-preview" aria-hidden="true">
+                <span></span><i></i><i></i><i></i>
+              </span>
+              <span class="workspace-theme-card-copy">
+                <strong>Forest</strong>
+                <small>Calm green contrast</small>
+              </span>
+              <i class="fa-solid fa-check workspace-theme-check" aria-hidden="true"></i>
+            </button>
+            <button
+              class="workspace-theme-card"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-workspace-theme-option="daylight"
+              style="--theme-surface: #ffffff; --theme-panel: #eaeef2; --theme-accent: #0969da"
+            >
+              <span class="workspace-theme-card-preview" aria-hidden="true">
+                <span></span><i></i><i></i><i></i>
+              </span>
+              <span class="workspace-theme-card-copy">
+                <strong>Daylight</strong>
+                <small>Bright and crisp</small>
+              </span>
+              <i class="fa-solid fa-check workspace-theme-check" aria-hidden="true"></i>
+            </button>
+          </div>
+          <p class="workspace-theme-help">
+            Selecting a theme previews it immediately. Use the controls below to customize its editor background or accent.
+          </p>
+        </div>
+
         <!-- Background Color -->
         <div style="margin-bottom: 20px">
           <label
@@ -851,7 +966,7 @@
           </div>
         </div>
 
-        <!-- Theme Color -->
+        <!-- Accent Color -->
         <div style="margin-bottom: 20px">
           <label
             for="themeColor"
@@ -862,7 +977,7 @@
               color: var(--text-primary);
             "
           >
-            Theme Color:
+            Accent Color:
           </label>
           <div style="display: flex; gap: 10px; align-items: center">
             <input
@@ -905,9 +1020,9 @@
                 cursor: pointer;
                 font-size: 13px;
               "
-              aria-label="Reset theme color to default"
+              aria-label="Reset accent color to the selected theme default"
             >
-              Reset Theme
+              Reset Accent
             </button>
           </div>
         </div>
@@ -2119,7 +2234,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js" crossorigin="anonymous"></script>
     <script src="/vendor/jsqr.js"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260721-share-icons1"></script>
+    <script src="/frontend.js?v=20260722-devtools-format1"></script>
     <script type="module" src="/node-runtime.js?v=20260721-corp-newtab1"></script>
   </body>
 </html>

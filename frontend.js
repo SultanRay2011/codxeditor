@@ -26,6 +26,11 @@ const editorBgColorText = document.getElementById("editorBgColorText");
 const themeColorInput = document.getElementById("themeColor");
 const themeColorText = document.getElementById("themeColorText");
 const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
+const workspaceThemeInput = document.getElementById("workspaceTheme");
+const workspaceThemeName = document.getElementById("workspaceThemeName");
+const workspaceThemeButtons = Array.from(
+  document.querySelectorAll("[data-workspace-theme-option]"),
+);
 const editorTextSizeInput = document.getElementById("editorTextSize");
 const textSizeValue = document.getElementById("textSizeValue");
 const editorTabSizeInput = document.getElementById("editorTabSize");
@@ -6735,8 +6740,8 @@ function countStructuralBraces(line, state) {
       break;
     } else if (char === "'" || char === '"' || char === "`") {
       state.mode = char;
-    } else if (char === "{") delta += 1;
-    else if (char === "}") delta -= 1;
+    } else if (char === "{" || char === "[" || char === "(") delta += 1;
+    else if (char === "}" || char === "]" || char === ")") delta -= 1;
   }
   return delta;
 }
@@ -6752,8 +6757,8 @@ function formatBraceCode(content) {
     }
     const trimmed = line.trim();
     if (!trimmed) return "";
-    const leadingClose = trimmed.startsWith("}") ? 1 : 0;
-    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    const leadingClose = /^[}\])]/.test(trimmed) ? 1 : 0;
+    const formatted = `${getIndentUnit().repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
     depth = Math.max(0, depth + countStructuralBraces(trimmed, state));
     return formatted;
   }).join("\n");
@@ -6806,7 +6811,7 @@ function formatHtmlCode(content) {
     const trimmed = line.trim();
     if (!trimmed) return "";
     const leadingClose = /^<\//.test(trimmed) ? 1 : 0;
-    const formatted = `${INDENT_UNIT.repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
+    const formatted = `${getIndentUnit().repeat(Math.max(0, depth - leadingClose))}${trimmed}`;
     let delta = 0;
     for (const match of trimmed.matchAll(/<\/?([a-z][\w:-]*)\b[^>]*>/gi)) {
       const tag = match[1].toLowerCase();
@@ -6839,7 +6844,7 @@ function formatActiveEditorCode() {
   const type = String(activeFile.type || getFileType(activeFile.name) || "").toLowerCase();
   let formatted;
   try {
-    if (type === "json") formatted = JSON.stringify(JSON.parse(original), null, 4);
+    if (type === "json") formatted = JSON.stringify(JSON.parse(original), null, getIndentUnit());
     else if (["jsonc", "js", "mjs", "cjs", "jsx", "ts", "tsx", "css", "scss", "less"].includes(type)) {
       formatted = formatBraceCode(original);
     } else if (["html", "htm", "xml", "svg"].includes(type)) {
@@ -6851,6 +6856,12 @@ function formatActiveEditorCode() {
   } catch (error) {
     return { ok: false, message: `Formatting failed: ${error.message}` };
   }
+  // Tidy the result: collapse runs of blank lines and end with a single newline.
+  formatted = String(formatted)
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+$/, "");
+  if (original.endsWith("\n")) formatted += "\n";
   if (formatted === original) return { ok: true, message: `${activeFile.name} is already formatted.` };
   const selectionStart = editorTextarea.selectionStart;
   const selectionEnd = editorTextarea.selectionEnd;
@@ -7906,7 +7917,36 @@ function resolvePreviewAssetPath(assetPath) {
   return normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
 }
 
+const workspaceThemes = Object.freeze({
+  "codx-dark": Object.freeze({
+    name: "CodX Dark",
+    accent: "#238636",
+    editorBackground: "#1E1E1E",
+  }),
+  midnight: Object.freeze({
+    name: "Midnight",
+    accent: "#4F8CFF",
+    editorBackground: "#0B1220",
+  }),
+  graphite: Object.freeze({
+    name: "Graphite",
+    accent: "#A970FF",
+    editorBackground: "#17191C",
+  }),
+  forest: Object.freeze({
+    name: "Forest",
+    accent: "#2FBF71",
+    editorBackground: "#0B1912",
+  }),
+  daylight: Object.freeze({
+    name: "Daylight",
+    accent: "#0969DA",
+    editorBackground: "#FFFFFF",
+  }),
+});
+
 const defaultSettings = {
+  workspaceTheme: "codx-dark",
   bgColor: "#1E1E1E",
   textSize: "14",
   fontFamily: "'JetBrains Mono', 'Consolas', monospace",
@@ -11229,11 +11269,48 @@ async function deleteFile(fileName) {
 }
 
 // PART 3 - SETTINGS MANAGEMENT
+function normalizeWorkspaceTheme(themeId) {
+  const normalizedTheme = String(themeId || "").trim().toLowerCase();
+  return Object.hasOwn(workspaceThemes, normalizedTheme)
+    ? normalizedTheme
+    : defaultSettings.workspaceTheme;
+}
+
+function applyWorkspaceTheme(themeId) {
+  const normalizedTheme = normalizeWorkspaceTheme(themeId);
+  const theme = workspaceThemes[normalizedTheme];
+  document.documentElement.dataset.workspaceTheme = normalizedTheme;
+  if (workspaceThemeInput) workspaceThemeInput.value = normalizedTheme;
+  if (workspaceThemeName) workspaceThemeName.textContent = theme.name;
+  if (resetThemeColorBtn) {
+    resetThemeColorBtn.style.setProperty("--reset-accent-color", theme.accent);
+    resetThemeColorBtn.title = `Restore the ${theme.name} accent (${theme.accent})`;
+  }
+  workspaceThemeButtons.forEach((button) => {
+    const isSelected = button.dataset.workspaceThemeOption === normalizedTheme;
+    button.setAttribute("aria-checked", isSelected ? "true" : "false");
+    button.tabIndex = isSelected ? 0 : -1;
+  });
+  return theme;
+}
+
+function previewWorkspaceTheme(themeId) {
+  const theme = applyWorkspaceTheme(themeId);
+  editorBgColorInput.value = theme.editorBackground;
+  editorBgColorText.value = theme.editorBackground;
+  themeColorInput.value = theme.accent;
+  themeColorText.value = theme.accent;
+  updateThemeColor(theme.accent);
+  updatePreviewBox();
+  applySettingsToEditors();
+}
+
 function loadSettings() {
   const savedSettings = safeLocalStorage("get", "editorSettings");
   if (savedSettings) {
     try {
       const settings = JSON.parse(savedSettings);
+      applyWorkspaceTheme(settings.workspaceTheme || defaultSettings.workspaceTheme);
       editorBgColorInput.value = settings.bgColor || defaultSettings.bgColor;
       editorBgColorText.value = settings.bgColor || defaultSettings.bgColor;
       themeColorInput.value = settings.themeColor || defaultSettings.themeColor;
@@ -11301,6 +11378,7 @@ function loadSettings() {
 }
 
 function resetToDefaultSettings() {
+  applyWorkspaceTheme(defaultSettings.workspaceTheme);
   editorBgColorInput.value = defaultSettings.bgColor;
   editorBgColorText.value = defaultSettings.bgColor;
   themeColorInput.value = defaultSettings.themeColor;
@@ -11580,6 +11658,7 @@ editorBgColorText.addEventListener("input", (e) => {
 
 themeColorInput.addEventListener("input", (e) => {
   themeColorText.value = e.target.value;
+  updateThemeColor(e.target.value);
   updatePreviewBox();
 });
 
@@ -11587,17 +11666,48 @@ themeColorText.addEventListener("input", (e) => {
   const hexValue = e.target.value;
   if (/^#[0-9A-Fa-f]{6}$/.test(hexValue)) {
     themeColorInput.value = hexValue;
+    updateThemeColor(hexValue);
     updatePreviewBox();
   }
 });
 
+workspaceThemeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    previewWorkspaceTheme(button.dataset.workspaceThemeOption);
+  });
+  button.addEventListener("keydown", (event) => {
+    const navigationKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!navigationKeys.includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = workspaceThemeButtons.indexOf(button);
+    const direction = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1;
+    const nextIndex =
+      (currentIndex + direction + workspaceThemeButtons.length) % workspaceThemeButtons.length;
+    workspaceThemeButtons[nextIndex].focus();
+    previewWorkspaceTheme(workspaceThemeButtons[nextIndex].dataset.workspaceThemeOption);
+  });
+});
+
 if (resetThemeColorBtn) {
-  resetThemeColorBtn.addEventListener("click", () => {
-    const defaultTheme = defaultSettings.themeColor;
-    themeColorInput.value = defaultTheme;
-    themeColorText.value = defaultTheme;
-    updateThemeColor(defaultTheme);
+  resetThemeColorBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    const activeThemeId = normalizeWorkspaceTheme(
+      document.documentElement.dataset.workspaceTheme || workspaceThemeInput?.value,
+    );
+    const activeTheme = workspaceThemes[activeThemeId];
+    const defaultAccent = normalizeHexColor(activeTheme.accent);
+    themeColorInput.value = defaultAccent;
+    themeColorText.value = defaultAccent;
+    updateThemeColor(defaultAccent);
     updatePreviewBox();
+    applySettingsToEditors();
+    resetThemeColorBtn.classList.remove("accent-reset-confirmed");
+    requestAnimationFrame(() => resetThemeColorBtn.classList.add("accent-reset-confirmed"));
+    window.setTimeout(() => resetThemeColorBtn.classList.remove("accent-reset-confirmed"), 900);
+    showNotification(
+      `${activeTheme.name} accent restored. Select Apply to save it.`,
+      "success",
+    );
   });
 }
 
@@ -11660,6 +11770,7 @@ settingsBtn.addEventListener("click", () => {
 });
 
 closeSettingsBtn.addEventListener("click", () => {
+  loadSettings();
   settingsModal.style.display = "none";
 });
 
@@ -11681,6 +11792,7 @@ applySettingsBtn.addEventListener("click", () => {
   );
 
   const settings = {
+    workspaceTheme: normalizeWorkspaceTheme(workspaceThemeInput?.value),
     bgColor: editorBgColorInput.value,
     themeColor: themeColorInput.value,
     textSize: editorTextSizeInput.value,
@@ -19435,6 +19547,7 @@ document.addEventListener("keydown", (e) => {
     }
     if (settingsModal && settingsModal.style.display === "flex") {
       e.preventDefault();
+      loadSettings();
       settingsModal.style.display = "none";
       return;
     }
