@@ -138,8 +138,16 @@ const DEFAULT_PERMISSIONS = {
   sessionEndsAt: null,
 };
 
+// Local env files, loaded in order. Real environment variables (e.g. those set
+// in the Render dashboard) always win — a value is only applied when the key is
+// not already defined. GitHub OAuth settings live in their own .githubenv file.
 function loadEnvFile() {
-  const envPath = path.join(__dirname, ".env");
+  [".env", ".githubenv"].forEach((fileName) => {
+    loadEnvFileAt(path.join(__dirname, fileName));
+  });
+}
+
+function loadEnvFileAt(envPath) {
   if (!fs.existsSync(envPath)) return;
 
   try {
@@ -165,7 +173,7 @@ function loadEnvFile() {
       process.env[key] = value;
     });
   } catch (error) {
-    console.warn("Failed to load .env file:", error);
+    console.warn(`Failed to load ${path.basename(envPath)} file:`, error);
   }
 }
 

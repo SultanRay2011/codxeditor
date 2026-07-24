@@ -4,8 +4,11 @@ node_modules/
 # Environment files and local secrets
 .env
 .env.*
+.githubenv
+.githubenv.*
 !.env.example
 !.env.sample
+!.githubenv.example
 
 # Generated folders
 dist/
