@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="site-enhancements.css?v=20260719-public-illustrations1" />
     <title>Privacy Policy & Data Guide | CodX Editor</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"WebPage","name":"CodX Editor Privacy Policy and Data Guide","dateModified":"2026-07-20","isPartOf":{"@type":"WebSite","name":"CodX Editor"}}
+      {"@context":"https://schema.org","@type":"WebPage","name":"CodX Editor Privacy Policy and Data Guide","dateModified":"2026-07-24","isPartOf":{"@type":"WebSite","name":"CodX Editor"}}
     </script>
     <style>
       * {
@@ -851,7 +851,7 @@
       <div class="content-section">
         <div class="badge">PRIVACY POLICY</div>
         <h1>Privacy Policy</h1>
-        <p class="last-updated">Last Updated: July 14, 2026</p>
+        <p class="last-updated">Last Updated: July 24, 2026</p>
 
         <img class="page-illustration public-doodle-legal sourced-illustration" src="assets/illustrations/privacy-security.svg" alt="A shield protecting personal information and account data." width="799" height="552" decoding="async" />
         <div class="privacy-guarantee">
@@ -869,7 +869,7 @@
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-hard-drive"></i></span><h3>Browser storage</h3><p>Unsaved recovery data, preferences, tutorial state (including whether the one-time Manage Session tip was shown), device identifiers used for collaboration safety, and locally saved projects can be stored in your browser. The project library keeps up to 24 entries, and an autosaved recovery draft remains eligible for restoration for up to seven days. Clearing site data may remove them.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-users"></i></span><h3>Live collaboration</h3><p>A session temporarily carries display names, chosen colors, cursor styles, chat, pair tasks and suggestions, shared project updates, permissions, and connection identifiers through the collaboration server. Optional pair voice is direct browser-to-browser audio and is not recorded by CodX Editor.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-brands fa-github"></i></span><h3>GitHub connection</h3><p>OAuth authorization is handled through GitHub. The connection is protected in an encrypted, HTTP-only cookie that browser scripts cannot read and that is sent only to CodX Editor's GitHub API routes. It expires after seven days, or is removed from the current browser when you disconnect. You are never asked to paste a personal token.</p></article>
-            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-globe"></i></span><h3>Publishing</h3><p>Files included in a published project are sent to the service so the public link can work. Do not publish secrets, private messages, credentials, or material you do not have permission to share.</p></article>
+            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-globe"></i></span><h3>Publishing</h3><p>Files included in a published project are sent to the service and stored so the public link keeps working. Publishing also creates a verification key. That key is needed to update the link, and anyone who has it can open the project's full source code and load every file into the editor, so treat it like a password and never post it publicly. Do not publish secrets, private messages, credentials, or material you do not have permission to share.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-cube"></i></span><h3>Optional browser runtime</h3><p>Runtime project files and packages can run in an isolated browser container supplied by the runtime provider. A temporary preview URL bridges the selected localhost port to the browser tab.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-language"></i></span><h3>Localization</h3><p>Country headers, a public IP lookup when necessary, or browser language may be used to choose an interface language. Visible interface phrases can be sent to a translation provider and cached.</p></article>
           </div>
@@ -1135,8 +1135,13 @@
           <h3>5.3 External Libraries and Services</h3>
           <p>
             CodX Editor uses open-source libraries for code editing features
-            (such as syntax highlighting). These libraries run locally in your
-            browser and don't transmit data to external servers.
+            (such as syntax highlighting, icons, fonts, and archive support).
+            Once loaded, they run locally in your browser and your code is not
+            sent to them. Some are delivered from public content delivery
+            networks, so your browser requests those files directly and the
+            provider can see standard request details such as your IP address.
+            Enabling the optional Node.js runtime additionally downloads that
+            runtime from its provider.
           </p>
         </div>
 
