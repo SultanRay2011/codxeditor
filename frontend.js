@@ -10352,6 +10352,59 @@ function inferRuntimeRootCause(payload, context) {
   const nearby = String(context?.nearbySource || "");
   const isPromise = payload.kind === "unhandledrejection";
 
+  // A JSON.parse failure is reported as a SyntaxError, but the real problem is
+  // almost always the response body, not punctuation in the source. Check it
+  // before the generic syntax branch so the advice points at the request.
+  if (/is not valid json|in json at position|unexpected end of json input|json\.parse/.test(lower)) {
+    const receivedHtml = /<|doctype/i.test(message);
+    return {
+      category: "Invalid JSON response",
+      confidence: receivedHtml ? "High confidence" : "Likely",
+      explanation: receivedHtml
+        ? "JSON.parse received HTML instead of JSON, so the request most likely returned an error, login, or redirect page rather than data."
+        : "JSON.parse received text that is not valid JSON, such as an empty body, plain text, or a response that was cut short.",
+      fix: "Log the raw response text before parsing, check response.ok and the request URL, and only parse when the response really is JSON.",
+    };
+  }
+
+  const duplicateDeclaration = message.match(/Identifier ['"]([^'"]+)['"] has already been declared/i);
+  if (duplicateDeclaration) {
+    return {
+      category: "Duplicate declaration",
+      confidence: "High confidence",
+      explanation: `"${duplicateDeclaration[1]}" is declared more than once in the same scope, which commonly happens when a script is linked twice or a name is reused.`,
+      fix: `Remove or rename the second declaration of "${duplicateDeclaration[1]}", and check the page does not include the same script file twice.`,
+    };
+  }
+
+  if (/assignment to constant variable/i.test(lower)) {
+    const constantName = sourceLine.match(/([A-Za-z_$][\w$]*)\s*=(?!=)/)?.[1] || "This value";
+    return {
+      category: "Reassigned constant",
+      confidence: "High confidence",
+      explanation: `${constantName} was declared with const, so it cannot be given a new value later.`,
+      fix: `Declare ${constantName} with let if it needs to change, or update the existing object's properties instead of replacing it.`,
+    };
+  }
+
+  if (/cors|cross-origin|access-control-allow-origin/.test(lower)) {
+    return {
+      category: "Blocked by CORS",
+      confidence: "High confidence",
+      explanation: "The browser blocked this request because the other site did not say it allows requests from this page.",
+      fix: "Use an API that sends Access-Control-Allow-Origin, request it through your own server, or call a URL on the same origin.",
+    };
+  }
+
+  if (/quotaexceeded|exceeded the quota|storage is full/.test(lower)) {
+    return {
+      category: "Storage limit reached",
+      confidence: "High confidence",
+      explanation: "Browser storage (localStorage or sessionStorage) is full, so this value could not be saved.",
+      fix: "Remove keys you no longer need, store less data, or wrap the write in try/catch and handle the failure.",
+    };
+  }
+
   if (
     errorName === "SyntaxError" ||
     /unexpected token|unexpected end|missing\s+[)\]}]|unterminated|invalid or unexpected token|expected/.test(lower)
