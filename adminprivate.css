@@ -2341,3 +2341,242 @@ input:focus-visible,
     transform: none;
   }
 }
+
+/* ============================================================
+   Advanced admin styling — login screen + overview (home)
+   A stronger type scale, calmer spacing, and clearer depth.
+   ============================================================ */
+
+/* ---------------- LOGIN SCREEN ---------------- */
+.login-wrap {
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(1000px 520px at 12% -8%, rgba(52, 211, 133, 0.2), transparent 60%),
+    radial-gradient(820px 460px at 100% 108%, rgba(16, 185, 129, 0.14), transparent 58%),
+    linear-gradient(158deg, #04251a 0%, #06482a 52%, #0a6b3b 100%);
+}
+
+.login-card {
+  width: min(462px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 24px;
+  padding: 40px 38px 34px;
+  background: #ffffff;
+  box-shadow:
+    0 2px 6px rgba(0, 20, 9, 0.06),
+    0 30px 72px rgba(0, 20, 9, 0.34);
+}
+
+/* Accent ribbon across the top of the card. */
+.login-card::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #0d7a37, #34d399, #0d7a37);
+}
+
+.login-card .badge {
+  top: 26px;
+  right: 26px;
+}
+
+.login-brand {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+.login-illustration {
+  width: min(208px, 60%);
+  margin: 10px auto 14px;
+}
+
+.login-card h1 {
+  font-size: clamp(26px, 3.4vw, 33px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.login-card > p {
+  max-width: 40ch;
+  margin: 12px 0 22px;
+  color: #5b7566;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.login-card form {
+  display: grid;
+  gap: 15px;
+}
+
+.login-card label {
+  display: grid;
+  gap: 7px;
+  color: #4a6b57;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.login-card input {
+  min-height: 50px;
+  border: 1.5px solid #dbe9e0;
+  border-radius: 12px;
+  padding: 0 15px;
+  background: #f7fbf9;
+  font-size: 15px;
+}
+
+.login-card input:focus {
+  border-color: #16a34a;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
+}
+
+.login-actions .btn {
+  min-height: 52px;
+  margin-top: 6px;
+  border-color: transparent;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #17a94e, #0c7536);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 12px 26px rgba(20, 148, 71, 0.32);
+}
+
+.login-actions .btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 16px 32px rgba(20, 148, 71, 0.38);
+}
+
+.error {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------------- SIDEBAR ---------------- */
+.sidebar {
+  padding: 22px 14px;
+}
+
+.nav-label {
+  color: #93a89b;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.nav-item {
+  border-radius: 11px;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, #17a94e, #0f8a41);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(20, 148, 71, 0.26);
+}
+
+.nav-item.active svg {
+  fill: #ffffff;
+}
+
+/* ---------------- TOPBAR HERO ---------------- */
+.topbar {
+  margin-bottom: 30px;
+  border-radius: 24px;
+  padding: clamp(24px, 3.4vw, 40px);
+  box-shadow: 0 26px 60px rgba(3, 63, 33, 0.24);
+}
+
+.topbar h1 {
+  margin: 14px 0 10px;
+  font-size: clamp(28px, 3vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.topbar p {
+  font-size: 13.5px;
+}
+
+.hero-btn {
+  min-height: 42px;
+  border-radius: 12px;
+}
+
+/* ---------------- SECTION HEADINGS ---------------- */
+.section-label {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.section-heading h2,
+.panel-heading h2 {
+  margin: 6px 0 4px;
+  font-size: clamp(20px, 2.2vw, 27px);
+  letter-spacing: -0.022em;
+}
+
+/* ---------------- STAT TILES ---------------- */
+.stats {
+  gap: 15px;
+}
+
+.stat {
+  min-height: 168px;
+  border-radius: 18px;
+  padding: 20px;
+}
+
+/* Coloured accent ribbon per stat variant. */
+.stat::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--stat-color, #149447), transparent 85%);
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+}
+
+.stat > strong {
+  margin-top: 16px;
+  font-size: clamp(32px, 3vw, 44px);
+  letter-spacing: -0.05em;
+}
+
+.stat-label {
+  color: #1d3d2b;
+  font-size: 12.5px;
+}
+
+.stat p {
+  color: #7b8d84;
+  font-size: 10.5px;
+}
+
+/* ---------------- PANEL CARDS ---------------- */
+.panel-card {
+  border-radius: 20px;
+  padding: 22px;
+}
