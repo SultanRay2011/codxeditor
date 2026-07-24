@@ -79,6 +79,52 @@ function toInstallablePackage(specifier) {
 
 const NODE_DIAGNOSTIC_RULES = [
   {
+    // A broken package.json. npm's wording is very technical, so translate the
+    // specific JSON complaint into the everyday typo that caused it.
+    id: "invalid-package-json",
+    // npm prints "code EJSONPARSE" first and the useful position on a later
+    // line, so match the detail lines (which carry line/column) rather than the
+    // bare code. `once` keeps the follow-up lines from adding duplicates.
+    once: true,
+    match: /Invalid package\.json|in JSON at position|JSON\.parse\b.*(?:Expected|Unexpected|Failed)|package\.json must be actual JSON/i,
+    build: (m) => {
+      const full = String(m.input || "");
+      const at = full.match(/line (\d+) column (\d+)/i);
+      const where = at ? ` (line ${at[1]}, column ${at[2]})` : "";
+      const near = full.match(/while parsing near\s+"(.{0,60})/i);
+
+      let fix;
+      if (/Expected ',' or '}'/i.test(full)) {
+        fix = at
+          ? `Look at the end of line ${Number(at[1]) - 1} — it is probably missing a comma. Every entry needs a comma after it except the last one.`
+          : "An entry is missing the comma that separates it from the next one.";
+      } else if (/Expected ',' or ']'/i.test(full)) {
+        fix = "An item in a list is missing the comma that separates it from the next one.";
+      } else if (/Expected double-quoted property name/i.test(full)) {
+        fix = at
+          ? `There is probably an extra comma after the last entry before line ${at[1]}, or a name is missing its double quotes.`
+          : "Remove the extra comma after the last entry, and put double quotes around every name.";
+      } else if (/Expected ':'/i.test(full)) {
+        fix = "A name is missing the colon between it and its value.";
+      } else if (/Unexpected end of JSON/i.test(full)) {
+        fix = "A closing } or ] is missing at the end of the file.";
+      } else {
+        fix = at
+          ? `Open package.json and check line ${at[1]} around column ${at[2]}.`
+          : "Open package.json and look for a missing comma, quote, or bracket.";
+      }
+
+      return {
+        title: `package.json has a typo${where}`,
+        detail:
+          "npm could not read package.json because it is not valid JSON. JSON is stricter than JavaScript: every name and text value needs double quotes, entries are separated by commas, and the final entry must not have a comma after it." +
+          (near ? ` The problem is near: ${near[1].replace(/\\n/g, " ").trim()}` : ""),
+        fix,
+        openFile: "package.json",
+      };
+    },
+  },
+  {
     id: "module-not-found",
     match: /(?:Cannot find module|Error: Cannot find package)\s+['"]([^'"]+)['"]/i,
     build: (m) => {
@@ -110,7 +156,8 @@ const NODE_DIAGNOSTIC_RULES = [
   },
   {
     id: "npm-404",
-    match: /npm ERR!\s+404.*?['"]?([@\w./-]+)['"]?\s+is not in (?:this registry|the npm registry)/i,
+    // npm 10+ prints "npm error", older versions print "npm ERR!".
+    match: /npm (?:ERR!|error)\s+404.*?['"]?([@\w./-]+)['"]?\s+is not in (?:this registry|the npm registry)/i,
     build: (m) => ({
       title: `Package not found: ${m[1]}`,
       detail: "npm could not find that package in the registry.",
@@ -219,7 +266,10 @@ function detectNodeIssue(line) {
     const found = text.match(rule.match);
     if (!found) continue;
     const built = rule.build(found);
-    return { id: rule.id, key: `${rule.id}:${built.title}`, ...built };
+    // `once` rules report a single time per command, even when the tool prints
+    // several related lines with differing wording.
+    const key = rule.once ? rule.id : `${rule.id}:${built.title}`;
+    return { id: rule.id, key, ...built };
   }
   return null;
 }
@@ -259,6 +309,23 @@ function writeTerminalDiagnostic(diagnostic) {
       );
     });
     box.appendChild(action);
+  }
+  // Jump straight to the file that needs fixing.
+  if (diagnostic.openFile && typeof window.switchFile === "function") {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "node-terminal-diagnostic-action";
+    open.textContent = `OPEN ${diagnostic.openFile}`;
+    open.title = `Open ${diagnostic.openFile} in the editor`;
+    open.addEventListener("click", () => {
+      try {
+        window.switchFile(diagnostic.openFile);
+        setServerView("terminal");
+      } catch (_error) {
+        writeTerminal(`\nCould not open ${diagnostic.openFile}.\n`, "error");
+      }
+    });
+    box.appendChild(open);
   }
 
   terminalOutput.appendChild(box);
