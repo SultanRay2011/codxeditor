@@ -35,16 +35,17 @@
 }
 
 .home-showcase-shell {
-  width: min(1360px, calc(100% - 40px));
+  width: 100%;
+  padding: 0 clamp(20px, 5vw, 70px);
   margin: 0 auto;
 }
 
 .home-content {
   position: relative;
   z-index: 1;
-  width: min(1220px, calc(100% - 40px));
+  width: 100%;
   margin: 0 auto;
-  padding: 72px 0 64px;
+  padding: 72px clamp(20px, 5vw, 70px) 64px;
   flex-grow: 1;
 }
 
@@ -839,13 +840,14 @@
   color: #fff !important;
 }
 
+/* Content spans the page instead of sitting in a narrow boxed card. */
 .site-refurbished :is(.ad-container, .about-container, .contact-container, .policy-container, .terms-container) {
-  width: min(1120px, 100%);
+  width: 100%;
   margin-inline: auto;
-  border: 1px solid color-mix(in srgb, var(--site-accent) 22%, var(--site-line)) !important;
-  border-radius: 26px !important;
-  background: var(--site-surface) !important;
-  box-shadow: var(--site-shadow) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .site-refurbished :is(h1, h2, h3) { text-wrap: balance; }

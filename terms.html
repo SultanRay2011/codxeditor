@@ -246,14 +246,14 @@
       .container {
         position: relative;
         z-index: 1;
-        max-width: 900px;
+        max-width: none;
+        width: 100%;
         margin: 0 auto;
-        padding: 40px 20px 60px;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 100px 20px 40px 20px;
+        align-items: stretch;
+        justify-content: flex-start;
+        padding: 100px clamp(20px, 5vw, 70px) 40px;
       }
 
       .last-updated {
@@ -279,15 +279,12 @@
 
       /* *** MODIFIED SECTION *** */
       .terms-container {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        padding: 50px 40px;
-        border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        border: 2px solid rgba(76, 175, 80, 0.3);
-        animation:
-          floatCard 4s ease-in-out infinite alternate,
-          fadeInUp 0.8s ease;
+        background: transparent;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+        border: none;
+        animation: fadeInUp 0.8s ease;
         width: 100%;
         /* MODIFIED: Setting text-align to left to align the inline-block badge */
         text-align: left;

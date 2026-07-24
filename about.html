@@ -261,7 +261,7 @@
         }
       }
 
-      .about-shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+      .about-shell { width: 100%; padding: 0 clamp(20px, 5vw, 70px); margin: 0 auto; }
       .about-button {
         min-height: 48px;
         display: inline-flex;
@@ -425,7 +425,7 @@
         .footer-grid { grid-template-columns: 1.4fr repeat(2, 1fr); }
       }
       @media (max-width: 760px) {
-        .about-shell { width: min(100% - 28px, 1180px); }
+        .about-shell { width: 100%; padding: 0 14px; }
         .about-section { padding: 70px 0; }
         .workflow { grid-template-columns: 1fr; gap: 22px; }
         .workflow-step { display: grid; grid-template-columns: 56px 1fr; gap: 0 16px; text-align: left; padding: 0; }
