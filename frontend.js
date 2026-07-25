@@ -143,6 +143,7 @@ const projectStatusBadge = document.getElementById("projectStatusBadge");
 const projectStatusMeta = document.getElementById("projectStatusMeta");
 const runPreviewBtn = document.getElementById("runPreviewBtn");
 const clearConsoleBtn = document.getElementById("clearConsoleBtn");
+const nodeClearTerminalBtn = document.getElementById("nodeClearTerminalBtn");
 const headerMoreMenu = document.getElementById("headerMoreMenu");
 const headerMoreBtn = document.getElementById("headerMoreBtn");
 const headerMorePanel = document.getElementById("headerMorePanel");
@@ -6988,7 +6989,45 @@ function getPreviewOpenFileCall(fileName) {
   return `window.parent.__codxOpenPreviewFile(${JSON.stringify(fileName)})`;
 }
 
+function getExternalPreviewUrl(rawAddress) {
+  let address = String(rawAddress || "").trim();
+  if (!address) return "";
+  const hasExplicitWebProtocol = /^https?:\/\//i.test(address);
+  const looksLikeBareWebHost =
+    /^(?:www\.)?[a-z\d-]+(?:\.[a-z\d-]+)+(?::\d+)?(?:[/?#]|$)/i.test(address);
+  if (
+    !hasExplicitWebProtocol &&
+    !looksLikeBareWebHost &&
+    /\.html?(?:[?#].*)?$/i.test(address)
+  ) {
+    return "";
+  }
+  if (/^www\./i.test(address)) {
+    address = `https://${address}`;
+  } else if (
+    !/^[a-z][a-z\d+.-]*:\/\//i.test(address) &&
+    looksLikeBareWebHost
+  ) {
+    address = `https://${address}`;
+  }
+  try {
+    const parsed = new URL(address);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
 function setPreviewTarget(rawHref) {
+  const externalUrl = getExternalPreviewUrl(rawHref);
+  if (externalUrl) {
+    currentPreviewTarget = {
+      mode: "external",
+      url: externalUrl,
+    };
+    updatePreview();
+    return false;
+  }
   const nextTarget = getPreviewTargetForFile(rawHref);
   currentPreviewTarget = {
     mode: nextTarget.mode,
@@ -6999,6 +7038,33 @@ function setPreviewTarget(rawHref) {
 }
 
 window.__codxOpenPreviewFile = setPreviewTarget;
+
+function restoreHtmlPreviewAddress() {
+  updatePreviewLink(currentPreviewTarget?.url || currentPreviewTarget?.fileName || "");
+}
+
+function openHtmlPreviewAddress() {
+  if (!previewLinkEl) return;
+  const address = String(previewLinkEl.value || "").trim();
+  if (!address) {
+    restoreHtmlPreviewAddress();
+    return;
+  }
+  setPreviewTarget(address);
+}
+
+previewLinkEl?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    previewLinkEl.blur();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    previewLinkEl.value = currentPreviewTarget?.fileName || "";
+    previewLinkEl.blur();
+  }
+});
+
+previewLinkEl?.addEventListener("blur", openHtmlPreviewAddress);
 
 function bindPreviewNavigationHandlers() {
   const previewDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -7844,7 +7910,9 @@ function updatePreviewTitle(text) {
 function updatePreviewLink(linkText) {
   if (!previewLinkEl) return;
   const next = String(linkText || "").trim();
-  previewLinkEl.textContent = next || "";
+  if (document.activeElement !== previewLinkEl) {
+    previewLinkEl.value = next || "";
+  }
   previewLinkEl.style.display = next ? "block" : "none";
 }
 
@@ -11791,6 +11859,14 @@ function applySettingsToEditors() {
   editor.style.letterSpacing = `${selectedSpacing}px`;
   editor.style.lineHeight = selectedLineHeight;
   editor.style.backgroundColor = "transparent";
+  document.documentElement.style.setProperty(
+    "--editor-control-font-family",
+    getEffectiveEditorFontFamily(),
+  );
+  document.documentElement.style.setProperty(
+    "--editor-control-letter-spacing",
+    `${selectedSpacing}px`,
+  );
   if (editorWrapper) {
     editorWrapper.style.backgroundColor = selectedBg;
   }
@@ -13829,6 +13905,45 @@ function refreshDiagnosticsState() {
   performDiagnosticsRefresh();
 }
 
+/* --- React / JSX preview support ----------------------------------------
+   JSX cannot run natively in the browser, so when a project contains .jsx
+   files the preview loads React and compiles those scripts with Babel. */
+const PREVIEW_SCRIPT_TYPES = new Set(["js", "mjs", "cjs", "jsx"]);
+const REACT_CDN_BASE = "https://unpkg.com";
+
+function isJsxProjectFile(file) {
+  return String(file?.type || "").toLowerCase() === "jsx" ||
+    /\.jsx$/i.test(String(file?.name || ""));
+}
+
+function projectUsesJsx() {
+  return (Array.isArray(projectFiles) ? projectFiles : []).some(isJsxProjectFile);
+}
+
+// Only add libraries the project has not already included itself.
+function buildReactRuntimeMarkup(html) {
+  const markup = String(html || "");
+  const tags = [];
+  if (!/react(?:\.|-)(?:development|production|min)/i.test(markup)) {
+    tags.push(
+      `<script crossorigin src="${REACT_CDN_BASE}/react@18/umd/react.development.js"></script>`,
+      `<script crossorigin src="${REACT_CDN_BASE}/react-dom@18/umd/react-dom.development.js"></script>`,
+    );
+  }
+  if (!/babel(?:\.min)?\.js|@babel\/standalone/i.test(markup)) {
+    tags.push(`<script src="${REACT_CDN_BASE}/@babel/standalone/babel.min.js"></script>`);
+  }
+  // Babel's default React preset emits `import ... from "react/jsx-runtime"`,
+  // which cannot resolve without a bundler. Register a preset that uses the
+  // classic runtime so JSX compiles to React.createElement and runs against
+  // the React global loaded above.
+  tags.push(
+    `<script>if(window.Babel&&!Babel.availablePresets["codx-react"]){` +
+      `Babel.registerPreset("codx-react",{presets:[[Babel.availablePresets["react"],{runtime:"classic"}]]});}<\/script>`,
+  );
+  return tags.join("");
+}
+
 function updatePreview() {
   if (
     activeSessionId && !isHost() && collabPermissions.disableRunCode
@@ -13854,6 +13969,27 @@ function updatePreview() {
     iframe.srcdoc =
       '<h3 style="text-align:center;color:#aaa;">No HTML file found</h3>';
     appendConsoleMessage("warn", "WARNING: No HTML target was provided for preview navigation.");
+    return;
+  }
+
+  if (currentPreviewTarget.mode === "external" && currentPreviewTarget.url) {
+    const externalUrl = getExternalPreviewUrl(currentPreviewTarget.url);
+    if (!externalUrl) {
+      currentPreviewTarget = { mode: "empty", fileName: "" };
+      updatePreview();
+      return;
+    }
+    let externalTitle = "External Preview";
+    try {
+      externalTitle = new URL(externalUrl).hostname || externalTitle;
+    } catch (_error) {
+      // The URL was already validated above.
+    }
+    updatePreviewTitle(externalTitle);
+    updatePreviewLink(externalUrl);
+    updatePreviewFavicon("");
+    iframe.removeAttribute("srcdoc");
+    if (iframe.src !== externalUrl) iframe.src = externalUrl;
     return;
   }
 
@@ -13995,7 +14131,7 @@ function updatePreview() {
       const srcFileName = resolvedSrc.split("/").pop();
       const jsFile = projectFiles.find(
         (f) => {
-          if (f.type !== "js") return false;
+          if (!PREVIEW_SCRIPT_TYPES.has(f.type)) return false;
           const candidate = String(f.name || "").trim().replace(/^\.\/+/, "").toLowerCase();
           return (
             candidate === resolvedSrc ||
@@ -14006,8 +14142,11 @@ function updatePreview() {
       );
       if (jsFile) {
         const rewrittenScript = rewritePreviewScriptNavigation(jsFile.content);
+        // JSX has to be compiled in the browser, so hand it to Babel instead
+        // of running it as plain JavaScript.
+        const scriptType = isJsxProjectFile(jsFile) ? ' type="text/babel" data-presets="codx-react"' : "";
         // Keep original file line numbers by not wrapping code in extra lines.
-        return `<script data-filename="${jsFile.name}">${rewrittenScript}
+        return `<script data-filename="${jsFile.name}"${scriptType}>${rewrittenScript}
 //# sourceURL=${jsFile.name}
 </script>`;
       } else {
@@ -14421,16 +14560,18 @@ function updatePreview() {
 
   // Insert console script and image CSS at the very beginning
   const externalHeadMarkup = Array.from(new Set(externalHeadResources)).join("");
+  // React projects need React, ReactDOM and the Babel compiler in the preview.
+  const reactRuntimeMarkup = projectUsesJsx() ? buildReactRuntimeMarkup(html) : "";
   const countInsertedLines = (text) => (String(text || "").match(/\n/g) || []).length;
   const injectedOffset = countInsertedLines(
-    externalHeadMarkup + imageSizingCSS + consoleScript,
+    externalHeadMarkup + reactRuntimeMarkup + imageSizingCSS + consoleScript,
   );
   const consoleScriptResolved = consoleScript.replace(
     "__CODEX_INJECTED_OFFSET__",
     String(injectedOffset),
   );
   const injectionResolved =
-    externalHeadMarkup + imageSizingCSS + consoleScriptResolved;
+    externalHeadMarkup + reactRuntimeMarkup + imageSizingCSS + consoleScriptResolved;
 
   if (/<head[^>]*>/i.test(html)) {
     html = html.replace(/(<head[^>]*>)/i, `$1${injectionResolved}`);
@@ -15486,9 +15627,116 @@ function highlightJs(code) {
     return code.slice(start, index);
   };
 
+  // --- JSX -----------------------------------------------------------------
+  // How deeply we are nested inside JSX element children, so plain text
+  // between tags is not mistaken for JavaScript identifiers.
+  let jsxDepth = 0;
+
+  // "<" only begins JSX where a value cannot already have ended; after an
+  // identifier, number, ")" or "]" it is a less-than comparison instead.
+  const jsxCanStart = () => {
+    const prev = previousSignificant;
+    if (!prev) return true;
+    if (/^[A-Za-z_$][\w$]*$/.test(prev)) {
+      return ["return", "yield", "await", "do", "else", "case", "default", "typeof", "in", "of"].includes(prev);
+    }
+    return ![")", "]", "++", "--"].includes(prev);
+  };
+
+  // A {...} block inside JSX: the contents are ordinary JavaScript.
+  const consumeJsxExpression = () => {
+    append("{", "punctuation");
+    index += 1;
+    const start = index;
+    let depth = 1;
+    while (index < code.length) {
+      const char = code[index];
+      if (char === '"' || char === "'" || char === "`") {
+        consumeString(char);
+        continue;
+      }
+      if (char === "{") depth += 1;
+      if (char === "}") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+      index += 1;
+    }
+    const inner = code.slice(start, index);
+    if (inner) result += highlightJs(inner);
+    if (code[index] === "}") {
+      append("}", "punctuation");
+      index += 1;
+    }
+  };
+
+  // One JSX tag. Children flow back through the main loop, which keeps
+  // nesting and embedded expressions working without a second parser.
+  const consumeJsxElement = () => {
+    const isClosing = peek(1) === "/";
+    append(isClosing ? "</" : "<", "tag-punctuation");
+    index += isClosing ? 2 : 1;
+
+    if (peek() === ">") {
+      append(">", "tag-punctuation");
+      index += 1;
+      jsxDepth += isClosing ? -1 : 1;
+      if (jsxDepth < 0) jsxDepth = 0;
+      return;
+    }
+
+    const name = consumeWhile((value) => /[A-Za-z0-9_$.:-]/.test(value));
+    if (name) append(name, "tag");
+
+    while (index < code.length) {
+      const char = peek();
+      if (/\s/.test(char)) {
+        append(consumeWhile((value) => /\s/.test(value)));
+        continue;
+      }
+      if (char === "/" && peek(1) === ">") {
+        append("/>", "tag-punctuation");
+        index += 2;
+        return; // self-closing: depth unchanged
+      }
+      if (char === ">") {
+        append(">", "tag-punctuation");
+        index += 1;
+        jsxDepth += isClosing ? -1 : 1;
+        if (jsxDepth < 0) jsxDepth = 0;
+        return;
+      }
+      if (char === "{") {
+        consumeJsxExpression();
+        continue;
+      }
+      if (char === "=") {
+        append("=", "operator");
+        index += 1;
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        append(consumeString(char), "string");
+        continue;
+      }
+      if (isIdStart(char)) {
+        append(consumeWhile((value) => /[A-Za-z0-9_$:-]/.test(value)), "attr");
+        continue;
+      }
+      append(char);
+      index += 1;
+    }
+  };
+
   while (index < code.length) {
     const char = peek();
     const next = peek(1);
+
+    // Literal text between JSX tags is content, not code.
+    if (jsxDepth > 0 && char !== "<" && char !== "{") {
+      append(consumeWhile((value) => value !== "<" && value !== "{"), "html-text");
+      continue;
+    }
 
     if (/\s/.test(char)) {
       append(consumeWhile((value) => /\s/.test(value)));
@@ -15559,6 +15807,13 @@ function highlightJs(code) {
       else if (/^[A-Z][A-Za-z0-9_$]*$/.test(word)) append(word, "class-name");
       else append(word, "identifier");
       previousSignificant = word;
+      continue;
+    }
+
+    // JSX: treat "<" as a tag when it cannot be a comparison, so React markup
+    // is coloured as tags/attributes rather than operators and identifiers.
+    if (char === "<" && (isIdStart(next) || next === "/" || next === ">") && jsxCanStart()) {
+      consumeJsxElement();
       continue;
     }
 
@@ -17410,7 +17665,7 @@ function matchesExtensionByContext(fileName, attr, tag) {
 
   if (attr === "href" && tag === "link") return ext === "css" || imageExt.has(ext);
   if (attr === "href" && tag === "a") return true;
-  if (attr === "src" && tag === "script") return ext === "js" || ext === "mjs";
+  if (attr === "src" && tag === "script") return ext === "js" || ext === "mjs" || ext === "jsx";
   if (attr === "src" && tag === "img") return imageExt.has(ext);
   if (tag === "css-import") return ext === "css";
   if (tag === "js-file") return true;
@@ -17444,11 +17699,14 @@ function getRankedFileSuggestions(prefix, attr, tag) {
 
 function getFileIcon(fileName) {
   const ext = getFileType(fileName);
-  if (ext === "html") return "HTML";
-  if (ext === "css") return "CSS";
-  if (ext === "js" || ext === "mjs") return "JS";
-  if (ext === "json") return "JSON";
+  if (ext === "html" || ext === "htm") return "HTML";
+  if (ext === "css" || ext === "scss" || ext === "less") return "CSS";
+  if (ext === "jsx" || ext === "tsx") return "React";
+  if (ext === "js" || ext === "mjs" || ext === "cjs") return "JavaScript";
+  if (ext === "ts") return "TypeScript";
+  if (ext === "json" || ext === "jsonc") return "JSON";
   if (ext === "env") return "ENV";
+  if (ext === "md") return "Markdown";
   if (ext === "txt") return "TXT";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "IMG";
   if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "mp4", "webm", "ogv", "mov", "m4v"].includes(ext)) return "MED";
@@ -17459,17 +17717,29 @@ function createFileExtensionIcon(fileName) {
   const ext = getFileType(fileName);
   const iconByExtension = {
     html: "fa-brands fa-html5",
+    htm: "fa-brands fa-html5",
     css: "fa-brands fa-css3-alt",
+    scss: "fa-brands fa-css3-alt",
+    less: "fa-brands fa-css3-alt",
     js: "fa-brands fa-js",
     mjs: "fa-brands fa-js",
+    cjs: "fa-brands fa-js",
+    jsx: "fa-brands fa-react",
+    tsx: "fa-brands fa-react",
+    ts: "fa-solid fa-code",
     json: "fa-solid fa-code",
+    jsonc: "fa-solid fa-code",
     env: "fa-solid fa-key",
+    md: "fa-brands fa-markdown",
     txt: "fa-solid fa-file-lines",
   };
   const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"];
   const videoExtensions = ["mp4", "webm", "ogv", "mov", "m4v"];
   const audioExtensions = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
-  let safeExt = ["html", "css", "js", "mjs", "json", "env", "txt"].includes(ext) ? ext : "file";
+  let safeExt = [
+    "html", "htm", "css", "scss", "less", "js", "mjs", "cjs", "jsx", "tsx",
+    "ts", "json", "jsonc", "env", "md", "txt",
+  ].includes(ext) ? ext : "file";
   let glyphClass = iconByExtension[ext] || "fa-solid fa-file-code";
   if (imageExtensions.includes(ext)) {
     safeExt = "image";
@@ -17496,7 +17766,10 @@ const suggestionIconDefinitions = {
   html: { className: "fa-brands fa-html5", label: "HTML" },
   css: { className: "fa-brands fa-css3-alt", label: "CSS" },
   js: { className: "fa-brands fa-js", label: "JavaScript" },
+  react: { className: "fa-brands fa-react", label: "React" },
+  typescript: { className: "fa-solid fa-code", label: "TypeScript" },
   env: { className: "fa-solid fa-key", label: "ENV" },
+  markdown: { className: "fa-brands fa-markdown", label: "Markdown" },
   txt: { className: "fa-solid fa-file-lines", label: "TXT" },
   json: { className: "fa-solid fa-code", label: "JSON" },
   image: { className: "fa-solid fa-image", label: "Image" },
@@ -17509,8 +17782,11 @@ function getSuggestionIconKind(kind, fileName = "") {
   const ext = getFileType(fileName);
   if (["html", "htm"].includes(ext)) return "html";
   if (["css", "scss", "less"].includes(ext)) return "css";
-  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(ext)) return "js";
+  if (["jsx", "tsx"].includes(ext)) return "react";
+  if (["js", "mjs", "cjs"].includes(ext)) return "js";
+  if (ext === "ts") return "typescript";
   if (ext === "env") return "env";
+  if (ext === "md") return "markdown";
   if (ext === "txt") return "txt";
   if (["json", "jsonc"].includes(ext)) return "json";
   if (["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp", "ico"].includes(ext)) return "image";
@@ -20922,6 +21198,10 @@ function enforceCollabPermissionsUI() {
       clearConsoleBtn.disabled = false;
       clearConsoleBtn.title = "";
     }
+    if (nodeClearTerminalBtn) {
+      nodeClearTerminalBtn.disabled = false;
+      nodeClearTerminalBtn.title = "Clear Node.js terminal";
+    }
     const editor = document.getElementById("activeEditor");
     if (editor) {
       const mediaSourceReadOnly = developerMediaSourceVisible && Boolean(getProjectMediaKind(activeFile));
@@ -21001,6 +21281,12 @@ function enforceCollabPermissionsUI() {
   if (clearConsoleBtn) {
     clearConsoleBtn.disabled = lockConsole;
     clearConsoleBtn.title = lockConsole ? "The host disabled console access for participants." : "";
+  }
+  if (nodeClearTerminalBtn) {
+    nodeClearTerminalBtn.disabled = lockConsole;
+    nodeClearTerminalBtn.title = lockConsole
+      ? "The host disabled console access for participants."
+      : "Clear Node.js terminal";
   }
   if (collabModalView === "session-details" || collabModalView === "group-controls") {
     const chatInput = document.getElementById("collabChatInput");

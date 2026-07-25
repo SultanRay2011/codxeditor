@@ -718,20 +718,35 @@ body.zen-mode #zenExitBtn {
   opacity: 0.95;
 }
 
-.file-extension-icon-html {
+.file-extension-icon-html,
+.file-extension-icon-htm {
   color: #e34f26;
 }
 
-.file-extension-icon-css {
+.file-extension-icon-css,
+.file-extension-icon-scss,
+.file-extension-icon-less {
   color: #1572b6;
 }
 
 .file-extension-icon-js,
-.file-extension-icon-mjs {
+.file-extension-icon-mjs,
+.file-extension-icon-cjs {
   color: #f7df1e;
 }
 
-.file-extension-icon-json {
+/* React's brand cyan for JSX/TSX files. */
+.file-extension-icon-jsx,
+.file-extension-icon-tsx {
+  color: #61dafb;
+}
+
+.file-extension-icon-ts {
+  color: #3178c6;
+}
+
+.file-extension-icon-json,
+.file-extension-icon-jsonc {
   color: #f5c451;
 }
 
@@ -740,6 +755,10 @@ body.zen-mode #zenExitBtn {
 }
 
 .file-extension-icon-txt {
+  color: #38bdf8;
+}
+
+.file-extension-icon-md {
   color: #38bdf8;
 }
 
@@ -1758,10 +1777,19 @@ textarea::-webkit-scrollbar-thumb:hover {
   color: #d6b900;
 }
 
+.suggestion-icon-react {
+  color: #61dafb;
+}
+
+.suggestion-icon-typescript {
+  color: #3178c6;
+}
+
 .suggestion-icon-env {
   color: var(--warning-color);
 }
 
+.suggestion-icon-markdown,
 .suggestion-icon-txt {
   color: #38bdf8;
 }
@@ -2564,11 +2592,28 @@ button[aria-busy="true"] .fa-spinner {
 }
 
 #previewLink {
+  width: 100%;
+  min-width: 0;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  background: transparent;
   font-size: 11px;
+  font-family: var(--font-code);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+#previewLink:hover {
+  border-color: var(--border-color);
+}
+#previewLink:focus {
+  border-color: var(--accent-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .preview-viewport-stage {
@@ -2710,8 +2755,12 @@ iframe {
   border-top: 0;
 }
 
+.preview.node-runtime-active .console-toolbar {
+  display: none !important;
+}
+
 /* Live Node.js server preview shown inside the editor's console area.
-   The header toggle switches this and the terminal one-at-a-time. */
+   The localhost toolbar stays in place while the content below switches. */
 .node-server-preview {
   display: none;
   flex-direction: column;
@@ -2719,8 +2768,8 @@ iframe {
   min-height: 0;
   background: #ffffff;
 }
-/* When toggled to the preview, the live server fills the area and the
-   terminal is hidden; toggling back does the reverse. */
+/* When toggled to the preview, the live server fills the remaining area and
+   the terminal is hidden; toggling back changes only the content below. */
 .preview.node-runtime-active.node-server-live.node-view-preview .node-terminal {
   display: none !important;
 }
@@ -2737,13 +2786,16 @@ iframe {
   display: inline-flex;
 }
 .node-server-bar {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
   font: 12px/1 var(--font-code, monospace);
+}
+.preview.node-runtime-active.node-server-live .node-server-bar {
+  display: flex;
 }
 .node-server-dot {
   flex: 0 0 auto;
@@ -2755,16 +2807,38 @@ iframe {
 }
 .node-server-address {
   flex: 1;
+  width: 100%;
   min-width: 0;
   overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  background: transparent;
   color: var(--text-primary);
+  font: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.node-server-address:hover {
+  border-color: var(--border-color);
+}
+.node-server-address:focus {
+  border-color: var(--accent-color);
+  background: var(--bg-tertiary);
+}
 .node-server-actions {
   display: flex;
+  align-items: center;
   flex: 0 0 auto;
   gap: 5px;
+}
+.node-server-actions .run-button,
+.node-server-actions .run-button strong {
+  font-family: var(--editor-control-font-family, var(--font-code)) !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
+  letter-spacing: var(--editor-control-letter-spacing, 0);
 }
 .node-server-btn {
   display: inline-flex;

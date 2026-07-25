@@ -562,7 +562,16 @@
           <img id="previewFavicon" alt="" hidden />
           <div class="preview-header-meta">
             <strong id="previewTitle">Preview</strong>
-            <span id="previewLink"></span>
+            <input
+              id="previewLink"
+              type="text"
+              inputmode="url"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="HTML preview address"
+              title="Type a project HTML file and press Enter"
+            />
           </div>
           <span id="previewDeviceBadge" class="preview-device-badge" title="Preview viewport">
             Responsive
@@ -659,6 +668,7 @@
         </div>
         <div class="console-container" id="consoleContainer">
           <div
+            class="console-toolbar"
             style="
               display: flex;
               justify-content: space-between;
@@ -671,19 +681,6 @@
           >
             <strong id="consoleOutputHeading" style="color: var(--text-primary)">Console Output</strong>
             <div style="display: flex; align-items: center; gap: 8px">
-              <button
-                id="nodeViewToggleBtn"
-                type="button"
-                class="run-button node-view-toggle"
-                hidden
-                aria-pressed="true"
-                aria-label="Switch between the terminal and the live server preview"
-                title="Switch between the terminal and the live server preview"
-                style="padding: 4px 10px; font-size: 11px"
-              >
-                <i id="nodeViewToggleIcon" class="fa-solid fa-terminal" aria-hidden="true"></i>
-                <strong id="nodeViewToggleLabel">SHOW TERMINAL</strong>
-              </button>
               <button
                 id="clearConsoleBtn"
                 class="run-button"
@@ -702,6 +699,52 @@
             role="log"
             aria-live="polite"
           ></div>
+          <div class="node-server-bar">
+            <span class="node-server-dot" aria-hidden="true"></span>
+            <input
+              class="node-server-address"
+              id="nodeServerAddress"
+              type="text"
+              value="http://localhost:8000"
+              inputmode="url"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="Node.js preview address"
+              title="Type a running localhost address and press Enter"
+            />
+            <div class="node-server-actions">
+              <button
+                id="nodeViewToggleBtn"
+                type="button"
+                class="run-button node-view-toggle"
+                aria-pressed="true"
+                aria-label="Switch between the terminal and the live server preview"
+                title="Switch between the terminal and the live server preview"
+                style="padding: 4px 10px; font-size: 11px"
+              >
+                <i id="nodeViewToggleIcon" class="fa-solid fa-terminal" aria-hidden="true"></i>
+                <strong id="nodeViewToggleLabel">SHOW TERMINAL</strong>
+              </button>
+              <button
+                id="nodeClearTerminalBtn"
+                type="button"
+                class="run-button"
+                style="padding: 4px 10px; font-size: 11px"
+                aria-label="Clear Node.js terminal"
+                title="Clear Node.js terminal"
+              >
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                <strong>CLEAR</strong>
+              </button>
+              <button type="button" id="nodeServerReloadBtn" class="node-server-btn" title="Restart the Node.js server" aria-label="Restart the Node.js server">
+                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+              </button>
+              <a id="nodeServerOpenBtn" class="node-server-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open the running server in a new tab" aria-label="Open the running server in a new tab">
+                <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+              </a>
+            </div>
+          </div>
           <div id="nodeTerminal" class="node-terminal" hidden>
             <div id="nodeTerminalOutput" class="node-terminal-output" role="log" aria-live="polite"></div>
             <form id="nodeTerminalForm" class="node-terminal-form" autocomplete="off">
@@ -718,18 +761,6 @@
             </form>
           </div>
           <div id="nodeServerPreview" class="node-server-preview" hidden>
-            <div class="node-server-bar">
-              <span class="node-server-dot" aria-hidden="true"></span>
-              <span class="node-server-address" id="nodeServerAddress">http://localhost:8000</span>
-              <div class="node-server-actions">
-                <button type="button" id="nodeServerReloadBtn" class="node-server-btn" title="Restart the Node.js server" aria-label="Restart the Node.js server">
-                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
-                </button>
-                <a id="nodeServerOpenBtn" class="node-server-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open the running server in a new tab" aria-label="Open the running server in a new tab">
-                  <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
-                </a>
-              </div>
-            </div>
             <iframe id="nodeServerFrame" title="Node.js server preview" allow="cross-origin-isolated"></iframe>
           </div>
         </div>

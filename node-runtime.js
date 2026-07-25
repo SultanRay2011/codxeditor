@@ -12,6 +12,7 @@ const toggleButton = document.getElementById("enableNodeRuntimeBtn");
 const toggleLabel = document.getElementById("enableNodeRuntimeBtnLabel");
 const previewTitle = document.getElementById("previewTitle");
 const clearConsoleButton = document.getElementById("clearConsoleBtn");
+const nodeClearTerminalButton = document.getElementById("nodeClearTerminalBtn");
 const nodeServerPreview = document.getElementById("nodeServerPreview");
 const nodeServerFrame = document.getElementById("nodeServerFrame");
 const nodeServerAddress = document.getElementById("nodeServerAddress");
@@ -23,6 +24,8 @@ const nodeViewToggleIcon = document.getElementById("nodeViewToggleIcon");
 const consoleOutputHeading = document.getElementById("consoleOutputHeading");
 
 let activeServerUrl = "";
+let activeServerPort = "";
+let activeServerDisplayUrl = "";
 
 let instance = null;
 let bootPromise = null;
@@ -387,9 +390,8 @@ function clearServerLinks() {
   hideServerPreview();
 }
 
-// Switch the console area between the terminal and the live server preview.
-// The WebContainer preview only renders embedded in this isolated page, so it
-// is shown in-pane here rather than opened as a (blank) top-level browser tab.
+// Switch only the content below the persistent localhost toolbar between the
+// terminal and live preview.
 function setServerView(view) {
   const showPreview = view === "preview";
   preview?.classList.toggle("node-view-preview", showPreview);
@@ -402,17 +404,74 @@ function setServerView(view) {
   if (nodeViewToggleIcon) {
     nodeViewToggleIcon.className = showPreview ? "fa-solid fa-terminal" : "fa-solid fa-display";
   }
-  if (consoleOutputHeading) {
-    consoleOutputHeading.textContent = showPreview ? "Live Server" : "Node.js Terminal";
+}
+
+function parseLocalhostAddress(value) {
+  let address = String(value || "").trim();
+  if (/^\d+$/.test(address)) address = `localhost:${address}`;
+  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(address)) address = `http://${address}`;
+  try {
+    const parsed = new URL(address);
+    if (!["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) return null;
+    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+    if (!/^\d{1,5}$/.test(port) || Number(port) > 65535) return null;
+    return {
+      port,
+      path: `${parsed.pathname || "/"}${parsed.search}${parsed.hash}`,
+      displayUrl: `http://localhost:${port}${parsed.pathname === "/" && !parsed.search && !parsed.hash ? "" : `${parsed.pathname}${parsed.search}${parsed.hash}`}`,
+    };
+  } catch (_error) {
+    return null;
   }
+}
+
+function restoreServerAddress() {
+  if (nodeServerAddress) {
+    nodeServerAddress.value = activeServerDisplayUrl || (activeServerPort ? `http://localhost:${activeServerPort}` : "");
+  }
+}
+
+function openTypedServerAddress() {
+  if (!nodeServerAddress) return;
+  const target = parseLocalhostAddress(nodeServerAddress.value);
+  if (!target) {
+    restoreServerAddress();
+    return;
+  }
+  let runtimeBaseUrl = "";
+  if (target.port === activeServerPort && activeServerUrl) {
+    runtimeBaseUrl = activeServerUrl;
+  } else {
+    try {
+      runtimeBaseUrl = localStorage.getItem(`codxNodePreview:${target.port}`) || "";
+    } catch (_error) {
+      runtimeBaseUrl = "";
+    }
+  }
+  if (!runtimeBaseUrl) {
+    restoreServerAddress();
+    return;
+  }
+  const runtimeUrl = new URL(target.path, runtimeBaseUrl).href;
+  activeServerPort = target.port;
+  activeServerUrl = runtimeBaseUrl;
+  activeServerDisplayUrl = target.displayUrl;
+  nodeServerAddress.value = target.displayUrl;
+  if (nodeServerFrame && nodeServerFrame.src !== runtimeUrl) nodeServerFrame.src = runtimeUrl;
+  if (nodeServerOpenButton) {
+    nodeServerOpenButton.href = `/node-preview.html?port=${encodeURIComponent(target.port)}`;
+  }
+  setServerView("preview");
 }
 
 // Reveal the running Node.js server live inside the editor so the user sees
 // their site immediately, and expose the terminal/preview toggle button.
 function showServerPreview(port, runtimeUrl) {
   if (!nodeServerPreview || !nodeServerFrame || !runtimeUrl) return;
+  activeServerPort = String(port);
   activeServerUrl = runtimeUrl;
-  if (nodeServerAddress) nodeServerAddress.textContent = `http://localhost:${port}`;
+  activeServerDisplayUrl = `http://localhost:${port}`;
+  if (nodeServerAddress) nodeServerAddress.value = activeServerDisplayUrl;
   if (nodeServerOpenButton) {
     nodeServerOpenButton.href = `/node-preview.html?port=${encodeURIComponent(port)}`;
   }
@@ -425,6 +484,8 @@ function showServerPreview(port, runtimeUrl) {
 
 function hideServerPreview() {
   activeServerUrl = "";
+  activeServerPort = "";
+  activeServerDisplayUrl = "";
   if (nodeServerFrame) nodeServerFrame.removeAttribute("src");
   if (nodeServerPreview) nodeServerPreview.hidden = true;
   preview?.classList.remove("node-server-live");
@@ -641,7 +702,7 @@ function setEnabled(nextEnabled) {
   toggleButton?.setAttribute("aria-pressed", enabled ? "true" : "false");
   toggleButton?.setAttribute("aria-label", `${enabled ? "Disable" : "Enable"} Node.js runtime`);
   toggleButton?.setAttribute("title", `${enabled ? "Disable" : "Enable"} the browser-isolated Node.js runtime`);
-  if (previewTitle) previewTitle.textContent = enabled ? "Node.js Console" : previousPreviewTitle;
+  if (!enabled && previewTitle) previewTitle.textContent = previousPreviewTitle;
 }
 
 function restoreConsoleVisibility() {
@@ -700,6 +761,24 @@ terminalForm?.addEventListener("submit", (event) => {
 clearConsoleButton?.addEventListener("click", () => {
   if (enabled && terminalOutput) terminalOutput.textContent = "";
 });
+
+nodeClearTerminalButton?.addEventListener("click", () => {
+  if (terminalOutput) terminalOutput.textContent = "";
+});
+
+nodeServerAddress?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    openTypedServerAddress();
+    nodeServerAddress.blur();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    restoreServerAddress();
+    nodeServerAddress.blur();
+  }
+});
+
+nodeServerAddress?.addEventListener("blur", openTypedServerAddress);
 
 terminalStopButton?.addEventListener("click", () => {
   stopActiveProcess().catch((error) => writeTerminal(`\n${error?.message || error}\n`, "error"));
