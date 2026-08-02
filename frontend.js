@@ -5306,7 +5306,7 @@ function showPublishActionPrompt() {
 }
 
 function showPublishUrlPrompt(action = "create") {
-  const publishBase = `${window.location.origin}/published/`;
+  const publishBase = `${window.location.origin}/p/`;
   const exampleSlug = "my-custom-link";
   const isUpdate = action === "update";
   const dialog = showAppDialog({
@@ -9785,7 +9785,7 @@ async function publishCurrentProject() {
     }
     const confirmUpdatePromise = showAppDialog({
       title: "UPDATE PUBLISHED LINK",
-      messageHtml: `Are you sure you want to replace the project currently published at:<br><code style="display:block;margin-top:8px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(`${window.location.origin}/published/${publishId}`)}</code>`,
+      messageHtml: `Are you sure you want to replace the project currently published at:<br><code style="display:block;margin-top:8px;padding:9px 10px;border-radius:7px;background:var(--bg-primary);color:var(--text-primary);word-break:break-all">${escapeHtml(`${window.location.origin}/p/${publishId}`)}</code>`,
       input: false,
       okText: "YES, UPDATE IT",
       cancelText: "CANCEL",
@@ -17719,8 +17719,8 @@ function createFileExtensionIcon(fileName) {
     html: "fa-brands fa-html5",
     htm: "fa-brands fa-html5",
     css: "fa-brands fa-css3-alt",
-    scss: "fa-brands fa-css3-alt",
-    less: "fa-brands fa-css3-alt",
+    scss: "fa-brands fa-sass",
+    less: "fa-brands fa-less",
     js: "fa-brands fa-js",
     mjs: "fa-brands fa-js",
     cjs: "fa-brands fa-js",

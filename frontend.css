@@ -723,10 +723,17 @@ body.zen-mode #zenExitBtn {
   color: #e34f26;
 }
 
-.file-extension-icon-css,
-.file-extension-icon-scss,
-.file-extension-icon-less {
+.file-extension-icon-css {
   color: #1572b6;
+}
+
+/* Sass and Less keep their own brand colours. */
+.file-extension-icon-scss {
+  color: #cd6799;
+}
+
+.file-extension-icon-less {
+  color: #2b5e8f;
 }
 
 .file-extension-icon-js,
@@ -759,7 +766,7 @@ body.zen-mode #zenExitBtn {
 }
 
 .file-extension-icon-md {
-  color: #38bdf8;
+  color: #e2e8f0;
 }
 
 .file-extension-icon-image {

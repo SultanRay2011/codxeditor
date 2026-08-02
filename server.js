@@ -29,6 +29,9 @@ const adminActivity = [];
 const adminSessions = new Map();
 const sessionRecoveryEmitTimers = new Map();
 const publishedProjects = new Map();
+// Path segment for published project links. Kept short for shareable URLs;
+// the older "/published/" path is still served for links already in the wild.
+const PUBLISH_PATH = "p";
 const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
 // DATA_DIR remains the local-development fallback and also stores encrypted
 // GitHub sessions. Production published projects use DATABASE_URL when set.
@@ -1192,7 +1195,7 @@ app.get("/admin/api/projects", (req, res) => {
         projectName: String(project?.projectName || "CodX Editor Project"),
         pageTitle: extractHtmlTitle(htmlFile?.content || ""),
         verificationKey: String(project?.verificationKey || ""),
-        shareLink: `${origin}/published/${encodeURIComponent(id)}`,
+        shareLink: `${origin}/${PUBLISH_PATH}/${encodeURIComponent(id)}`,
         editorLink: `/frontend.html?adminProject=${encodeURIComponent(id)}`,
         fileCount: files.length,
         fileTypes: Array.from(
@@ -1439,19 +1442,19 @@ app.post("/api/publish", async (req, res) => {
   publishedProjects.set(projectKey, published);
   logAdminEvent(
     mode === "update" ? "Published project updated" : "Project published",
-    `${projectName || id} is available at /published/${published?.id || id}.`,
+    `${projectName || id} is available at /${PUBLISH_PATH}/${published?.id || id}.`,
   );
   const responseVerificationKey = String(published?.verificationKey || "").trim();
   res.json({
     ok: true,
     id: published?.id || id,
     mode,
-    shareLink: `${req.protocol}://${req.get("host")}/published/${published?.id || id}`,
+    shareLink: `${req.protocol}://${req.get("host")}/${PUBLISH_PATH}/${published?.id || id}`,
     verificationKey: mode === "create" ? responseVerificationKey : "",
   });
 });
 
-app.get("/published/:id", (req, res) => {
+function servePublishedProject(req, res) {
   const id = String(req.params.id || "").trim();
   const project = findPublishedProjectEntry(id)?.project;
   if (!project) {
@@ -1471,7 +1474,12 @@ app.get("/published/:id", (req, res) => {
     return;
   }
   res.send(publishedHtml);
-});
+}
+
+// New short links are served from /p/. The original /published/ path stays
+// active so links already shared with other people keep working.
+app.get(`/${PUBLISH_PATH}/:id`, servePublishedProject);
+app.get("/published/:id", servePublishedProject);
 
 // Return a published project's source files when the correct verification key
 // is supplied. Powers the "OPEN SOURCE CODE" button on published pages.
@@ -2147,12 +2155,12 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     return null;
   }
 
-  const publishLinkBase = `/published/${encodeURIComponent(project.id)}`;
+  const publishLinkBase = `/${PUBLISH_PATH}/${encodeURIComponent(project.id)}`;
   const isProjectHtmlNavigationHref = (rawHref) => {
     const href = String(rawHref || "").trim();
     if (!href || href.startsWith("#")) return false;
     if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return false;
-    if (/^\/(?:404-for-preview\.html|published\/)/i.test(href)) return false;
+    if (/^\/(?:404-for-preview\.html|published\/|p\/)/i.test(href)) return false;
     return /\.html(?:[?#].*)?$/i.test(href);
   };
   const toPublishedLink = (rawHref) => {
