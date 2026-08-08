@@ -1774,7 +1774,7 @@ textarea::-webkit-scrollbar-thumb:hover {
 
 .editor-value-controls {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 76px 38px;
+  grid-template-columns: 38px minmax(0, 1fr) 84px 38px;
   align-items: end;
   gap: 7px;
 }
@@ -1873,7 +1873,7 @@ textarea::-webkit-scrollbar-thumb:hover {
   }
 
   .editor-value-controls {
-    grid-template-columns: 34px minmax(0, 1fr) 68px 34px;
+    grid-template-columns: 34px minmax(0, 1fr) 78px 34px;
     gap: 5px;
   }
 

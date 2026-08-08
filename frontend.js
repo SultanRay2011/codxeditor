@@ -1756,8 +1756,51 @@ const editorTextarea = document.getElementById("activeEditor");
 const editorWrapperEl = editorTextarea
   ? editorTextarea.closest(".editor-wrapper")
   : null;
-const EDITOR_VALUE_HOVER_DELAY_MS = 2000;
-const EDITOR_VALUE_TOKEN_PATTERN = /(-?(?:\d+(?:\.\d*)?|\.\d+))(px|vh)\b/gi;
+const EDITOR_VALUE_HOVER_DELAY_MS = 1000;
+const EDITOR_VALUE_UNIT_GROUPS = Object.freeze({
+  percentage: ["%"],
+  length: [
+    "px", "cm", "mm", "q", "in", "pc", "pt",
+    "em", "rem", "ex", "rex", "cap", "rcap", "ch", "rch", "ic", "ric", "lh", "rlh",
+    "vw", "vh", "vi", "vb", "vmin", "vmax",
+    "svw", "svh", "svi", "svb", "svmin", "svmax",
+    "lvw", "lvh", "lvi", "lvb", "lvmin", "lvmax",
+    "dvw", "dvh", "dvi", "dvb", "dvmin", "dvmax",
+    "cqw", "cqh", "cqi", "cqb", "cqmin", "cqmax",
+  ],
+  angle: ["deg", "grad", "rad", "turn"],
+  time: ["s", "ms"],
+  frequency: ["hz", "khz"],
+  resolution: ["dpi", "dpcm", "dppx", "x"],
+  flex: ["fr"],
+});
+const EDITOR_VALUE_UNIT_FAMILY = new Map(
+  Object.entries(EDITOR_VALUE_UNIT_GROUPS).flatMap(([family, units]) => (
+    units.map((unit) => [unit, family])
+  )),
+);
+const EDITOR_VALUE_UNIT_PATTERN = [...EDITOR_VALUE_UNIT_FAMILY.keys()]
+  .sort((first, second) => second.length - first.length)
+  .join("|");
+const EDITOR_VALUE_TOKEN_PATTERN = new RegExp(
+  `([+-]?(?:(?:\\d*\\.\\d+)|(?:\\d+\\.?\\d*))(?:e[+-]?\\d+)?)(${EDITOR_VALUE_UNIT_PATTERN})(?![\\w%])`,
+  "gi",
+);
+const EDITOR_VALUE_ABSOLUTE_LENGTH_PIXELS = Object.freeze({
+  px: 1,
+  in: 96,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+  q: 96 / 101.6,
+  pt: 96 / 72,
+  pc: 16,
+});
+const EDITOR_VALUE_CONVERSION_FACTORS = Object.freeze({
+  angle: Object.freeze({ deg: 1, grad: 0.9, rad: 180 / Math.PI, turn: 360 }),
+  time: Object.freeze({ s: 1000, ms: 1 }),
+  frequency: Object.freeze({ hz: 1, khz: 1000 }),
+  resolution: Object.freeze({ dpi: 1 / 96, dpcm: 2.54 / 96, dppx: 1, x: 1 }),
+});
 let editorValueHoverTimer = null;
 let editorValueHoverTarget = null;
 let editorValuePointerFrame = null;
@@ -16283,17 +16326,121 @@ function formatEditorValueNumber(value) {
 }
 
 function getEditorValueStep(unit) {
-  return unit === "vh" ? 0.1 : 1;
+  const normalizedUnit = String(unit || "").toLowerCase();
+  return ["px", "q", "pt", "%", "deg", "grad", "ms", "hz", "khz", "dpi", "dpcm"]
+    .includes(normalizedUnit)
+    ? 1
+    : 0.1;
 }
 
-function getEditorValuePreviewHeight() {
+function getEditorValueMeasurementDocuments() {
+  const documents = [];
   try {
-    const previewHeight = Number(iframe?.contentWindow?.innerHeight || 0);
-    if (previewHeight > 0) return previewHeight;
+    if (iframe?.contentDocument?.documentElement) documents.push(iframe.contentDocument);
   } catch (_error) {
     // The preview can briefly be cross-origin while it refreshes.
   }
-  return Math.max(1, Number(window.innerHeight || document.documentElement.clientHeight || 1));
+  documents.push(document);
+  return documents;
+}
+
+function measureEditorCssLengthInPixels(unit) {
+  const normalizedUnit = String(unit || "").toLowerCase();
+  const absolutePixels = EDITOR_VALUE_ABSOLUTE_LENGTH_PIXELS[normalizedUnit];
+  if (Number.isFinite(absolutePixels)) return absolutePixels;
+  if (EDITOR_VALUE_UNIT_FAMILY.get(normalizedUnit) !== "length") return null;
+
+  for (const measurementDocument of getEditorValueMeasurementDocuments()) {
+    const measurementWindow = measurementDocument.defaultView;
+    const parent = measurementDocument.body || measurementDocument.documentElement;
+    if (!measurementWindow || !parent) continue;
+    if (
+      measurementWindow.CSS?.supports
+      && !measurementWindow.CSS.supports("width", `1${normalizedUnit}`)
+    ) {
+      continue;
+    }
+    const probe = measurementDocument.createElement("div");
+    probe.setAttribute("aria-hidden", "true");
+    Object.assign(probe.style, {
+      position: "absolute",
+      left: "-100000px",
+      top: "0",
+      display: "block",
+      visibility: "hidden",
+      pointerEvents: "none",
+      boxSizing: "content-box",
+      width: `100${normalizedUnit}`,
+      minWidth: "0",
+      maxWidth: "none",
+      height: "0",
+      margin: "0",
+      padding: "0",
+      border: "0",
+      font: "inherit",
+      lineHeight: "inherit",
+    });
+    parent.appendChild(probe);
+    const measuredPixels = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    if (Number.isFinite(measuredPixels) && measuredPixels > 0) return measuredPixels;
+  }
+  return null;
+}
+
+function getEditorValueFamilyLabel(family) {
+  return {
+    percentage: "percentage",
+    length: "length",
+    angle: "angle",
+    time: "time",
+    frequency: "frequency",
+    resolution: "resolution",
+    flex: "grid flex",
+  }[family] || "CSS value";
+}
+
+function convertEditorValueUnit(value, previousUnit, nextUnit) {
+  const numericValue = Number(value);
+  const normalizedPrevious = String(previousUnit || "").toLowerCase();
+  const normalizedNext = String(nextUnit || "").toLowerCase();
+  const previousFamily = EDITOR_VALUE_UNIT_FAMILY.get(normalizedPrevious);
+  const nextFamily = EDITOR_VALUE_UNIT_FAMILY.get(normalizedNext);
+  if (!Number.isFinite(numericValue) || !previousFamily || !nextFamily) return null;
+
+  if (previousFamily !== nextFamily) {
+    return {
+      value: numericValue,
+      hint: `Changed format without conversion; ${getEditorValueFamilyLabel(previousFamily)} and ${getEditorValueFamilyLabel(nextFamily)} units are not directly compatible.`,
+    };
+  }
+
+  if (previousFamily === "length") {
+    const previousPixels = measureEditorCssLengthInPixels(normalizedPrevious);
+    const nextPixels = measureEditorCssLengthInPixels(normalizedNext);
+    if (!previousPixels || !nextPixels) {
+      return {
+        value: numericValue,
+        hint: "Changed the length format without conversion because preview metrics are unavailable.",
+      };
+    }
+    return {
+      value: (numericValue * previousPixels) / nextPixels,
+      hint: "Converted using the current preview's CSS metrics.",
+    };
+  }
+
+  const familyFactors = EDITOR_VALUE_CONVERSION_FACTORS[previousFamily];
+  const previousFactor = familyFactors?.[normalizedPrevious];
+  const nextFactor = familyFactors?.[normalizedNext];
+  if (Number.isFinite(previousFactor) && Number.isFinite(nextFactor)) {
+    return {
+      value: (numericValue * previousFactor) / nextFactor,
+      hint: `Converted within the ${getEditorValueFamilyLabel(previousFamily)} unit family.`,
+    };
+  }
+
+  return { value: numericValue, hint: "Changed the CSS value format." };
 }
 
 function positionEditorValuePopover() {
@@ -16358,8 +16505,8 @@ function adjustEditorValueSelection(position, start, end, replacementLength) {
 function applyEditorValueChange(value, unit, options = {}) {
   if (!activeEditorValueContext || !editorTextarea) return false;
   const numericValue = Number(value);
-  const normalizedUnit = unit === "vh" ? "vh" : "px";
-  if (!Number.isFinite(numericValue)) return false;
+  const normalizedUnit = String(unit || "").toLowerCase();
+  if (!Number.isFinite(numericValue) || !EDITOR_VALUE_UNIT_FAMILY.has(normalizedUnit)) return false;
   const context = activeEditorValueContext;
   if (
     String(activeFile?.name || "") !== context.fileName
@@ -16421,18 +16568,16 @@ function changeEditorValueByStep(direction) {
 
 function changeEditorValueUnit() {
   if (!activeEditorValueContext) return;
-  const nextUnit = editorValueUnitSelect.value === "vh" ? "vh" : "px";
+  const nextUnit = String(editorValueUnitSelect.value || "").toLowerCase();
   const previousUnit = activeEditorValueContext.unit;
-  if (nextUnit === previousUnit) return;
+  if (nextUnit === previousUnit || !EDITOR_VALUE_UNIT_FAMILY.has(nextUnit)) return;
   const currentValue = Number(editorValueNumberInput.value);
   if (!Number.isFinite(currentValue)) return;
-  const previewHeight = getEditorValuePreviewHeight();
-  const convertedValue = previousUnit === "px"
-    ? (currentValue / previewHeight) * 100
-    : (currentValue * previewHeight) / 100;
-  editorValueHint.textContent = `Converted using a ${Math.round(previewHeight)}px preview height.`;
-  editorValueNumberInput.value = formatEditorValueNumber(convertedValue);
-  applyEditorValueChange(convertedValue, nextUnit);
+  const conversion = convertEditorValueUnit(currentValue, previousUnit, nextUnit);
+  if (!conversion) return;
+  editorValueHint.textContent = conversion.hint;
+  editorValueNumberInput.value = formatEditorValueNumber(conversion.value);
+  applyEditorValueChange(conversion.value, nextUnit);
 }
 
 function handleEditorValuePointerMove(editor, pointer) {
