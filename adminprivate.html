@@ -1017,6 +1017,12 @@
                 <div class="project-actions">
                   <a class="btn" href="${escapeHtml(project.editorLink)}" target="_blank" rel="noopener noreferrer">OPEN IN CODX EDITOR</a>
                   <a class="btn secondary" href="${escapeHtml(project.shareLink)}" target="_blank" rel="noopener noreferrer">VIEW LIVE PAGE &nearr;</a>
+                  <button
+                    class="btn danger project-delete-btn"
+                    type="button"
+                    data-id="${escapeHtml(project.id)}"
+                    data-name="${escapeHtml(project.projectName || project.id)}"
+                  >DELETE LINK</button>
                 </div>
               </article>
             `;
@@ -1162,6 +1168,25 @@
         await loadDashboard();
       }
 
+      async function deletePublishedProject(button) {
+        const projectId = String(button?.dataset.id || "").trim();
+        const projectName = String(button?.dataset.name || projectId || "this project").trim();
+        if (!projectId) return;
+        if (!confirm(`Permanently delete "${projectName}"? Its public link and stored project files will stop working immediately.`)) return;
+        const originalLabel = button.textContent;
+        button.disabled = true;
+        button.textContent = "DELETING...";
+        try {
+          await api(`/admin/api/project/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+          await loadDashboard();
+        } finally {
+          if (button.isConnected) {
+            button.disabled = false;
+            button.textContent = originalLabel;
+          }
+        }
+      }
+
       loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
@@ -1226,6 +1251,8 @@
             const original = target.textContent;
             target.textContent = "COPIED";
             setTimeout(() => (target.textContent = original), 1000);
+          } else if (target.classList.contains("project-delete-btn")) {
+            await deletePublishedProject(target);
           } else if (target.classList.contains("lock-btn")) {
             await sessionAction(target.dataset.id, "lock-toggle");
           } else if (target.classList.contains("freeze-btn")) {
