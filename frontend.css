@@ -345,12 +345,6 @@ header .run-button:hover {
 .auto-run-label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-}
-
-.auto-run-icon {
-  color: #fbbf24;
-  font-size: 12px;
 }
 
 .header-switches label[for="showConsole"] {
@@ -10405,7 +10399,7 @@ iframe {
     display: none;
   }
 
-  .header-switches > .auto-run-label span {
+  .header-switches > .auto-run-label {
     display: none;
   }
 
@@ -10742,25 +10736,65 @@ iframe {
 @media (max-width: 520px) {
   header {
     display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(8, 20px);
+    column-gap: 4px !important;
+    row-gap: 6px !important;
     flex-shrink: 0;
-    justify-content: stretch !important;
+    justify-content: center !important;
     width: 100%;
-    gap: 6px !important;
   }
 
   header > .header-switches {
     display: flex !important;
-    width: 100%;
-    min-width: 0;
+    grid-column: 1 / span 2;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 0;
     justify-content: center;
   }
 
   header > .run-button,
   header > .header-more-menu,
   header > .header-more-menu > .run-button {
-    width: 100% !important;
-    min-width: 0 !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    justify-self: center;
+  }
+
+  header > .header-switches .switch {
+    width: 40px;
+  }
+
+  header > .header-switches input:checked + .slider:before {
+    transform: translateX(20px);
+  }
+
+  header > #collabBtn {
+    grid-column: 3 / span 2;
+  }
+
+  header > #previewFullscreenBtn {
+    grid-column: 5 / span 2;
+  }
+
+  header > #settingsBtn {
+    grid-column: 7 / span 2;
+  }
+
+  header > #addMediaBtn {
+    grid-column: 2 / span 2;
+  }
+
+  header > #helpPageBtn {
+    grid-column: 4 / span 2;
+  }
+
+  header > #headerMoreMenu {
+    grid-column: 6 / span 2;
   }
 
   .header-more-panel {
@@ -10814,14 +10848,6 @@ iframe {
     padding-left: max(6px, env(safe-area-inset-left, 0px)) !important;
   }
 
-  header > .header-switches {
-    padding-right: 4px;
-    padding-left: 4px;
-  }
-
-  .header-switches > .auto-run-label {
-    display: none;
-  }
 }
 
 /* ============================================================
