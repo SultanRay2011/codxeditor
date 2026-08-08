@@ -11097,6 +11097,37 @@ function focusFileReorderControl(fileName) {
   });
 }
 
+function persistActiveSavedProjectFileOrder() {
+  if (!activeSavedProjectName || hasUnsavedChanges) return false;
+
+  const projects = getSavedProjects();
+  const projectIndex = projects.findIndex(
+    (project) =>
+      String(project.name || "").trim().toLowerCase() ===
+      String(activeSavedProjectName).trim().toLowerCase(),
+  );
+  const savedFiles = projects[projectIndex]?.snapshot?.files;
+  if (projectIndex < 0 || !Array.isArray(savedFiles)) return false;
+
+  const savedFilesByName = new Map(
+    savedFiles.map((file) => [String(file.name || "").trim().toLowerCase(), file]),
+  );
+  const reorderedSavedFiles = projectFiles
+    .map((file) => savedFilesByName.get(String(file.name || "").trim().toLowerCase()))
+    .filter(Boolean);
+  if (reorderedSavedFiles.length !== savedFiles.length) return false;
+
+  projects[projectIndex] = {
+    ...projects[projectIndex],
+    updatedAt: Date.now(),
+    snapshot: {
+      ...projects[projectIndex].snapshot,
+      files: reorderedSavedFiles,
+    },
+  };
+  return setSavedProjects(projects);
+}
+
 function reorderProjectFile(fileName, targetIndex, { focusHandle = false } = {}) {
   if (!canReorderProjectFiles()) return false;
   const normalizedName = String(fileName || "").trim().toLowerCase();
@@ -11109,7 +11140,7 @@ function reorderProjectFile(fileName, targetIndex, { focusHandle = false } = {})
 
   const [movedFile] = projectFiles.splice(currentIndex, 1);
   projectFiles.splice(nextIndex, 0, movedFile);
-  hasUnsavedChanges = true;
+  persistActiveSavedProjectFileOrder();
   updateProjectStatusUI();
   renderFileList({ skipNameNormalization: true });
   scheduleProjectAutosave();
