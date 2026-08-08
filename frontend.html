@@ -1104,104 +1104,59 @@
         </div>
 
         <!-- Background Color -->
-        <div style="margin-bottom: 20px">
-          <label
-            for="editorBgColor"
-            style="
-              display: block;
-              margin-bottom: 8px;
-              font-weight: bold;
-              color: var(--text-primary);
-            "
-          >
-            Editor Background Color:
-          </label>
-          <div style="display: flex; gap: 10px; align-items: center">
-            <input
-              type="color"
-              id="editorBgColor"
-              style="
-                width: 60px;
-                height: 40px;
-                border: 2px solid var(--border-color);
-                border-radius: 4px;
-                cursor: pointer;
-              "
-              aria-label="Select background color"
-            />
-            <input
-              type="text"
-              id="editorBgColorText"
-              placeholder="#000000"
-              maxlength="7"
-              style="
-                flex: 1;
-                padding: 10px;
-                background: var(--bg-tertiary);
-                border: 1px solid var(--border-color);
-                color: var(--text-primary);
-                border-radius: 4px;
-                font-family: monospace;
-              "
-              aria-label="Background color code"
-            />
+        <div class="settings-color-setting">
+          <div class="settings-color-setting-copy">
+            <span class="settings-color-setting-kicker">EDITOR SURFACE</span>
+            <h3>Background Color</h3>
+            <p>Choose the color behind your code and syntax highlighting.</p>
+          </div>
+          <input type="hidden" id="editorBgColor" value="#1E1E1E" />
+          <div class="settings-color-setting-actions">
+            <button
+              type="button"
+              id="editorBgColorTrigger"
+              class="settings-color-trigger"
+              aria-haspopup="dialog"
+              aria-controls="settingsColorPickerModal"
+              aria-label="Choose editor background color"
+            >
+              <span id="editorBgColorSwatch" class="settings-color-trigger-swatch" aria-hidden="true"></span>
+              <span class="settings-color-trigger-copy">
+                <strong>Choose color</strong>
+                <output id="editorBgColorText" for="editorBgColor">#1E1E1E</output>
+              </span>
+              <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+            </button>
           </div>
         </div>
 
         <!-- Accent Color -->
-        <div style="margin-bottom: 20px">
-          <label
-            for="themeColor"
-            style="
-              display: block;
-              margin-bottom: 8px;
-              font-weight: bold;
-              color: var(--text-primary);
-            "
-          >
-            Accent Color:
-          </label>
-          <div style="display: flex; gap: 10px; align-items: center">
-            <input
-              type="color"
-              id="themeColor"
-              style="
-                width: 60px;
-                height: 40px;
-                border: 2px solid var(--border-color);
-                border-radius: 4px;
-                cursor: pointer;
-              "
-              aria-label="Select theme color"
-            />
-            <input
-              type="text"
-              id="themeColorText"
-              placeholder="#238636"
-              maxlength="7"
-              style="
-                flex: 1;
-                padding: 10px;
-                background: var(--bg-tertiary);
-                border: 1px solid var(--border-color);
-                color: var(--text-primary);
-                border-radius: 4px;
-                font-family: monospace;
-              "
-              aria-label="Theme color code"
-            />
+        <div class="settings-color-setting">
+          <div class="settings-color-setting-copy">
+            <span class="settings-color-setting-kicker">INTERFACE HIGHLIGHT</span>
+            <h3>Accent Color</h3>
+            <p>Customize buttons, active states, focus rings, and highlights.</p>
+          </div>
+          <input type="hidden" id="themeColor" value="#238636" />
+          <div class="settings-color-setting-actions settings-color-setting-actions-accent">
+            <button
+              type="button"
+              id="themeColorTrigger"
+              class="settings-color-trigger"
+              aria-haspopup="dialog"
+              aria-controls="settingsColorPickerModal"
+              aria-label="Choose interface accent color"
+            >
+              <span id="themeColorSwatch" class="settings-color-trigger-swatch" aria-hidden="true"></span>
+              <span class="settings-color-trigger-copy">
+                <strong>Choose color</strong>
+                <output id="themeColorText" for="themeColor">#238636</output>
+              </span>
+              <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+            </button>
             <button
               type="button"
               id="resetThemeColorBtn"
-              style="
-                padding: 10px 14px;
-                background: transparent;
-                border: 1px solid var(--border-color);
-                border-radius: 4px;
-                color: var(--text-primary);
-                cursor: pointer;
-                font-size: 13px;
-              "
               aria-label="Reset accent color to the selected theme default"
             >
               Reset Accent
@@ -1592,6 +1547,78 @@
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- Custom Settings Color Picker -->
+    <div
+      id="settingsColorPickerModal"
+      class="settings-color-picker-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsColorPickerTitle"
+      aria-describedby="settingsColorPickerDescription"
+      hidden
+    >
+      <section class="settings-color-picker-card">
+        <div class="settings-color-picker-header">
+          <div>
+            <span class="settings-color-picker-kicker">CUSTOM COLOR</span>
+            <h2 id="settingsColorPickerTitle">Background Color</h2>
+            <p id="settingsColorPickerDescription">Drag anywhere in the color area to choose a shade.</p>
+          </div>
+          <button
+            id="closeSettingsColorPickerBtn"
+            class="settings-color-picker-close"
+            type="button"
+            aria-label="Close color picker"
+          >&times;</button>
+        </div>
+
+        <div class="settings-color-picker-live" aria-live="polite">
+          <span id="settingsColorPreviewSwatch" class="settings-color-picker-live-swatch" aria-hidden="true"></span>
+          <div>
+            <strong id="settingsColorLiveHex">#1E1E1E</strong>
+            <span id="settingsColorLiveRgb">rgb(30, 30, 30)</span>
+          </div>
+        </div>
+
+        <div
+          id="settingsColorSaturation"
+          class="settings-color-saturation"
+          tabindex="0"
+          role="slider"
+          aria-label="Color saturation and brightness"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="100"
+          aria-valuetext="100 percent saturation, 100 percent brightness"
+        >
+          <span id="settingsColorSaturationThumb" class="settings-color-saturation-thumb" aria-hidden="true"></span>
+        </div>
+
+        <label class="settings-color-hue-control" for="settingsColorHue">
+          <span>Hue</span>
+          <input id="settingsColorHue" type="range" min="0" max="360" step="1" value="0" />
+        </label>
+
+        <div class="settings-color-fields">
+          <label class="settings-color-hex-field" for="settingsColorHex">
+            <span>HEX</span>
+            <input id="settingsColorHex" type="text" value="#1E1E1E" maxlength="7" autocomplete="off" spellcheck="false" />
+          </label>
+          <fieldset class="settings-color-rgb-fields">
+            <legend>RGB</legend>
+            <label for="settingsColorRed"><span>R</span><input id="settingsColorRed" type="number" min="0" max="255" inputmode="numeric" value="30" /></label>
+            <label for="settingsColorGreen"><span>G</span><input id="settingsColorGreen" type="number" min="0" max="255" inputmode="numeric" value="30" /></label>
+            <label for="settingsColorBlue"><span>B</span><input id="settingsColorBlue" type="number" min="0" max="255" inputmode="numeric" value="30" /></label>
+          </fieldset>
+        </div>
+
+        <div class="settings-color-picker-actions">
+          <button id="cancelSettingsColorPickerBtn" class="settings-color-picker-button secondary" type="button">Cancel</button>
+          <button id="doneSettingsColorPickerBtn" class="settings-color-picker-button primary" type="button">Done</button>
+        </div>
+      </section>
     </div>
 
     <!-- Collaboration Modal -->

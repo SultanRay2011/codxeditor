@@ -26,6 +26,26 @@ const editorBgColorText = document.getElementById("editorBgColorText");
 const themeColorInput = document.getElementById("themeColor");
 const themeColorText = document.getElementById("themeColorText");
 const resetThemeColorBtn = document.getElementById("resetThemeColorBtn");
+const editorBgColorTrigger = document.getElementById("editorBgColorTrigger");
+const editorBgColorSwatch = document.getElementById("editorBgColorSwatch");
+const themeColorTrigger = document.getElementById("themeColorTrigger");
+const themeColorSwatch = document.getElementById("themeColorSwatch");
+const settingsColorPickerModal = document.getElementById("settingsColorPickerModal");
+const settingsColorPickerTitle = document.getElementById("settingsColorPickerTitle");
+const settingsColorPickerDescription = document.getElementById("settingsColorPickerDescription");
+const closeSettingsColorPickerBtn = document.getElementById("closeSettingsColorPickerBtn");
+const settingsColorPreviewSwatch = document.getElementById("settingsColorPreviewSwatch");
+const settingsColorLiveHex = document.getElementById("settingsColorLiveHex");
+const settingsColorLiveRgb = document.getElementById("settingsColorLiveRgb");
+const settingsColorSaturation = document.getElementById("settingsColorSaturation");
+const settingsColorSaturationThumb = document.getElementById("settingsColorSaturationThumb");
+const settingsColorHue = document.getElementById("settingsColorHue");
+const settingsColorHex = document.getElementById("settingsColorHex");
+const settingsColorRed = document.getElementById("settingsColorRed");
+const settingsColorGreen = document.getElementById("settingsColorGreen");
+const settingsColorBlue = document.getElementById("settingsColorBlue");
+const cancelSettingsColorPickerBtn = document.getElementById("cancelSettingsColorPickerBtn");
+const doneSettingsColorPickerBtn = document.getElementById("doneSettingsColorPickerBtn");
 const workspaceThemeInput = document.getElementById("workspaceTheme");
 const workspaceThemeName = document.getElementById("workspaceThemeName");
 const workspaceThemeButtons = Array.from(
@@ -11693,6 +11713,7 @@ function previewWorkspaceTheme(themeId) {
   editorBgColorText.value = theme.editorBackground;
   themeColorInput.value = theme.accent;
   themeColorText.value = theme.accent;
+  syncSettingsColorControls();
   updateThemeColor(theme.accent);
   updatePreviewBox();
   applySettingsToEditors();
@@ -11763,6 +11784,7 @@ function loadSettings() {
   }
   applyGoogleFontImport(extractGoogleFontsCssUrl(editorFontEmbedInput.value));
   updateFontControlsState();
+  syncSettingsColorControls();
   updateThemeColor(themeColorInput.value);
   updatePreviewBox();
   applyZenFileVisibilitySetting();
@@ -11797,6 +11819,7 @@ function resetToDefaultSettings() {
   if (previewInspectNavigateCheckbox) {
     previewInspectNavigateCheckbox.checked = defaultSettings.previewInspectNavigate;
   }
+  syncSettingsColorControls();
   applyGoogleFontImport("");
   updateFontControlsState();
   updateThemeColor(defaultSettings.themeColor);
@@ -12042,34 +12065,293 @@ function getHoverColor(hex) {
   return hoverColor;
 }
 
-editorBgColorInput.addEventListener("input", (e) => {
-  editorBgColorText.value = e.target.value;
-  updatePreviewBox();
-});
+const settingsColorPickerState = {
+  target: "background",
+  originalHex: defaultSettings.bgColor,
+  hue: 0,
+  saturation: 0,
+  value: 0,
+  pointerId: null,
+  returnFocus: null,
+};
 
-// Allow manual hex code input for background color
-editorBgColorText.addEventListener("input", (e) => {
-  const hexValue = e.target.value;
-  // Validate hex color format
-  if (/^#[0-9A-Fa-f]{6}$/.test(hexValue)) {
-    editorBgColorInput.value = hexValue;
+function clampColorPickerValue(value, min, max) {
+  return Math.min(max, Math.max(min, Number(value) || 0));
+}
+
+function settingsColorHexToRgb(rawHex) {
+  const hex = normalizeHexColor(rawHex);
+  if (!hex) return null;
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function settingsColorRgbToHex(r, g, b) {
+  const channel = (value) => clampColorPickerValue(Math.round(value), 0, 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`.toUpperCase();
+}
+
+function settingsColorRgbToHsv(r, g, b) {
+  const red = clampColorPickerValue(r, 0, 255) / 255;
+  const green = clampColorPickerValue(g, 0, 255) / 255;
+  const blue = clampColorPickerValue(b, 0, 255) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  let hue = 0;
+
+  if (delta) {
+    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
+    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
+    else hue = 60 * ((red - green) / delta + 4);
+  }
+  if (hue < 0) hue += 360;
+
+  return {
+    h: hue,
+    s: max === 0 ? 0 : delta / max,
+    v: max,
+  };
+}
+
+function settingsColorHsvToRgb(h, s, v) {
+  const hue = ((Number(h) % 360) + 360) % 360;
+  const saturation = clampColorPickerValue(s, 0, 1);
+  const value = clampColorPickerValue(v, 0, 1);
+  const chroma = value * saturation;
+  const segment = hue / 60;
+  const x = chroma * (1 - Math.abs((segment % 2) - 1));
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (segment < 1) [red, green] = [chroma, x];
+  else if (segment < 2) [red, green] = [x, chroma];
+  else if (segment < 3) [green, blue] = [chroma, x];
+  else if (segment < 4) [green, blue] = [x, chroma];
+  else if (segment < 5) [red, blue] = [x, chroma];
+  else [red, blue] = [chroma, x];
+
+  const match = value - chroma;
+  return {
+    r: Math.round((red + match) * 255),
+    g: Math.round((green + match) * 255),
+    b: Math.round((blue + match) * 255),
+  };
+}
+
+function getSettingsColorTarget(target) {
+  if (target === "accent") {
+    return {
+      input: themeColorInput,
+      text: themeColorText,
+      swatch: themeColorSwatch,
+      trigger: themeColorTrigger,
+      title: "Accent Color",
+      description: "Drag to customize buttons, active states, focus rings, and highlights.",
+    };
+  }
+  return {
+    input: editorBgColorInput,
+    text: editorBgColorText,
+    swatch: editorBgColorSwatch,
+    trigger: editorBgColorTrigger,
+    title: "Background Color",
+    description: "Drag to choose the color behind your code and syntax highlighting.",
+  };
+}
+
+function setSettingsColorValue(target, rawColor, refreshPreview = true) {
+  const fallback = target === "accent" ? defaultSettings.themeColor : defaultSettings.bgColor;
+  const color = normalizeHexColor(rawColor) || fallback;
+  const config = getSettingsColorTarget(target);
+  config.input.value = color;
+  config.text.value = color;
+  config.swatch.style.backgroundColor = color;
+  config.trigger.style.setProperty("--settings-selected-color", color);
+  if (refreshPreview) {
+    if (target === "accent") updateThemeColor(color);
     updatePreviewBox();
   }
-});
+  return color;
+}
 
-themeColorInput.addEventListener("input", (e) => {
-  themeColorText.value = e.target.value;
-  updateThemeColor(e.target.value);
-  updatePreviewBox();
-});
+function syncSettingsColorControls() {
+  setSettingsColorValue("background", editorBgColorInput.value, false);
+  setSettingsColorValue("accent", themeColorInput.value, false);
+}
 
-themeColorText.addEventListener("input", (e) => {
-  const hexValue = e.target.value;
-  if (/^#[0-9A-Fa-f]{6}$/.test(hexValue)) {
-    themeColorInput.value = hexValue;
-    updateThemeColor(hexValue);
-    updatePreviewBox();
+function renderSettingsColorPicker() {
+  const hue = clampColorPickerValue(settingsColorPickerState.hue, 0, 360);
+  const saturation = clampColorPickerValue(settingsColorPickerState.saturation, 0, 1);
+  const value = clampColorPickerValue(settingsColorPickerState.value, 0, 1);
+  const rgb = settingsColorHsvToRgb(hue, saturation, value);
+  const hex = settingsColorRgbToHex(rgb.r, rgb.g, rgb.b);
+
+  settingsColorPickerState.hue = hue;
+  settingsColorPickerState.saturation = saturation;
+  settingsColorPickerState.value = value;
+  settingsColorSaturation.style.setProperty("--picker-hue-color", `hsl(${hue} 100% 50%)`);
+  settingsColorSaturationThumb.style.left = `${saturation * 100}%`;
+  settingsColorSaturationThumb.style.top = `${(1 - value) * 100}%`;
+  settingsColorSaturation.setAttribute("aria-valuenow", String(Math.round(saturation * 100)));
+  settingsColorSaturation.setAttribute(
+    "aria-valuetext",
+    `${Math.round(saturation * 100)} percent saturation, ${Math.round(value * 100)} percent brightness`,
+  );
+  settingsColorHue.value = String(Math.round(hue));
+  settingsColorHue.style.setProperty("--picker-hue", String(Math.round(hue)));
+  settingsColorPreviewSwatch.style.backgroundColor = hex;
+  settingsColorLiveHex.textContent = hex;
+  settingsColorLiveRgb.textContent = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+  settingsColorHex.value = hex;
+  settingsColorRed.value = String(rgb.r);
+  settingsColorGreen.value = String(rgb.g);
+  settingsColorBlue.value = String(rgb.b);
+  [settingsColorHex, settingsColorRed, settingsColorGreen, settingsColorBlue].forEach((input) => {
+    input.removeAttribute("aria-invalid");
+  });
+  setSettingsColorValue(settingsColorPickerState.target, hex, true);
+}
+
+function setSettingsColorPickerFromHex(rawHex) {
+  const rgb = settingsColorHexToRgb(rawHex);
+  if (!rgb) return false;
+  const hsv = settingsColorRgbToHsv(rgb.r, rgb.g, rgb.b);
+  settingsColorPickerState.hue = hsv.s === 0 ? settingsColorPickerState.hue : hsv.h;
+  settingsColorPickerState.saturation = hsv.s;
+  settingsColorPickerState.value = hsv.v;
+  renderSettingsColorPicker();
+  return true;
+}
+
+function openSettingsColorPicker(target) {
+  const config = getSettingsColorTarget(target);
+  const initialHex = normalizeHexColor(config.input.value) || (
+    target === "accent" ? defaultSettings.themeColor : defaultSettings.bgColor
+  );
+  const rgb = settingsColorHexToRgb(initialHex);
+  const hsv = settingsColorRgbToHsv(rgb.r, rgb.g, rgb.b);
+  settingsColorPickerState.target = target;
+  settingsColorPickerState.originalHex = initialHex;
+  settingsColorPickerState.hue = hsv.h;
+  settingsColorPickerState.saturation = hsv.s;
+  settingsColorPickerState.value = hsv.v;
+  settingsColorPickerState.pointerId = null;
+  settingsColorPickerState.returnFocus = config.trigger;
+  settingsColorPickerTitle.textContent = config.title;
+  settingsColorPickerDescription.textContent = config.description;
+  settingsColorPickerModal.hidden = false;
+  renderSettingsColorPicker();
+  requestAnimationFrame(() => settingsColorSaturation.focus());
+}
+
+function closeSettingsColorPicker(restoreOriginal = false) {
+  if (!settingsColorPickerModal || settingsColorPickerModal.hidden) return;
+  if (restoreOriginal) {
+    setSettingsColorValue(
+      settingsColorPickerState.target,
+      settingsColorPickerState.originalHex,
+      true,
+    );
   }
+  settingsColorPickerState.pointerId = null;
+  settingsColorSaturation.classList.remove("is-dragging");
+  settingsColorPickerModal.hidden = true;
+  const returnFocus = settingsColorPickerState.returnFocus;
+  settingsColorPickerState.returnFocus = null;
+  requestAnimationFrame(() => returnFocus?.focus());
+}
+
+function updateSettingsColorFromPointer(event) {
+  const bounds = settingsColorSaturation.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  settingsColorPickerState.saturation = clampColorPickerValue(
+    (event.clientX - bounds.left) / bounds.width,
+    0,
+    1,
+  );
+  settingsColorPickerState.value = 1 - clampColorPickerValue(
+    (event.clientY - bounds.top) / bounds.height,
+    0,
+    1,
+  );
+  renderSettingsColorPicker();
+}
+
+editorBgColorTrigger?.addEventListener("click", () => openSettingsColorPicker("background"));
+themeColorTrigger?.addEventListener("click", () => openSettingsColorPicker("accent"));
+closeSettingsColorPickerBtn?.addEventListener("click", () => closeSettingsColorPicker(true));
+cancelSettingsColorPickerBtn?.addEventListener("click", () => closeSettingsColorPicker(true));
+doneSettingsColorPickerBtn?.addEventListener("click", () => closeSettingsColorPicker(false));
+
+settingsColorSaturation?.addEventListener("pointerdown", (event) => {
+  settingsColorPickerState.pointerId = event.pointerId;
+  settingsColorSaturation.setPointerCapture(event.pointerId);
+  settingsColorSaturation.classList.add("is-dragging");
+  updateSettingsColorFromPointer(event);
+});
+
+settingsColorSaturation?.addEventListener("pointermove", (event) => {
+  if (settingsColorPickerState.pointerId !== event.pointerId) return;
+  updateSettingsColorFromPointer(event);
+});
+
+function finishSettingsColorPointer(event) {
+  if (settingsColorPickerState.pointerId !== event.pointerId) return;
+  if (settingsColorSaturation.hasPointerCapture(event.pointerId)) {
+    settingsColorSaturation.releasePointerCapture(event.pointerId);
+  }
+  settingsColorPickerState.pointerId = null;
+  settingsColorSaturation.classList.remove("is-dragging");
+}
+
+settingsColorSaturation?.addEventListener("pointerup", finishSettingsColorPointer);
+settingsColorSaturation?.addEventListener("pointercancel", finishSettingsColorPointer);
+
+settingsColorSaturation?.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const step = event.shiftKey ? 0.05 : 0.01;
+  if (event.key === "ArrowLeft") settingsColorPickerState.saturation -= step;
+  if (event.key === "ArrowRight") settingsColorPickerState.saturation += step;
+  if (event.key === "ArrowUp") settingsColorPickerState.value += step;
+  if (event.key === "ArrowDown") settingsColorPickerState.value -= step;
+  renderSettingsColorPicker();
+});
+
+settingsColorHue?.addEventListener("input", () => {
+  settingsColorPickerState.hue = Number(settingsColorHue.value);
+  renderSettingsColorPicker();
+});
+
+settingsColorHex?.addEventListener("input", () => {
+  const isValid = setSettingsColorPickerFromHex(settingsColorHex.value);
+  settingsColorHex.setAttribute("aria-invalid", isValid ? "false" : "true");
+});
+
+function updateSettingsColorFromRgbFields() {
+  const inputs = [settingsColorRed, settingsColorGreen, settingsColorBlue];
+  const values = inputs.map((input) => Number(input.value));
+  const isValid = inputs.every((input, index) => (
+    input.value !== "" && Number.isInteger(values[index]) && values[index] >= 0 && values[index] <= 255
+  ));
+  inputs.forEach((input) => input.setAttribute("aria-invalid", isValid ? "false" : "true"));
+  if (!isValid) return;
+  const hsv = settingsColorRgbToHsv(values[0], values[1], values[2]);
+  settingsColorPickerState.hue = hsv.s === 0 ? settingsColorPickerState.hue : hsv.h;
+  settingsColorPickerState.saturation = hsv.s;
+  settingsColorPickerState.value = hsv.v;
+  renderSettingsColorPicker();
+}
+
+[settingsColorRed, settingsColorGreen, settingsColorBlue].forEach((input) => {
+  input?.addEventListener("input", updateSettingsColorFromRgbFields);
 });
 
 workspaceThemeButtons.forEach((button) => {
@@ -12099,6 +12381,7 @@ if (resetThemeColorBtn) {
     const defaultAccent = normalizeHexColor(activeTheme.accent);
     themeColorInput.value = defaultAccent;
     themeColorText.value = defaultAccent;
+    syncSettingsColorControls();
     updateThemeColor(defaultAccent);
     updatePreviewBox();
     applySettingsToEditors();
@@ -12171,6 +12454,7 @@ settingsBtn.addEventListener("click", () => {
 });
 
 closeSettingsBtn.addEventListener("click", () => {
+  closeSettingsColorPicker(true);
   loadSettings();
   settingsModal.style.display = "none";
 });
@@ -12178,6 +12462,7 @@ closeSettingsBtn.addEventListener("click", () => {
 // Clicking outside the modal card no longer closes it; use Escape or the close button.
 
 applySettingsBtn.addEventListener("click", () => {
+  closeSettingsColorPicker(false);
   const rawFontEmbed = editorFontEmbedInput.value.trim();
   const cssUrl = extractGoogleFontsCssUrl(rawFontEmbed);
   if (rawFontEmbed && !cssUrl) {
@@ -20629,6 +20914,11 @@ document.addEventListener("keydown", (e) => {
     if (fontPickerModal && fontPickerModal.style.display === "flex") {
       e.preventDefault();
       fontPickerModal.style.display = "none";
+      return;
+    }
+    if (settingsColorPickerModal && !settingsColorPickerModal.hidden) {
+      e.preventDefault();
+      closeSettingsColorPicker(true);
       return;
     }
     if (settingsModal && settingsModal.style.display === "flex") {
