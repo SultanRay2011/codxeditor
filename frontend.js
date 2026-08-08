@@ -21509,7 +21509,7 @@ updateCollabButtonState();
 
 function extractSessionIdFromUrl() {
   const pathMatch = window.location.pathname.match(
-    /\/frontend\.html\/([A-Za-z0-9-]+)$/,
+    /\/frontend(?:\.html)?\/([A-Za-z0-9-]+)\/?$/,
   );
   if (pathMatch) return pathMatch[1].toUpperCase();
 
@@ -22361,7 +22361,7 @@ function regenerateInviteLink() {
     }
     activeSessionId = res.sessionId || activeSessionId;
     collabShareLink = res.shareLink || collabShareLink;
-    window.history.replaceState({}, "", `/frontend.html/${activeSessionId}`);
+    window.history.replaceState({}, "", `/frontend/${activeSessionId}`);
     showNotification("Invite link regenerated.", "success");
     showGroupControls(activeSessionId);
   });
@@ -22954,7 +22954,7 @@ function showGroupControls(sessionId) {
       <div class="collab-meta-grid">
         <div class="collab-meta-item">
           <span class="collab-meta-label">Share Link</span>
-          <span class="collab-meta-value">${escapeHtml(collabShareLink || `${window.location.origin}/frontend.html/${sessionId}`)}</span>
+          <span class="collab-meta-value">${escapeHtml(collabShareLink || `${window.location.origin}/frontend/${sessionId}`)}</span>
         </div>
         <div class="collab-meta-item">
           <span class="collab-meta-label">Timer</span>
@@ -25879,7 +25879,7 @@ function ensureCollabSocket() {
     activeSessionId = payload.sessionId || activeSessionId;
     if (previousSessionId && previousSessionId !== activeSessionId) clearCollabRecoveryToken(previousSessionId);
     collabShareLink = payload.shareLink || collabShareLink;
-    window.history.replaceState({}, "", `/frontend.html/${activeSessionId}`);
+    window.history.replaceState({}, "", `/frontend/${activeSessionId}`);
     addTimelineEntry("Invite link was regenerated.", "session");
     if (collabModal.style.display === "flex" && collabModalView === "session") {
       showSessionDetails(activeSessionId);
@@ -25904,7 +25904,7 @@ function ensureCollabSocket() {
     collabChatTarget = "";
     applyRemoteSessionState(res.files, res.activeFileName, true);
     enforceCollabPermissionsUI();
-    window.history.replaceState({}, "", `/frontend.html/${activeSessionId}`);
+    window.history.replaceState({}, "", `/frontend/${activeSessionId}`);
     showNotification(`Welcome, ${myInfo.name}!`, "success");
     startSyncing();
     closeModal();
@@ -27126,7 +27126,7 @@ function createNumericSession() {
 
         const sid = res.sessionId;
         const pin = res.sessionPin || sid;
-        const link = res.shareLink || `${window.location.origin}/frontend.html/${sid}`;
+        const link = res.shareLink || `${window.location.origin}/frontend/${sid}`;
         activeSessionId = sid;
         if (res.recoveryToken) storeCollabRecoveryToken(sid, res.recoveryToken);
         collabShareLink = link;
@@ -27139,7 +27139,7 @@ function createNumericSession() {
         collabPrivateMessages = [];
         collabChatMode = "group";
         collabChatTarget = "";
-        window.history.replaceState({}, "", `/frontend.html/${sid}`);
+        window.history.replaceState({}, "", `/frontend/${sid}`);
         setCollabCloseButtonVisible(true);
         enforceCollabPermissionsUI();
         startSyncing();
@@ -27199,7 +27199,7 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
         const resolvedName = String(res.name || name).trim() || name;
         activeSessionId = resolvedSessionId;
         myInfo = { name: resolvedName, theme, cursorStyle: normalizeCollabCursorStyle(cursorStyle) };
-        collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${resolvedSessionId}`;
+        collabShareLink = res.shareLink || `${window.location.origin}/frontend/${resolvedSessionId}`;
         collabSessionPin = res.sessionPin || sid;
         collabParticipants = res.participants || [];
         collabHostName =
@@ -27211,7 +27211,7 @@ function joinSessionWithPin(sid, name, theme, cursorStyle = "pointer") {
         collabPrivateMessages = [];
         collabChatMode = "group";
         collabChatTarget = "";
-        window.history.replaceState({}, "", `/frontend.html/${resolvedSessionId}`);
+        window.history.replaceState({}, "", `/frontend/${resolvedSessionId}`);
         applyRemoteSessionState(res.files, res.activeFileName, true);
         enforceCollabPermissionsUI();
         showNotification(
@@ -27263,7 +27263,7 @@ function sortSessionParticipants(participants, mode = collabParticipantSortMode)
 function showSessionDetails(sid) {
   collabModalView = "session";
   setCollabCloseButtonVisible(true);
-  const link = collabShareLink || `${window.location.origin}/frontend.html/${sid}`;
+  const link = collabShareLink || `${window.location.origin}/frontend/${sid}`;
   const sessionPin = collabSessionPin || sid;
   const orderedParticipants = sortSessionParticipants(collabParticipants);
   const listItems = orderedParticipants
@@ -27473,8 +27473,8 @@ function isReloadNavigation() {
 }
 
 function resetCollabUrlToFreshState() {
-  if (window.location.pathname.includes("/frontend.html/") || window.location.hash) {
-    window.history.replaceState({}, "", "/frontend.html");
+  if (/\/frontend(?:\.html)?\//.test(window.location.pathname) || window.location.hash) {
+    window.history.replaceState({}, "", "/frontend");
   }
 }
 
@@ -27548,7 +27548,7 @@ function promptJoinTheme(name, sid) {
 
           activeSessionId = sid;
           myInfo = { name, theme };
-          collabShareLink = res.shareLink || `${window.location.origin}/frontend.html/${sid}`;
+          collabShareLink = res.shareLink || `${window.location.origin}/frontend/${sid}`;
           collabSessionPin = res.sessionPin || collabSessionPin;
           collabParticipants = res.participants || [];
           collabHostName =
