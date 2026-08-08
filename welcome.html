@@ -467,9 +467,9 @@
 
       function resolveNextEditorRoute() {
         const savedRoute = localStorage.getItem("codxPendingEditorRoute");
-        if (savedRoute && /^\/frontend(?:\.html)?(?:\/|$)/.test(savedRoute)) {
+        if (savedRoute && /^\/frontend(?:\.html)?(?:\/|[?#]|$)/.test(savedRoute)) {
           localStorage.removeItem("codxPendingEditorRoute");
-          return savedRoute.replace(/^\/frontend\.html(?=\/|$)/, "/frontend");
+          return savedRoute.replace(/^\/frontend\.html(?=\/|[?#]|$)/, "/frontend");
         }
         localStorage.removeItem("codxPendingEditorRoute");
         return "/frontend";

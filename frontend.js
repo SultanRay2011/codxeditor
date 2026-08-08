@@ -3514,7 +3514,13 @@ const existingJsSuggestionValues = new Set(jsSuggestions.map((entry) => entry.va
 });
 
 let hasUnsavedChanges = false;
+let activeSavedProjectId = null;
 let activeSavedProjectName = null;
+
+function setActiveSavedProject(project = null) {
+  activeSavedProjectId = project?.id ? String(project.id) : null;
+  activeSavedProjectName = project?.name ? String(project.name) : null;
+}
 let autoRunTimeout;
 const AUTO_RUN_TYPING_IDLE_MS = 180;
 let latestDiagnostics = [];
@@ -4512,7 +4518,7 @@ async function applyStarterTemplate(template) {
     "template",
   );
   if (!applied) return false;
-  activeSavedProjectName = null;
+  setActiveSavedProject();
   closeStarterTemplatePreview();
   closeProjectLibrary();
   showNotification(`Opened ${template.name}.`, "success");
@@ -7995,6 +8001,7 @@ function updateProjectStatusUI() {
   const statusSignature = [
     hasUnsavedChanges ? "unsaved" : "saved",
     Number(lastAutosaveAt || 0),
+    String(activeSavedProjectId || ""),
     String(activeSavedProjectName || ""),
   ].join(":");
   if (projectStatusBadge.dataset.statusSignature === statusSignature) return;
@@ -8009,7 +8016,7 @@ function updateProjectStatusUI() {
     projectStatusMeta.textContent = lastAutosaveAt
       ? `Autosaved ${formatProjectStatusTime(lastAutosaveAt)}`
       : "Save to keep this version";
-    if (projectStatusSaveBtn && activeSavedProjectName) {
+    if (projectStatusSaveBtn && getActiveSavedProject()) {
       projectStatusSaveBtn.hidden = false;
     }
     return;
@@ -8295,6 +8302,7 @@ function scheduleProjectAutosave() {
       JSON.stringify({
         activeFileName: snapshot.activeFileName,
         savedAt: snapshot.savedAt,
+        savedProjectId: activeSavedProjectId || "",
         savedProjectName: activeSavedProjectName || "",
       }),
     );
@@ -8315,7 +8323,16 @@ function getSavedProjects() {
     const projects = JSON.parse(safeLocalStorage("get", SAVED_PROJECTS_KEY) || "[]");
     let migrated = false;
     if (Array.isArray(projects)) {
-      projects.forEach((project) => {
+      const usedProjectIds = new Set();
+      projects.forEach((project, index) => {
+        if (!project || typeof project !== "object") return;
+        let projectId = String(project?.id || "").trim();
+        if (!projectId || usedProjectIds.has(projectId)) {
+          projectId = `project-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+          project.id = projectId;
+          migrated = true;
+        }
+        usedProjectIds.add(projectId);
         const snapshot = project?.snapshot;
         if (!Array.isArray(snapshot?.files)) return;
         const requestedActiveName = normalizeProjectFileName(snapshot.activeFileName || "");
@@ -8511,6 +8528,7 @@ async function createDeviceTransferPayload() {
         previewBreakpoints: previewBreakpointIndicatorEnabled,
         previewColorScheme: previewColorSchemeMode,
       },
+      activeSavedProjectId: activeSavedProjectId || "",
       activeSavedProjectName: activeSavedProjectName || "",
     },
     skippedMedia: transferState.skippedMedia,
@@ -9173,25 +9191,29 @@ async function importDeviceTransferPayload(payload, { replaceCurrentWorkspace = 
       snapshot: payload.currentProject,
     });
   }
-  const projectsByName = new Map(
-    localProjects.map((project) => [String(project?.name || "").trim().toLowerCase(), project]),
+  const projectsById = new Map(
+    localProjects.map((project) => [String(project?.id || "").trim(), project]),
   );
-  const importedNames = new Set();
+  const importedIds = new Set();
   let importedCount = 0;
   let newerLocalCount = 0;
-  for (const incoming of incomingProjects) {
-    const nameKey = String(incoming?.name || "").trim().toLowerCase();
-    if (!nameKey || !incoming?.snapshot) continue;
-    const local = projectsByName.get(nameKey);
+  incomingProjects.forEach((incoming, index) => {
+    if (!incoming?.snapshot) return;
+    let incomingId = String(incoming.id || "").trim();
+    if (!incomingId) {
+      incomingId = `project-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+      incoming.id = incomingId;
+    }
+    const local = projectsById.get(incomingId);
     if (!local || Number(incoming.updatedAt || 0) >= Number(local.updatedAt || 0)) {
-      projectsByName.set(nameKey, local ? { ...incoming, id: local.id } : incoming);
-      importedNames.add(nameKey);
+      projectsById.set(incomingId, incoming);
+      importedIds.add(incomingId);
       importedCount += 1;
     } else {
       newerLocalCount += 1;
     }
-  }
-  const mergedProjects = [...projectsByName.values()]
+  });
+  const mergedProjects = [...projectsById.values()]
     .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
     .slice(0, MAX_SAVED_PROJECTS);
   const usedProjectIds = new Set();
@@ -9212,8 +9234,13 @@ async function importDeviceTransferPayload(payload, { replaceCurrentWorkspace = 
     loadSettings();
   }
   if (replaceCurrentWorkspace) {
+    const importedId = String(payload.activeSavedProjectId || "").trim();
     const importedName = String(payload.activeSavedProjectName || "").trim();
-    activeSavedProjectName = importedNames.has(importedName.toLowerCase()) ? importedName : null;
+    const importedProject = mergedProjects.find((project) =>
+      (importedId && importedIds.has(importedId) && String(project.id) === importedId) ||
+      (!importedId && importedIds.has(String(project.id)) && String(project.name || "").trim() === importedName),
+    );
+    setActiveSavedProject(importedProject || null);
     if (!applyProjectState(payload.currentProject, "device transfer")) {
       throw new Error("The transferred workspace could not be opened.");
     }
@@ -9221,7 +9248,7 @@ async function importDeviceTransferPayload(payload, { replaceCurrentWorkspace = 
   if (payload.workspaceSettings && Object.keys(payload.workspaceSettings).length) {
     applyWorkspaceSettings(payload.workspaceSettings);
   }
-  if (replaceCurrentWorkspace && activeSavedProjectName) {
+  if (replaceCurrentWorkspace && getActiveSavedProject()) {
     hasUnsavedChanges = false;
     updateProjectStatusUI();
   }
@@ -9342,11 +9369,16 @@ function getSavedProjectById(projectId) {
 }
 
 function getActiveSavedProject() {
+  if (activeSavedProjectId) {
+    return getSavedProjectById(activeSavedProjectId);
+  }
   if (!activeSavedProjectName) return null;
   const normalizedName = String(activeSavedProjectName).trim().toLowerCase();
-  return getSavedProjects().find(
+  const legacyProject = getSavedProjects().find(
     (project) => String(project.name || "").trim().toLowerCase() === normalizedName,
   ) || null;
+  if (legacyProject) setActiveSavedProject(legacyProject);
+  return legacyProject;
 }
 
 function parseSyncDeviceName(userAgent = navigator.userAgent) {
@@ -9678,10 +9710,44 @@ function downloadSyncKeyText(projectName, key) {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
+function getSyncKeyLaunchUrl(key) {
+  const normalizedKey = window.CodxSync?.normalizeKey(key);
+  if (!window.CodxSync?.isValidKey(normalizedKey)) return "";
+  const url = new URL("/frontend", window.location.origin);
+  url.hash = `sync-key=${encodeURIComponent(normalizedKey)}`;
+  return url.toString();
+}
+
+function extractSyncKeyFromValue(value) {
+  const rawValue = String(value || "").trim();
+  const directKey = window.CodxSync?.normalizeKey(rawValue);
+  if (window.CodxSync?.isValidKey(directKey)) return directKey;
+  try {
+    const url = new URL(rawValue, window.location.href);
+    const fragment = url.hash.replace(/^#/, "");
+    const fragmentKey = window.CodxSync?.normalizeKey(new URLSearchParams(fragment).get("sync-key"));
+    return window.CodxSync?.isValidKey(fragmentKey) ? fragmentKey : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function maybeOpenSyncKeyFromUrl() {
+  const url = new URL(window.location.href);
+  const key = extractSyncKeyFromValue(url.toString());
+  if (!key) return false;
+  url.hash = "";
+  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  setTimeout(() => showSyncKeyEntry(key), 250);
+  return true;
+}
+
 async function renderSyncKeyQr(canvas, key) {
   if (!canvas || !window.CodxQRCode?.toCanvas) return;
   try {
-    await window.CodxQRCode.toCanvas(canvas, key, {
+    const launchUrl = getSyncKeyLaunchUrl(key);
+    if (!launchUrl) throw new Error("Invalid Sync Key");
+    await window.CodxQRCode.toCanvas(canvas, launchUrl, {
       errorCorrectionLevel: "M",
       margin: 2,
       width: 220,
@@ -9840,7 +9906,7 @@ function showSyncKeyEntry(entryValue = "") {
 }
 
 async function resolveEnteredSyncKey(rawKey) {
-  const key = window.CodxSync?.normalizeKey(rawKey);
+  const key = extractSyncKeyFromValue(rawKey);
   const status = document.getElementById("syncKeyEntryStatus");
   if (!window.CodxSync?.isValidKey(key)) {
     if (status) {
@@ -9916,16 +9982,18 @@ async function openResolvedSyncProject(key, remote, payload) {
     const snapshot = JSON.parse(JSON.stringify(payload.snapshot));
     await persistTransferredSnapshotMedia(snapshot, new Map());
     const requestedId = String(payload.projectId || `project-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
-    const projectName = getUniqueSyncedProjectName(payload.projectName, requestedId);
     const projects = getSavedProjects();
     const existingIndex = projects.findIndex((project) => String(project.id) === requestedId);
+    const projectName = existingIndex >= 0
+      ? projects[existingIndex].name
+      : (String(payload.projectName || "Synced project").trim() || "Synced project");
     const savedAt = Number(remote.savedAt || payload.savedAt || Date.now());
     const project = { id: requestedId, name: projectName, updatedAt: savedAt, snapshot };
     if (existingIndex >= 0) projects[existingIndex] = project;
     else projects.unshift(project);
     setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
     if (!applyProjectState(snapshot, "synced project")) throw new Error("Unable to load the synced project.");
-    activeSavedProjectName = projectName;
+    setActiveSavedProject(project);
     const remoteDevice = String(remote.deviceName || payload.deviceName || "Unknown device");
     saveSyncKeyRecord({
       projectId: requestedId,
@@ -10003,11 +10071,12 @@ async function startSyncKeyCamera() {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const result = window.jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
-        const key = window.CodxSync?.normalizeKey(result?.data);
-        if (window.CodxSync?.isValidKey(key)) {
+        const key = extractSyncKeyFromValue(result?.data);
+        if (key) {
           stopSyncKeyScanner();
           showSyncKeyEntry(key);
-          setTimeout(() => resolveEnteredSyncKey(key), 80);
+          const entryStatus = document.getElementById("syncKeyEntryStatus");
+          if (entryStatus) entryStatus.textContent = "Key scanned. Review it, then choose FIND KEY.";
           return;
         }
       }
@@ -10028,7 +10097,7 @@ async function handleSyncKey() {
     showNotification("Sync Key needs a secure browser with Web Crypto support.", "error");
     return;
   }
-  if (!activeSavedProjectName) {
+  if (!getActiveSavedProject()) {
     const saveDialog = await showAppPrompt(
       "Name this project to sync it.",
       "Choose a name for this saved project:",
@@ -10103,7 +10172,7 @@ async function loadSyncConflictVersion() {
     projects[index] = { ...projects[index], updatedAt: savedAt, snapshot };
     setSavedProjects(projects);
     if (!applyProjectState(snapshot, "newer synced version")) throw new Error("Unable to load the newer version.");
-    activeSavedProjectName = projects[index].name;
+    setActiveSavedProject(projects[index]);
     const deviceName = String(conflict.remote.deviceName || conflict.payload.deviceName || "Unknown device");
     saveSyncKeyRecord({
       ...conflict.syncRecord,
@@ -10216,9 +10285,10 @@ function saveCurrentProjectToLibrary(projectName) {
   }
   const projects = getSavedProjects();
   const snapshot = serializeProjectState();
-  const existingIndex = projects.findIndex(
-    (project) => String(project.name || "").trim().toLowerCase() === trimmedName.toLowerCase(),
-  );
+  const activeProject = getActiveSavedProject();
+  const existingIndex = activeProject
+    ? projects.findIndex((project) => String(project.id) === String(activeProject.id))
+    : -1;
   const nextRecord = {
     id:
       existingIndex >= 0
@@ -10234,7 +10304,7 @@ function saveCurrentProjectToLibrary(projectName) {
     projects.unshift(nextRecord);
   }
   setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
-  activeSavedProjectName = trimmedName;
+  setActiveSavedProject(nextRecord);
   hasUnsavedChanges = false;
   lastAutosaveAt = Date.now();
   updateProjectStatusUI();
@@ -10269,7 +10339,7 @@ async function saveCurrentProjectBeforeOpeningAnother() {
     }
   }
 
-  if (activeSavedProjectName) {
+  if (getActiveSavedProject()) {
     return saveCurrentProjectToLibrary(activeSavedProjectName);
   }
   const saveDialog = await showAppPrompt(
@@ -10283,7 +10353,7 @@ async function saveCurrentProjectBeforeOpeningAnother() {
 }
 
 async function saveCurrentProjectFromEditor() {
-  if (activeSavedProjectName) {
+  if (getActiveSavedProject()) {
     return saveCurrentProjectToLibrary(activeSavedProjectName);
   }
   const dialog = await showAppPrompt(
@@ -10314,7 +10384,7 @@ async function openSavedProjectFromLibrary(projectId) {
 
   hideSyncConflictBar();
   if (!applyProjectState(project.snapshot, "saved project")) return;
-  activeSavedProjectName = project.name;
+  setActiveSavedProject(project);
   closeProjectLibrary();
   updateProjectStatusUI();
   setTimeout(() => checkSyncProjectFreshness(project.id), 250);
@@ -10323,7 +10393,7 @@ async function openSavedProjectFromLibrary(projectId) {
 async function startFreshProject() {
   hideSyncConflictBar();
   applyProjectState(getFreshProjectState(), "new project");
-  activeSavedProjectName = null;
+  setActiveSavedProject();
   document.title = "CodX Editor";
   clearConsole();
   showNotification("Started a fresh HTML starter project.", "success");
@@ -10363,6 +10433,11 @@ async function deleteSavedProject(projectId) {
   const projects = getSavedProjects().filter((entry) => entry.id !== projectId);
   setSavedProjects(projects);
   removeSyncKeyRecord(projectId);
+  if (String(activeSavedProjectId || "") === String(projectId)) {
+    setActiveSavedProject();
+    hasUnsavedChanges = true;
+    updateProjectStatusUI();
+  }
   renderProjectLibrary("saved");
   showNotification("Saved project removed.", "success");
 }
@@ -11120,9 +11195,19 @@ async function tryRestoreAutosaveDraft() {
           minute: "2-digit",
         })
       : "a recent session";
-    const matchedProjectName =
+    const savedProjects = getSavedProjects();
+    const matchedProjectId = String(autosaveMeta.savedProjectId || "").trim();
+    const legacyProjectName =
       String(autosaveMeta.savedProjectName || "").trim() ||
       findSavedProjectNameForSnapshot(snapshot);
+    const matchedProject =
+      savedProjects.find((project) => matchedProjectId && String(project.id) === matchedProjectId) ||
+      savedProjects.find(
+        (project) => legacyProjectName &&
+          String(project.name || "").trim().toLowerCase() === legacyProjectName.toLowerCase(),
+      ) ||
+      null;
+    const matchedProjectName = matchedProject?.name || "";
     const restoreProjectName = matchedProjectName || "Unsaved project";
     const restoreFileName =
       String(autosaveMeta.activeFileName || snapshot.activeFileName || "").trim() ||
@@ -11137,7 +11222,7 @@ async function tryRestoreAutosaveDraft() {
     if (!dialog?.ok) return false;
 
     applyProjectState(snapshot, "autosave");
-    activeSavedProjectName = matchedProjectName || null;
+    setActiveSavedProject(matchedProject);
     updateProjectStatusUI();
     showNotification("Restored autosaved project draft.", "info");
     return true;
@@ -12043,14 +12128,13 @@ function focusFileReorderControl(fileName) {
 }
 
 function persistActiveSavedProjectFileOrder() {
-  if (!activeSavedProjectName || hasUnsavedChanges) return false;
+  if (hasUnsavedChanges) return false;
 
   const projects = getSavedProjects();
-  const projectIndex = projects.findIndex(
-    (project) =>
-      String(project.name || "").trim().toLowerCase() ===
-      String(activeSavedProjectName).trim().toLowerCase(),
-  );
+  const activeProject = getActiveSavedProject();
+  const projectIndex = activeProject
+    ? projects.findIndex((project) => String(project.id) === String(activeProject.id))
+    : -1;
   const savedFiles = projects[projectIndex]?.snapshot?.files;
   if (projectIndex < 0 || !Array.isArray(savedFiles)) return false;
 
@@ -29379,7 +29463,7 @@ async function tryOpenAdminPublishedProject() {
       `published project “${project.projectName || projectId}”`,
     );
     if (!opened) return false;
-    activeSavedProjectName = null;
+    setActiveSavedProject();
     document.title = `${project.projectName || projectId} | CodX Editor`;
     url.searchParams.delete("adminProject");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -29422,7 +29506,7 @@ function tryOpenSourceProject() {
     `source of “${label}”`,
   );
   if (!opened) return false;
-  activeSavedProjectName = null;
+  setActiveSavedProject();
   document.title = `${payload.projectName || "Source"} | CodX Editor`;
   showNotification(`Opened source code for “${label}”.`, "success");
   // A published/copied page renders only the front end; its Node.js backend
@@ -29484,6 +29568,7 @@ window.addEventListener("load", () => {
       updateProjectStatusUI();
       updatePreview();
       maybeOpenDeviceTransferFromUrl();
+      maybeOpenSyncKeyFromUrl();
       if (navigator.onLine) void flushSyncUploadQueue();
       setTimeout(() => checkSyncProjectFreshness(), 250);
     });
@@ -29493,6 +29578,10 @@ window.addEventListener("online", () => {
   getSyncUploadQueue().forEach((entry) => syncProjectStatuses.set(String(entry.projectId), { state: "syncing" }));
   updateSyncStatusUI();
   void flushSyncUploadQueue();
+});
+
+window.addEventListener("hashchange", () => {
+  maybeOpenSyncKeyFromUrl();
 });
 
 window.addEventListener("offline", () => {
