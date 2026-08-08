@@ -3572,6 +3572,24 @@ let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
 const editableTextExtensions = ["html", "htm", "css", "scss", "less", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "jsonc", "env", "md", "txt"];
+const newFileLanguageOptions = [
+  { extension: "html", label: "HTML", icon: "fa-brands fa-html5", color: "html" },
+  { extension: "htm", label: "HTML legacy", icon: "fa-brands fa-html5", color: "html" },
+  { extension: "css", label: "CSS", icon: "fa-brands fa-css3-alt", color: "css" },
+  { extension: "scss", label: "Sass", icon: "fa-brands fa-sass", color: "scss" },
+  { extension: "less", label: "Less", icon: "fa-brands fa-less", color: "less" },
+  { extension: "js", label: "JavaScript", icon: "fa-brands fa-js", color: "js" },
+  { extension: "mjs", label: "ES module", icon: "fa-brands fa-js", color: "js" },
+  { extension: "cjs", label: "CommonJS", icon: "fa-brands fa-js", color: "js" },
+  { extension: "jsx", label: "React JSX", icon: "fa-brands fa-react", color: "react" },
+  { extension: "ts", label: "TypeScript", icon: "fa-solid fa-code", color: "ts" },
+  { extension: "tsx", label: "React TSX", icon: "fa-brands fa-react", color: "react" },
+  { extension: "json", label: "JSON", icon: "fa-solid fa-code", color: "json" },
+  { extension: "jsonc", label: "JSON comments", icon: "fa-solid fa-code", color: "json" },
+  { extension: "env", label: "Environment", icon: "fa-solid fa-key", color: "env" },
+  { extension: "md", label: "Markdown", icon: "fa-brands fa-markdown", color: "md" },
+  { extension: "txt", label: "Plain text", icon: "fa-solid fa-file-lines", color: "txt" },
+];
 const ZIP_IMPORT_BATCH_SIZE = 12;
 const LARGE_PROJECT_FILE_THRESHOLD = 160;
 const LARGE_PROJECT_DIAGNOSTIC_LIMIT = 32;
@@ -5041,6 +5059,7 @@ function closeAppDialog(result = null) {
     appDialogInput.style.display = "none";
     appDialogInput.disabled = false;
     appDialogInput.value = "";
+    appDialogInput.oninput = null;
     appDialogInput.onkeydown = null;
   }
   if (appDialogActions) {
@@ -5087,6 +5106,7 @@ function showAppDialog({
       appDialogInput.disabled = false;
       appDialogInput.value = input ? String(inputValue || "") : "";
       appDialogInput.placeholder = input ? String(inputPlaceholder || "") : "";
+      appDialogInput.oninput = null;
     }
     if (appDialogActions) {
       appDialogActions.innerHTML = `
@@ -11340,12 +11360,66 @@ async function createNewFile() {
     showNotification("The host disabled creating new files for participants.", "error");
     return;
   }
-  const dialog = await showAppPrompt(
-    "NEW FILE",
-    `Enter a file name. Supported extensions: ${editableTextExtensions.map((extension) => `.${extension}`).join(", ")}. Spaces become dashes; underscores and dashes are allowed.`,
-    "",
-    "newfile.html",
-  );
+  const languagePickerHtml = `
+    <span class="new-file-dialog-intro">Enter a file name, then choose the language you want to use.</span>
+    <span class="new-file-language-label" id="newFileLanguageLabel">AVAILABLE LANGUAGES</span>
+    <span class="new-file-language-grid" role="group" aria-labelledby="newFileLanguageLabel">
+      ${newFileLanguageOptions.map((language) => `
+        <button
+          type="button"
+          class="new-file-language-option new-file-language-${escapeHtml(language.color)}"
+          data-new-file-extension="${escapeHtml(language.extension)}"
+          aria-label="Use ${escapeHtml(language.label)} for the new file"
+          aria-pressed="false"
+          title="${escapeHtml(language.label)}"
+        >
+          <i class="${escapeHtml(language.icon)}" aria-hidden="true"></i>
+          <span>${escapeHtml(language.label)}</span>
+        </button>
+      `).join("")}
+    </span>
+    <small class="new-file-dialog-hint">Spaces in file names become dashes. You can also type a supported file name directly.</small>
+  `;
+  const dialogPromise = showAppDialog({
+    title: "NEW FILE",
+    messageHtml: languagePickerHtml,
+    input: true,
+    inputPlaceholder: "newfile.html",
+    okText: "CREATE FILE",
+    cancelText: "CANCEL",
+  });
+  if (appDialog) appDialog.dataset.dialogKind = "new-file";
+
+  const languageButtons = [...document.querySelectorAll("[data-new-file-extension]")];
+  const updateSelectedLanguage = () => {
+    const selectedExtension = getFileType(appDialogInput?.value || "");
+    languageButtons.forEach((button) => {
+      const selected = button.dataset.newFileExtension === selectedExtension;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  };
+  languageButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!appDialogInput) return;
+      const extension = String(button.dataset.newFileExtension || "html");
+      const currentName = String(appDialogInput.value || "newfile").trim();
+      const slashIndex = Math.max(currentName.lastIndexOf("/"), currentName.lastIndexOf("\\"));
+      const directory = slashIndex >= 0 ? currentName.slice(0, slashIndex + 1) : "";
+      const leafName = slashIndex >= 0 ? currentName.slice(slashIndex + 1) : currentName;
+      const dotIndex = leafName.lastIndexOf(".");
+      const baseName = (dotIndex > 0 ? leafName.slice(0, dotIndex) : leafName) || "newfile";
+      appDialogInput.value = `${directory}${baseName}.${extension}`;
+      updateSelectedLanguage();
+      appDialogInput.focus();
+      const baseNameEnd = directory.length + baseName.length;
+      appDialogInput.setSelectionRange(directory.length, baseNameEnd);
+    });
+  });
+  if (appDialogInput) appDialogInput.oninput = updateSelectedLanguage;
+  updateSelectedLanguage();
+
+  const dialog = await dialogPromise;
   if (!dialog?.ok) return;
   const name = dialog.value;
   if (!name) return;
