@@ -20605,8 +20605,8 @@ async function exportNewZipFile() {
   const dialog = await showAppPrompt(
     "EXPORT ZIP",
     "Name your ZIP file:",
-    "codx-project.zip",
-    "codx-project.zip",
+    "untitled.zip",
+    "untitled.zip",
   );
   if (!dialog?.ok) return;
   const requestedName = dialog.value;
