@@ -555,6 +555,8 @@ app.use((req, res, next) => {
     requestPath = String(req.path || "");
   }
   const needsRequireCorp =
+    requestPath === "/frontend" ||
+    requestPath.startsWith("/frontend/") ||
     requestPath === "/frontend.html" ||
     requestPath.startsWith("/frontend.html/") ||
     requestPath === "/node-preview.html" ||
@@ -1112,13 +1114,28 @@ app.post("/api/github/repos/:owner/:repo/commit", async (req, res) => {
   }
 });
 
-app.get(/^\/frontend\.html\/([A-Za-z0-9-]+)$/, (req, res) => {
+app.get("/frontend", (_req, res) => {
+  res.sendFile(path.join(__dirname, "frontend.html"));
+});
+
+app.get(/^\/frontend\/([A-Za-z0-9-]+)\/?$/, (req, res) => {
   const sessionId = normalizeSessionId(req.params[0]);
   if (!isValidSessionId(sessionId)) {
     res.status(404).sendFile(path.join(__dirname, "404.html"));
     return;
   }
   res.sendFile(path.join(__dirname, "frontend.html"));
+});
+
+app.get(/^\/frontend\.html\/([A-Za-z0-9-]+)$/, (req, res) => {
+  const sessionId = normalizeSessionId(req.params[0]);
+  if (!isValidSessionId(sessionId)) {
+    res.status(404).sendFile(path.join(__dirname, "404.html"));
+    return;
+  }
+  const queryIndex = req.originalUrl.indexOf("?");
+  const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : "";
+  res.redirect(301, `/frontend/${encodeURIComponent(sessionId)}${query}`);
 });
 
 app.get("/health", (_req, res) => {
@@ -2151,8 +2168,8 @@ function findSessionIdByPin(pin) {
 
 function buildShareLink(baseUrl, sessionId) {
   const root = String(baseUrl || "").replace(/\/+$/, "");
-  if (root) return `${root}/frontend.html/${sessionId}`;
-  return `/frontend.html/${sessionId}`;
+  if (root) return `${root}/frontend/${sessionId}`;
+  return `/frontend/${sessionId}`;
 }
 
 function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") {

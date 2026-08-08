@@ -467,12 +467,12 @@
 
       function resolveNextEditorRoute() {
         const savedRoute = localStorage.getItem("codxPendingEditorRoute");
-        if (savedRoute && savedRoute.startsWith("/frontend.html")) {
+        if (savedRoute && /^\/frontend(?:\.html)?(?:\/|$)/.test(savedRoute)) {
           localStorage.removeItem("codxPendingEditorRoute");
-          return savedRoute;
+          return savedRoute.replace(/^\/frontend\.html(?=\/|$)/, "/frontend");
         }
         localStorage.removeItem("codxPendingEditorRoute");
-        return "/frontend.html";
+        return "/frontend";
       }
 
       if (localStorage.getItem("codxTermsAgreed") === "true") {
