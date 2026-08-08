@@ -21059,6 +21059,7 @@ window.addEventListener("resize", () => {
 
 // PART 8 - DRAG & DROP
 let externalProjectDragDepth = 0;
+let externalProjectDragItemNames = [];
 let projectDropImportInProgress = false;
 
 function isExternalProjectFileDrag(dataTransfer) {
@@ -21109,8 +21110,8 @@ function getProjectDropItemNames(dataTransfer) {
   return [...new Set(names)];
 }
 
-function buildProjectDropMessage(dataTransfer) {
-  const names = getProjectDropItemNames(dataTransfer);
+function buildProjectDropMessage(fileNames) {
+  const names = Array.isArray(fileNames) ? fileNames : [];
   if (!names.length) return "Dropping files or a folder";
   if (names.length === 1) return `Dropping ${names[0]}`;
 
@@ -21125,7 +21126,9 @@ function buildProjectDropMessage(dataTransfer) {
 function setProjectDropOverlayVisible(visible, dataTransfer = null) {
   if (!projectDropOverlay) return;
   if (visible && projectDropMessage) {
-    projectDropMessage.textContent = buildProjectDropMessage(dataTransfer);
+    const detectedNames = getProjectDropItemNames(dataTransfer);
+    if (detectedNames.length) externalProjectDragItemNames = detectedNames;
+    projectDropMessage.textContent = buildProjectDropMessage(externalProjectDragItemNames);
   }
   projectDropOverlay.hidden = !visible;
   editorContainer?.classList.toggle("project-drop-active", Boolean(visible));
@@ -21133,6 +21136,7 @@ function setProjectDropOverlayVisible(visible, dataTransfer = null) {
 
 function clearExternalProjectDragState() {
   externalProjectDragDepth = 0;
+  externalProjectDragItemNames = [];
   setProjectDropOverlayVisible(false);
 }
 
