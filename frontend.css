@@ -8312,6 +8312,411 @@ iframe {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 20%, transparent);
 }
 
+.settings-color-setting {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-color-setting-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-color-setting-kicker,
+.settings-color-picker-kicker {
+  color: var(--accent-color);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+
+.settings-color-setting-copy h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.settings-color-setting-copy p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-color-setting-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.settings-color-setting-actions-accent {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-color-trigger {
+  min-width: 0;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.settings-color-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 66%, var(--border-color));
+  transform: translateY(-1px);
+}
+
+.settings-color-trigger:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent-color) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-color-trigger-swatch {
+  width: 42px;
+  height: 42px;
+  border: 2px solid color-mix(in srgb, var(--border-color) 58%, #ffffff 42%);
+  border-radius: 11px;
+  background: #1e1e1e;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .12), 0 5px 14px rgba(0, 0, 0, .2);
+}
+
+.settings-color-trigger-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-color-trigger-copy strong {
+  font-size: 13px;
+}
+
+.settings-color-trigger-copy output {
+  color: var(--text-muted);
+  font: 800 12px/1.2 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: .03em;
+}
+
+.settings-color-trigger > i {
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.settings-color-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  background: rgba(2, 6, 12, .72);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  animation: codxModalOverlayFade .18s ease;
+}
+
+.settings-color-picker-modal[hidden] {
+  display: none !important;
+}
+
+.settings-color-picker-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 18px;
+  margin: auto;
+  padding: clamp(18px, 4vw, 26px);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
+  border-radius: 18px;
+  background: var(--bg-secondary);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .58), 0 0 0 1px rgba(255, 255, 255, .04);
+  animation: codxModalCardPop .22s cubic-bezier(.2, .9, .3, 1.15);
+}
+
+.settings-color-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-color-picker-header > div {
+  min-width: 0;
+}
+
+.settings-color-picker-header h2 {
+  margin: 4px 0 3px;
+  color: var(--text-primary);
+  font-size: clamp(20px, 5vw, 25px);
+  letter-spacing: -.025em;
+}
+
+.settings-color-picker-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-color-picker-close {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 27px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-color-picker-live {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+}
+
+.settings-color-picker-live-swatch {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border: 2px solid color-mix(in srgb, var(--border-color) 52%, #ffffff 48%);
+  border-radius: 13px;
+  background: #1e1e1e;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .12);
+}
+
+.settings-color-picker-live > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-color-picker-live strong,
+.settings-color-picker-live span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-color-picker-live strong {
+  color: var(--text-primary);
+  font: 900 15px/1.2 "JetBrains Mono", Consolas, monospace;
+}
+
+.settings-color-picker-live > div > span {
+  color: var(--text-muted);
+  font: 700 12px/1.2 "JetBrains Mono", Consolas, monospace;
+}
+
+.settings-color-saturation {
+  --picker-hue-color: hsl(0 100% 50%);
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--border-color) 66%, #ffffff 34%);
+  border-radius: 15px;
+  background:
+    linear-gradient(to top, #000000, transparent),
+    linear-gradient(to right, #ffffff, var(--picker-hue-color));
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25);
+}
+
+.settings-color-saturation:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+  outline-offset: 3px;
+}
+
+.settings-color-saturation.is-dragging {
+  cursor: none;
+}
+
+.settings-color-saturation-thumb {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .65), 0 4px 12px rgba(0, 0, 0, .42);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.settings-color-hue-control {
+  display: grid;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+#settingsColorHue {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  cursor: pointer;
+}
+
+#settingsColorHue::-webkit-slider-thumb {
+  width: 23px;
+  height: 23px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: hsl(var(--picker-hue, 0) 100% 50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .58);
+}
+
+#settingsColorHue::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: hsl(var(--picker-hue, 0) 100% 50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .58);
+}
+
+.settings-color-fields {
+  display: grid;
+  grid-template-columns: minmax(140px, .85fr) minmax(220px, 1.5fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.settings-color-hex-field,
+.settings-color-rgb-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.settings-color-fields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: 800 13px/1 "JetBrains Mono", Consolas, monospace;
+}
+
+.settings-color-fields input:focus {
+  border-color: var(--accent-color);
+  outline: 3px solid color-mix(in srgb, var(--accent-color) 24%, transparent);
+}
+
+.settings-color-fields input[aria-invalid="true"] {
+  border-color: #ff4d67;
+}
+
+.settings-color-rgb-fields {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-color-rgb-fields legend {
+  grid-column: 1 / -1;
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.settings-color-picker-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-color-picker-button {
+  min-height: 45px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.settings-color-picker-button.secondary {
+  background: var(--bg-primary);
+}
+
+.settings-color-picker-button.primary {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+.settings-color-picker-button:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 560px) {
+  .settings-color-setting-actions-accent,
+  .settings-color-fields {
+    grid-template-columns: 1fr;
+  }
+
+  #resetThemeColorBtn {
+    min-height: 42px;
+  }
+
+  .settings-color-picker-card {
+    gap: 14px;
+    padding: 17px;
+  }
+
+  .settings-color-saturation {
+    min-height: clamp(170px, 43vh, 220px);
+  }
+}
+
 #settingsPreview { border-radius: 11px !important; }
 
 .workspace-theme-setting {
