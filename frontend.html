@@ -471,6 +471,67 @@
               spellcheck="false"
             ></textarea>
             <div
+              id="editorValuePopover"
+              class="editor-value-popover"
+              role="dialog"
+              aria-label="Adjust CSS value"
+              hidden
+            >
+              <div class="editor-value-popover-header">
+                <span>
+                  <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                  <strong>VALUE EDITOR</strong>
+                </span>
+                <button
+                  id="editorValueCloseBtn"
+                  class="editor-value-icon-button"
+                  type="button"
+                  aria-label="Close value editor"
+                >
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="editor-value-token" id="editorValueToken">12px</div>
+              <div class="editor-value-controls">
+                <button
+                  id="editorValueDecreaseBtn"
+                  class="editor-value-step-button"
+                  type="button"
+                  aria-label="Decrease value"
+                >
+                  <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                </button>
+                <label class="editor-value-number-field">
+                  <span>Value</span>
+                  <input
+                    id="editorValueNumberInput"
+                    type="number"
+                    inputmode="decimal"
+                    aria-label="Numeric value"
+                  />
+                </label>
+                <label class="editor-value-unit-field">
+                  <span>Format</span>
+                  <select id="editorValueUnitSelect" aria-label="Value format">
+                    <option value="px">px</option>
+                    <option value="vh">vh</option>
+                  </select>
+                </label>
+                <button
+                  id="editorValueIncreaseBtn"
+                  class="editor-value-step-button"
+                  type="button"
+                  aria-label="Increase value"
+                >
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="editor-value-popover-footer">
+                <small id="editorValueHint">Changes update your code instantly.</small>
+                <button id="editorValueDoneBtn" type="button">DONE</button>
+              </div>
+            </div>
+            <div
               id="typingIndicator"
               style="
                 display: none;
