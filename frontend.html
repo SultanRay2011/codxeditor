@@ -513,8 +513,89 @@
                 <label class="editor-value-unit-field">
                   <span>Format</span>
                   <select id="editorValueUnitSelect" aria-label="Value format">
-                    <option value="px">px</option>
-                    <option value="vh">vh</option>
+                    <optgroup label="Percentage">
+                      <option value="%">%</option>
+                    </optgroup>
+                    <optgroup label="Absolute length">
+                      <option value="px">px</option>
+                      <option value="cm">cm</option>
+                      <option value="mm">mm</option>
+                      <option value="q">Q</option>
+                      <option value="in">in</option>
+                      <option value="pc">pc</option>
+                      <option value="pt">pt</option>
+                    </optgroup>
+                    <optgroup label="Font-relative length">
+                      <option value="em">em</option>
+                      <option value="rem">rem</option>
+                      <option value="ex">ex</option>
+                      <option value="rex">rex</option>
+                      <option value="cap">cap</option>
+                      <option value="rcap">rcap</option>
+                      <option value="ch">ch</option>
+                      <option value="rch">rch</option>
+                      <option value="ic">ic</option>
+                      <option value="ric">ric</option>
+                      <option value="lh">lh</option>
+                      <option value="rlh">rlh</option>
+                    </optgroup>
+                    <optgroup label="Viewport length">
+                      <option value="vw">vw</option>
+                      <option value="vh">vh</option>
+                      <option value="vi">vi</option>
+                      <option value="vb">vb</option>
+                      <option value="vmin">vmin</option>
+                      <option value="vmax">vmax</option>
+                      <option value="svw">svw</option>
+                      <option value="svh">svh</option>
+                      <option value="svi">svi</option>
+                      <option value="svb">svb</option>
+                      <option value="svmin">svmin</option>
+                      <option value="svmax">svmax</option>
+                      <option value="lvw">lvw</option>
+                      <option value="lvh">lvh</option>
+                      <option value="lvi">lvi</option>
+                      <option value="lvb">lvb</option>
+                      <option value="lvmin">lvmin</option>
+                      <option value="lvmax">lvmax</option>
+                      <option value="dvw">dvw</option>
+                      <option value="dvh">dvh</option>
+                      <option value="dvi">dvi</option>
+                      <option value="dvb">dvb</option>
+                      <option value="dvmin">dvmin</option>
+                      <option value="dvmax">dvmax</option>
+                    </optgroup>
+                    <optgroup label="Container length">
+                      <option value="cqw">cqw</option>
+                      <option value="cqh">cqh</option>
+                      <option value="cqi">cqi</option>
+                      <option value="cqb">cqb</option>
+                      <option value="cqmin">cqmin</option>
+                      <option value="cqmax">cqmax</option>
+                    </optgroup>
+                    <optgroup label="Angle">
+                      <option value="deg">deg</option>
+                      <option value="grad">grad</option>
+                      <option value="rad">rad</option>
+                      <option value="turn">turn</option>
+                    </optgroup>
+                    <optgroup label="Time">
+                      <option value="s">s</option>
+                      <option value="ms">ms</option>
+                    </optgroup>
+                    <optgroup label="Frequency">
+                      <option value="hz">Hz</option>
+                      <option value="khz">kHz</option>
+                    </optgroup>
+                    <optgroup label="Resolution">
+                      <option value="dpi">dpi</option>
+                      <option value="dpcm">dpcm</option>
+                      <option value="dppx">dppx</option>
+                      <option value="x">x</option>
+                    </optgroup>
+                    <optgroup label="Grid flex">
+                      <option value="fr">fr</option>
+                    </optgroup>
                   </select>
                 </label>
                 <button
