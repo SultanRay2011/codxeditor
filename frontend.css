@@ -442,6 +442,9 @@ input:checked + .slider:before {
 
 .project-drop-watermark {
   width: min(660px, 92%);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
   color: color-mix(in srgb, var(--text-muted) 86%, #8b949e 14%);
   text-align: center;
   opacity: .86;
@@ -452,16 +455,21 @@ input:checked + .slider:before {
   place-items: center;
   width: 64px;
   height: 64px;
-  margin: 0 auto 14px;
+  margin: 0;
   border: 2px solid currentColor;
   border-radius: 50%;
   color: inherit;
   font-size: 28px;
+  line-height: 1;
 }
 
-.project-drop-watermark strong,
-.project-drop-watermark span {
+.project-drop-icon i,
+.project-drop-watermark strong {
   display: block;
+}
+
+.project-drop-icon i {
+  line-height: 1;
 }
 
 .project-drop-watermark strong {

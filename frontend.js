@@ -21085,6 +21085,11 @@ function getProjectDropItemNames(dataTransfer) {
     });
   if (directoryNames.length) return [...new Set(directoryNames)];
 
+  const entryFileNames = entries
+    .filter((entry) => entry.isFile)
+    .map((entry) => String(entry.name || "").trim())
+    .filter(Boolean);
+
   const transferredFiles = Array.from(dataTransfer?.files || []);
   const itemFiles = items
     .map((item) => {
@@ -21095,9 +21100,12 @@ function getProjectDropItemNames(dataTransfer) {
       }
     })
     .filter(Boolean);
-  const names = (transferredFiles.length ? transferredFiles : itemFiles)
-    .map((file) => String(file?.name || "").trim())
-    .filter(Boolean);
+  const filesWithNames = transferredFiles.length ? transferredFiles : itemFiles;
+  const names = filesWithNames.length
+    ? filesWithNames
+      .map((file) => String(file?.name || "").trim())
+      .filter(Boolean)
+    : entryFileNames;
   return [...new Set(names)];
 }
 
