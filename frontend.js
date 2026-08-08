@@ -20873,10 +20873,28 @@ previewFullscreenBtn.addEventListener("click", togglePreviewFullscreen);
 zenModeBtn.addEventListener("click", toggleZenMode);
 if (zenExitBtn) zenExitBtn.addEventListener("click", () => toggleZenMode(false));
 document.addEventListener("fullscreenchange", updateFullscreenButtonState);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButtonState);
+document.addEventListener("MSFullscreenChange", updateFullscreenButtonState);
+document.addEventListener("fullscreenerror", updateFullscreenButtonState);
+document.addEventListener("webkitfullscreenerror", updateFullscreenButtonState);
+
+function getActiveFullscreenElement() {
+  return document.fullscreenElement
+    || document.webkitFullscreenElement
+    || document.msFullscreenElement
+    || null;
+}
+
+function waitForFullscreenRequest(request) {
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise((resolve) => setTimeout(resolve, 700)),
+  ]);
+}
 
 async function togglePreviewFullscreen() {
   try {
-    const enteringFullscreen = !document.fullscreenElement;
+    const enteringFullscreen = !getActiveFullscreenElement();
     if (enteringFullscreen) {
       const fullscreenTarget = fullscreenPreviewPanelCheckbox?.checked === false
         ? iframe
@@ -20885,22 +20903,25 @@ async function togglePreviewFullscreen() {
         || fullscreenTarget?.webkitRequestFullscreen
         || fullscreenTarget?.msRequestFullscreen;
       if (!request) throw new Error("Fullscreen is not supported by this browser.");
-      await Promise.resolve(request.call(fullscreenTarget));
+      await waitForFullscreenRequest(request.call(fullscreenTarget));
     } else {
       const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
       if (!exit) throw new Error("The browser cannot exit fullscreen mode.");
-      await Promise.resolve(exit.call(document));
+      await waitForFullscreenRequest(exit.call(document));
     }
     await new Promise((resolve) => setTimeout(resolve, 650));
     const changed = enteringFullscreen
-      ? Boolean(document.fullscreenElement)
-      : !document.fullscreenElement;
+      ? Boolean(getActiveFullscreenElement())
+      : !getActiveFullscreenElement();
+    updateFullscreenButtonState();
+    setTimeout(updateFullscreenButtonState, 1200);
     if (!changed && enteringFullscreen) {
       showNotification("The browser closed or blocked fullscreen mode.", "error");
     }
     return changed;
   } catch (error) {
     const message = String(error?.message || "Fullscreen preview could not be changed.");
+    updateFullscreenButtonState();
     showNotification(message, "error");
     return false;
   }
@@ -20908,7 +20929,17 @@ async function togglePreviewFullscreen() {
 
 function updateFullscreenButtonState() {
   syncDeveloperToolButtonStates();
-  if (document.fullscreenElement === previewPanel || document.fullscreenElement === iframe) {
+  const activeFullscreenElement = getActiveFullscreenElement();
+  const previewIsFullscreen = activeFullscreenElement === previewPanel
+    || activeFullscreenElement === iframe;
+  previewFullscreenBtn.setAttribute("aria-pressed", String(previewIsFullscreen));
+  previewFullscreenBtn.setAttribute(
+    "aria-label",
+    previewIsFullscreen
+      ? "Exit preview fullscreen mode"
+      : "Toggle preview fullscreen mode",
+  );
+  if (previewIsFullscreen) {
     previewFullscreenBtn.innerHTML = `
       <svg class="btn-icon" viewBox="0 0 24 24">
         <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>

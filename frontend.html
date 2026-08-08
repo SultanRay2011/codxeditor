@@ -76,10 +76,19 @@
       >Skip to editor</a
     >
     <header>
-      <div class="header-switches">
-        <label class="mobile-preview-control" for="autoRun">Auto-Run</label>
-        <label class="switch mobile-preview-control" title="Toggle auto-run feature">
-          <input type="checkbox" id="autoRun" checked />
+      <div class="header-switches" aria-label="Editor toggles">
+        <label class="mobile-preview-control auto-run-label" for="autoRun">
+          <i class="fa-solid fa-bolt auto-run-icon" aria-hidden="true"></i>
+          <span>Auto-Run</span>
+        </label>
+        <label class="switch mobile-preview-control" title="Toggle auto-run preview">
+          <input
+            type="checkbox"
+            id="autoRun"
+            role="switch"
+            aria-label="Auto-run preview"
+            checked
+          />
           <span class="slider"></span>
         </label>
         <label class="desktop-console-control" for="showConsole">Console</label>
@@ -108,6 +117,7 @@
         class="run-button"
         title="Toggle Preview Fullscreen"
         aria-label="Toggle preview fullscreen mode"
+        aria-pressed="false"
       >
         <svg class="btn-icon" viewBox="0 0 24 24">
           <path

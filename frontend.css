@@ -342,6 +342,17 @@ header .run-button:hover {
   gap: 8px;
 }
 
+.auto-run-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.auto-run-icon {
+  color: #fbbf24;
+  font-size: 12px;
+}
+
 .header-switches label[for="showConsole"] {
   margin-left: 8px;
 }
@@ -357,6 +368,11 @@ header .run-button:hover {
   opacity: 0;
   width: 0;
   height: 0;
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 3px;
 }
 
 .slider {
@@ -10385,7 +10401,11 @@ iframe {
     padding: 5px 7px;
   }
 
-  .header-switches > label:not(.switch) {
+  .header-switches > label:not(.switch):not(.auto-run-label) {
+    display: none;
+  }
+
+  .header-switches > .auto-run-label span {
     display: none;
   }
 
@@ -10458,7 +10478,10 @@ iframe {
     display: none !important;
   }
 
-  #previewFullscreenBtn,
+  #previewFullscreenBtn {
+    display: inline-flex !important;
+  }
+
   .editor-container > .divider {
     display: none !important;
   }
@@ -10718,11 +10741,31 @@ iframe {
 
 @media (max-width: 520px) {
   header {
-    justify-content: center !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    flex-shrink: 0;
+    justify-content: stretch !important;
+    width: 100%;
+    gap: 6px !important;
   }
 
   header > .header-switches {
-    display: none !important;
+    display: flex !important;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  header > .run-button,
+  header > .header-more-menu,
+  header > .header-more-menu > .run-button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .header-more-panel {
+    top: max(108px, calc(env(safe-area-inset-top, 0px) + 102px));
+    max-height: calc(100dvh - 118px - env(safe-area-inset-bottom, 0px));
   }
 
   .editor-actions {
@@ -10761,6 +10804,23 @@ iframe {
   .node-terminal-form input {
     flex-basis: calc(100% - 24px);
     min-height: 38px;
+  }
+}
+
+@media (max-width: 360px) {
+  header {
+    gap: 5px !important;
+    padding-right: max(6px, env(safe-area-inset-right, 0px)) !important;
+    padding-left: max(6px, env(safe-area-inset-left, 0px)) !important;
+  }
+
+  header > .header-switches {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .header-switches > .auto-run-label {
+    display: none;
   }
 }
 
