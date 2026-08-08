@@ -8280,6 +8280,108 @@ iframe {
 #appDialogInput { min-height: 44px; border-radius: 10px !important; }
 #appDialogActions .run-button { min-width: 110px; min-height: 40px; justify-content: center; border-radius: 10px; }
 
+#appDialog[data-dialog-kind="new-file"] > div {
+  width: min(660px, 94vw) !important;
+}
+
+#appDialog[data-dialog-kind="new-file"] #appDialogMessage {
+  display: grid;
+  gap: 12px;
+  white-space: normal !important;
+  text-align: left;
+}
+
+.new-file-dialog-intro,
+.new-file-dialog-hint {
+  color: var(--text-muted);
+}
+
+.new-file-language-label {
+  margin-top: 2px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+.new-file-language-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.new-file-language-option {
+  min-width: 0;
+  min-height: 72px;
+  padding: 10px 7px;
+  border: 1px solid color-mix(in srgb, currentColor 34%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 9%, var(--bg-primary));
+  color: var(--text-primary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  font: inherit;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.new-file-language-option i {
+  color: var(--language-color, var(--accent-color));
+  font-size: 25px;
+  line-height: 1;
+}
+
+.new-file-language-option span {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-file-language-option:hover,
+.new-file-language-option.is-selected {
+  border-color: var(--language-color, var(--accent-color));
+  background: color-mix(in srgb, var(--language-color, var(--accent-color)) 17%, var(--bg-primary));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--language-color, var(--accent-color)) 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.new-file-language-option.is-selected {
+  outline: 2px solid color-mix(in srgb, var(--language-color, var(--accent-color)) 42%, transparent);
+  outline-offset: 1px;
+}
+
+.new-file-language-option:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--language-color, var(--accent-color)) 66%, transparent);
+  outline-offset: 2px;
+}
+
+.new-file-language-html { --language-color: #e34f26; }
+.new-file-language-css { --language-color: #1572b6; }
+.new-file-language-scss { --language-color: #cd6799; }
+.new-file-language-less { --language-color: #2b5e8f; }
+.new-file-language-js { --language-color: #eab308; }
+.new-file-language-react { --language-color: #38bdf8; }
+.new-file-language-ts { --language-color: #3178c6; }
+.new-file-language-json { --language-color: #f5c451; }
+.new-file-language-env { --language-color: #f59e0b; }
+.new-file-language-md { --language-color: #a78bfa; }
+.new-file-language-txt { --language-color: #38bdf8; }
+
+@media (max-width: 560px) {
+  .new-file-language-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .new-file-language-option { min-height: 66px; }
+}
+
+@media (max-width: 380px) {
+  .new-file-language-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 #appDialog[data-dialog-kind="help-choice"] > div {
   width: min(560px, 94vw) !important;
   border-color: color-mix(in srgb, var(--accent-color) 58%, var(--border-color)) !important;
