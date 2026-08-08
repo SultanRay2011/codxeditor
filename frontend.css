@@ -8287,29 +8287,115 @@ iframe {
 }
 
 #resetThemeColorBtn {
+  position: relative;
+  min-width: 170px;
+  min-height: 62px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 44%, var(--border-color));
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 12%, var(--bg-primary)),
+      var(--bg-primary) 68%
+    );
+  color: var(--text-primary);
+  text-align: left;
   white-space: nowrap;
-  transition: border-color .16s ease, box-shadow .16s ease, color .16s ease !important;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  transition:
+    border-color .16s ease,
+    background-color .16s ease,
+    box-shadow .16s ease,
+    color .16s ease,
+    transform .16s ease !important;
 }
 
 #resetThemeColorBtn::before {
   content: "";
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border: 2px solid color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 72%, #ffffff);
-  border-radius: 50%;
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
   background: var(--reset-accent-color, var(--accent-color));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 18%, transparent);
+  opacity: .82;
+}
+
+#resetThemeColorBtn:hover {
+  border-color: color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 76%, var(--border-color));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 19%, var(--bg-primary)),
+      color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 5%, var(--bg-primary)) 70%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 8px 18px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 17%, transparent);
+  transform: translateY(-1px);
+}
+
+#resetThemeColorBtn:focus-visible {
+  border-color: var(--reset-accent-color, var(--accent-color));
+  outline: 3px solid color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-accent-reset-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 58%, var(--border-color));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 16%, var(--bg-secondary));
+  color: var(--reset-accent-color, var(--accent-color));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
+  transition: color .16s ease, background-color .16s ease, transform .28s ease;
+}
+
+.settings-accent-reset-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-accent-reset-copy strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+
+.settings-accent-reset-copy small {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+#resetThemeColorBtn:hover .settings-accent-reset-icon {
+  background: color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 24%, var(--bg-secondary));
+  transform: rotate(-18deg);
 }
 
 #resetThemeColorBtn.accent-reset-confirmed {
   border-color: var(--reset-accent-color, var(--accent-color)) !important;
-  color: var(--reset-accent-color, var(--accent-color)) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 20%, transparent);
+  background: color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 18%, var(--bg-primary)) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 20%, transparent),
+    0 10px 24px color-mix(in srgb, var(--reset-accent-color, var(--accent-color)) 18%, transparent);
+}
+
+#resetThemeColorBtn.accent-reset-confirmed .settings-accent-reset-icon {
+  background: var(--reset-accent-color, var(--accent-color));
+  color: #ffffff;
+  transform: rotate(-360deg) scale(1.04);
 }
 
 .settings-color-setting {
@@ -8704,7 +8790,8 @@ iframe {
   }
 
   #resetThemeColorBtn {
-    min-height: 42px;
+    width: 100%;
+    min-height: 58px;
   }
 
   .settings-color-picker-card {
