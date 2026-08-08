@@ -16,6 +16,7 @@ const localCollabCursor = document.getElementById("localCollabCursor");
 const localCollabCursorIcon = document.getElementById("localCollabCursorIcon");
 const editorContainer = document.querySelector(".editor-container");
 const projectDropOverlay = document.getElementById("projectDropOverlay");
+const projectDropMessage = document.getElementById("projectDropMessage");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
 const closeSettingsBtn = document.getElementById("closeSettingsBtn");
@@ -21065,8 +21066,59 @@ function isExternalProjectFileDrag(dataTransfer) {
   return types.includes("Files") || Boolean(dataTransfer?.files?.length);
 }
 
-function setProjectDropOverlayVisible(visible) {
+function getProjectDropEntry(item) {
+  try {
+    return typeof item?.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function getProjectDropItemNames(dataTransfer) {
+  const items = Array.from(dataTransfer?.items || []);
+  const entries = items.map(getProjectDropEntry).filter(Boolean);
+  const directoryNames = entries
+    .filter((entry) => entry.isDirectory)
+    .map((entry) => {
+      const name = String(entry.name || "project").trim() || "project";
+      return /\.zip$/i.test(name) ? name : `${name}.zip`;
+    });
+  if (directoryNames.length) return [...new Set(directoryNames)];
+
+  const transferredFiles = Array.from(dataTransfer?.files || []);
+  const itemFiles = items
+    .map((item) => {
+      try {
+        return typeof item?.getAsFile === "function" ? item.getAsFile() : null;
+      } catch (_error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  const names = (transferredFiles.length ? transferredFiles : itemFiles)
+    .map((file) => String(file?.name || "").trim())
+    .filter(Boolean);
+  return [...new Set(names)];
+}
+
+function buildProjectDropMessage(dataTransfer) {
+  const names = getProjectDropItemNames(dataTransfer);
+  if (!names.length) return "Dropping files or a folder";
+  if (names.length === 1) return `Dropping ${names[0]}`;
+
+  const visibleNames = names.slice(0, 3);
+  const message = `Dropping "${visibleNames.join(", ")}"`;
+  const remainingCount = names.length - visibleNames.length;
+  return remainingCount > 0
+    ? `${message} and ${remainingCount} more file${remainingCount === 1 ? "" : "s"}`
+    : message;
+}
+
+function setProjectDropOverlayVisible(visible, dataTransfer = null) {
   if (!projectDropOverlay) return;
+  if (visible && projectDropMessage) {
+    projectDropMessage.textContent = buildProjectDropMessage(dataTransfer);
+  }
   projectDropOverlay.hidden = !visible;
   editorContainer?.classList.toggle("project-drop-active", Boolean(visible));
 }
@@ -21352,14 +21404,14 @@ document.addEventListener("dragenter", (event) => {
   if (!isExternalProjectFileDrag(event.dataTransfer)) return;
   event.preventDefault();
   externalProjectDragDepth += 1;
-  setProjectDropOverlayVisible(true);
+  setProjectDropOverlayVisible(true, event.dataTransfer);
 });
 
 document.addEventListener("dragover", (event) => {
   if (!isExternalProjectFileDrag(event.dataTransfer)) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-  setProjectDropOverlayVisible(true);
+  setProjectDropOverlayVisible(true, event.dataTransfer);
 });
 
 document.addEventListener("dragleave", (event) => {
