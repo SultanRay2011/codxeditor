@@ -29,6 +29,7 @@ const adminActivity = [];
 const adminSessions = new Map();
 const sessionRecoveryEmitTimers = new Map();
 const publishedProjects = new Map();
+const syncBlobs = new Map();
 // Path segment for published project links. Kept short for shareable URLs;
 // the older "/published/" path is still served for links already in the wild.
 const PUBLISH_PATH = "p";
@@ -47,11 +48,14 @@ if (configuredDataDir) {
   }
 }
 const PUBLISHED_PROJECTS_FILE = path.join(DATA_DIR, "published-projects.json");
+const SYNC_BLOBS_FILE = path.join(DATA_DIR, ".codx-sync-blobs.json");
 // A copy that may ship with the deploy; used once to seed the persistent store.
 const BUNDLED_PUBLISHED_PROJECTS_FILE = path.join(__dirname, "published-projects.json");
 const PUBLISHED_PROJECTS_TABLE = "codx_published_projects";
+const SYNC_BLOBS_TABLE = "codx_sync_blobs";
 let publishedProjectsPool = null;
 let publishedProjectsStorage = "file";
+let syncBlobsStorage = "file";
 // No hardcoded credentials: the password must come from the environment
 // (.env locally, or the host's environment variables in production).
 // When it is missing, admin sign-in is disabled rather than falling back.
@@ -85,6 +89,10 @@ const DEVICE_TRANSFER_QR_OPTIONS = {
   width: 320,
   color: { dark: "#073b1d", light: "#ffffff" },
 };
+const SYNC_BLOB_MAX_BYTES = 1024 * 1024;
+const SYNC_BLOB_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+const SYNC_HASH_PATTERN = /^[a-f0-9]{64}$/;
+const syncApiAttempts = new Map();
 loadGitHubSessions();
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
@@ -571,6 +579,7 @@ const PRIVATE_STATIC_PATHS = new Set([
   "/package.json",
   "/package-lock.json",
   "/published-projects.json",
+  "/.codx-sync-blobs.json",
   "/README.md",
   "/server.js",
 ]);
@@ -606,6 +615,104 @@ app.get("/404-for-preview.html", (_req, res) => {
 });
 app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 loadPublishedProjects();
+loadSyncBlobs();
+
+function getSyncRequestIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown")
+    .split(",")[0]
+    .trim();
+}
+
+function canAttemptSyncApi(req) {
+  const now = Date.now();
+  const windowStart = now - 60 * 1000;
+  const ip = getSyncRequestIp(req);
+  const attempts = (syncApiAttempts.get(ip) || []).filter((timestamp) => timestamp > windowStart);
+  const limit = req.method === "GET" || req.method === "HEAD" ? 120 : 30;
+  if (attempts.length >= limit) {
+    syncApiAttempts.set(ip, attempts);
+    return false;
+  }
+  attempts.push(now);
+  syncApiAttempts.set(ip, attempts);
+  return true;
+}
+
+function getSyncHash(req) {
+  const hash = String(req.params?.hash || "").trim().toLowerCase();
+  return SYNC_HASH_PATTERN.test(hash) ? hash : "";
+}
+
+function sendSyncNotFound(res) {
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(404).json({ ok: false, error: "Sync data not found." });
+}
+
+app.use("/api/sync/:hash", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!canAttemptSyncApi(req)) {
+    res.setHeader("Retry-After", "60");
+    return res.status(429).json({ ok: false, error: "Too many sync requests. Try again shortly." });
+  }
+  if (!getSyncHash(req)) return sendSyncNotFound(res);
+  next();
+});
+
+app.put("/api/sync/:hash", async (req, res) => {
+  const hash = getSyncHash(req);
+  const blob = typeof req.body?.blob === "string" ? req.body.blob : "";
+  if (!blob) return res.status(400).json({ ok: false, error: "Encrypted sync data is required." });
+  if (Buffer.byteLength(blob, "utf8") > SYNC_BLOB_MAX_BYTES) {
+    return res.status(413).json({ ok: false, error: "Encrypted sync data exceeds the 1 MB limit." });
+  }
+  const savedAt = Number(req.body?.savedAt);
+  const fileCount = Number(req.body?.fileCount);
+  const deviceName = String(req.body?.deviceName || "Unknown device")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, 80) || "Unknown device";
+  if (!Number.isFinite(savedAt) || savedAt <= 0 || !Number.isInteger(fileCount) || fileCount < 0 || fileCount > 10000) {
+    return res.status(400).json({ ok: false, error: "Invalid sync metadata." });
+  }
+  const record = { hash, blob, savedAt: Math.floor(savedAt), deviceName, fileCount, touchedAt: Date.now() };
+  try {
+    await persistSyncBlob(record);
+    syncBlobs.set(hash, record);
+    return res.json({ ok: true, savedAt: record.savedAt });
+  } catch (error) {
+    console.error("Failed to store encrypted sync data:", error);
+    return res.status(503).json({ ok: false, error: "Sync storage is temporarily unavailable." });
+  }
+});
+
+app.head("/api/sync/:hash", (req, res) => {
+  const record = syncBlobs.get(getSyncHash(req));
+  if (!record) return res.status(404).end();
+  res.setHeader("Saved-At", String(record.savedAt));
+  res.setHeader("X-Codx-Saved-At", String(record.savedAt));
+  res.setHeader("X-Codx-Device", encodeURIComponent(record.deviceName));
+  res.setHeader("X-Codx-File-Count", String(record.fileCount));
+  return res.status(200).end();
+});
+
+app.get("/api/sync/:hash", (req, res) => {
+  const record = syncBlobs.get(getSyncHash(req));
+  if (!record) return sendSyncNotFound(res);
+  return res.json({ ok: true, blob: record.blob, savedAt: record.savedAt, deviceName: record.deviceName, fileCount: record.fileCount });
+});
+
+app.delete("/api/sync/:hash", async (req, res) => {
+  const hash = getSyncHash(req);
+  if (!syncBlobs.has(hash)) return sendSyncNotFound(res);
+  try {
+    await deletePersistedSyncBlob(hash);
+    syncBlobs.delete(hash);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to delete encrypted sync data:", error);
+    return res.status(503).json({ ok: false, error: "Sync storage is temporarily unavailable." });
+  }
+});
 
 app.post("/api/device-transfer/create", async (req, res) => {
   try {
@@ -1659,6 +1766,105 @@ function loadPublishedProjects() {
   }
 }
 
+function normalizeStoredSyncBlob(candidate) {
+  if (!candidate || !SYNC_HASH_PATTERN.test(String(candidate.hash || ""))) return null;
+  const blob = typeof candidate.blob === "string" ? candidate.blob : "";
+  if (!blob || Buffer.byteLength(blob, "utf8") > SYNC_BLOB_MAX_BYTES) return null;
+  const savedAt = Number(candidate.savedAt);
+  const touchedAt = Number(candidate.touchedAt || candidate.updatedAt || savedAt);
+  const fileCount = Number(candidate.fileCount);
+  if (!Number.isFinite(savedAt) || !Number.isFinite(touchedAt) || !Number.isInteger(fileCount) || fileCount < 0) return null;
+  return {
+    hash: String(candidate.hash),
+    blob,
+    savedAt: Math.floor(savedAt),
+    deviceName: String(candidate.deviceName || "Unknown device").slice(0, 80),
+    fileCount,
+    touchedAt: Math.floor(touchedAt),
+  };
+}
+
+function loadSyncBlobs() {
+  try {
+    if (!fs.existsSync(SYNC_BLOBS_FILE)) return;
+    const parsed = JSON.parse(fs.readFileSync(SYNC_BLOBS_FILE, "utf8"));
+    if (!Array.isArray(parsed)) return;
+    const expiry = Date.now() - SYNC_BLOB_MAX_AGE_MS;
+    let discardedRecords = false;
+    parsed.forEach((entry) => {
+      const record = normalizeStoredSyncBlob(entry);
+      if (record && record.touchedAt > expiry) syncBlobs.set(record.hash, record);
+      else discardedRecords = true;
+    });
+    if (discardedRecords) persistSyncBlobsFile();
+  } catch (error) {
+    console.error("Failed to load encrypted sync data:", error);
+  }
+}
+
+function persistSyncBlobsFile() {
+  const serialized = JSON.stringify(Array.from(syncBlobs.values()), null, 2);
+  const tempFile = `${SYNC_BLOBS_FILE}.tmp`;
+  fs.writeFileSync(tempFile, serialized, "utf8");
+  fs.renameSync(tempFile, SYNC_BLOBS_FILE);
+}
+
+async function persistSyncBlob(record) {
+  if (syncBlobsStorage === "postgres") {
+    if (!publishedProjectsPool) throw new Error("Sync database is unavailable.");
+    await publishedProjectsPool.query(
+      `INSERT INTO ${SYNC_BLOBS_TABLE} (id_hash, blob, saved_at, device_name, file_count, touched_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id_hash) DO UPDATE SET
+         blob = EXCLUDED.blob,
+         saved_at = EXCLUDED.saved_at,
+         device_name = EXCLUDED.device_name,
+         file_count = EXCLUDED.file_count,
+         touched_at = EXCLUDED.touched_at`,
+      [record.hash, record.blob, record.savedAt, record.deviceName, record.fileCount, record.touchedAt],
+    );
+    return;
+  }
+  const previous = syncBlobs.get(record.hash);
+  syncBlobs.set(record.hash, record);
+  try {
+    persistSyncBlobsFile();
+  } catch (error) {
+    if (previous) syncBlobs.set(record.hash, previous);
+    else syncBlobs.delete(record.hash);
+    throw error;
+  }
+}
+
+async function deletePersistedSyncBlob(hash) {
+  if (syncBlobsStorage === "postgres") {
+    if (!publishedProjectsPool) throw new Error("Sync database is unavailable.");
+    await publishedProjectsPool.query(`DELETE FROM ${SYNC_BLOBS_TABLE} WHERE id_hash = $1`, [hash]);
+    return;
+  }
+  const previous = syncBlobs.get(hash);
+  syncBlobs.delete(hash);
+  try {
+    persistSyncBlobsFile();
+  } catch (error) {
+    if (previous) syncBlobs.set(hash, previous);
+    throw error;
+  }
+}
+
+async function pruneExpiredSyncBlobs() {
+  const expiry = Date.now() - SYNC_BLOB_MAX_AGE_MS;
+  const expiredHashes = [...syncBlobs.values()]
+    .filter((record) => Number(record.touchedAt || 0) <= expiry)
+    .map((record) => record.hash);
+  if (syncBlobsStorage === "postgres" && publishedProjectsPool) {
+    await publishedProjectsPool.query(`DELETE FROM ${SYNC_BLOBS_TABLE} WHERE touched_at <= $1`, [expiry]);
+  }
+  if (!expiredHashes.length) return;
+  expiredHashes.forEach((hash) => syncBlobs.delete(hash));
+  if (syncBlobsStorage === "file") persistSyncBlobsFile();
+}
+
 async function initializePublishedProjectStorage() {
   if (!DATABASE_URL) {
     if (process.env.RENDER) {
@@ -1667,6 +1873,7 @@ async function initializePublishedProjectStorage() {
       );
     }
     console.log(`Published projects storage: file (${PUBLISHED_PROJECTS_FILE})`);
+    console.log(`Encrypted Sync Key storage: file (${SYNC_BLOBS_FILE})`);
     return;
   }
 
@@ -1691,6 +1898,16 @@ async function initializePublishedProjectStorage() {
         updated_at BIGINT NOT NULL
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${SYNC_BLOBS_TABLE} (
+        id_hash TEXT PRIMARY KEY,
+        blob TEXT NOT NULL,
+        saved_at BIGINT NOT NULL,
+        device_name TEXT NOT NULL,
+        file_count INTEGER NOT NULL,
+        touched_at BIGINT NOT NULL
+      )
+    `);
 
     const databaseResult = await client.query(
       `SELECT project FROM ${PUBLISHED_PROJECTS_TABLE} ORDER BY updated_at ASC`,
@@ -1713,12 +1930,47 @@ async function initializePublishedProjectStorage() {
       mergedProjects.set(storageKey, project);
     }
 
+    const syncResult = await client.query(
+      `SELECT id_hash, blob, saved_at, device_name, file_count, touched_at
+       FROM ${SYNC_BLOBS_TABLE}
+       WHERE touched_at > $1
+       ORDER BY touched_at ASC`,
+      [Date.now() - SYNC_BLOB_MAX_AGE_MS],
+    );
+    const mergedSyncBlobs = new Map();
+    syncResult.rows.forEach((row) => {
+      const record = normalizeStoredSyncBlob({
+        hash: row.id_hash,
+        blob: row.blob,
+        savedAt: row.saved_at,
+        deviceName: row.device_name,
+        fileCount: row.file_count,
+        touchedAt: row.touched_at,
+      });
+      if (record) mergedSyncBlobs.set(record.hash, record);
+    });
+    for (const record of syncBlobs.values()) {
+      if (mergedSyncBlobs.has(record.hash)) continue;
+      await client.query(
+        `INSERT INTO ${SYNC_BLOBS_TABLE} (id_hash, blob, saved_at, device_name, file_count, touched_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id_hash) DO NOTHING`,
+        [record.hash, record.blob, record.savedAt, record.deviceName, record.fileCount, record.touchedAt],
+      );
+      mergedSyncBlobs.set(record.hash, record);
+    }
+    await client.query(`DELETE FROM ${SYNC_BLOBS_TABLE} WHERE touched_at <= $1`, [Date.now() - SYNC_BLOB_MAX_AGE_MS]);
+
     await client.query("COMMIT");
     publishedProjects.clear();
     mergedProjects.forEach((project) => publishedProjects.set(project.id, project));
     publishedProjectsPool = pool;
     publishedProjectsStorage = "postgres";
+    syncBlobs.clear();
+    mergedSyncBlobs.forEach((record) => syncBlobs.set(record.hash, record));
+    syncBlobsStorage = "postgres";
     console.log(`Published projects storage: PostgreSQL (${publishedProjects.size} links loaded)`);
+    console.log(`Encrypted Sync Key storage: PostgreSQL (${syncBlobs.size} projects loaded)`);
   } catch (error) {
     try {
       await client.query("ROLLBACK");
@@ -5170,7 +5422,10 @@ server.on("error", (err) => {
 });
 
 initializePublishedProjectStorage()
-  .then(() => startServer(PORT))
+  .then(async () => {
+    await pruneExpiredSyncBlobs();
+    startServer(PORT);
+  })
   .catch((error) => {
     console.error("CodX Editor could not initialize published project storage:", error);
     process.exit(1);
@@ -5223,6 +5478,11 @@ setInterval(() => {
     if (recent.length) deviceTransferAttempts.set(clientIp, recent);
     else deviceTransferAttempts.delete(clientIp);
   });
+  syncApiAttempts.forEach((timestamps, clientIp) => {
+    const recent = (Array.isArray(timestamps) ? timestamps : []).filter((timestamp) => now - timestamp < 60 * 1000);
+    if (recent.length) syncApiAttempts.set(clientIp, recent);
+    else syncApiAttempts.delete(clientIp);
+  });
   endedSessions.forEach((expiresAt, sessionId) => {
     if (Number(expiresAt || 0) <= now) endedSessions.delete(sessionId);
   });
@@ -5252,3 +5512,10 @@ setInterval(() => {
     }
   });
 }, 1000);
+
+const syncPruneTimer = setInterval(() => {
+  pruneExpiredSyncBlobs().catch((error) => {
+    console.error("Failed to prune expired encrypted sync data:", error);
+  });
+}, 6 * 60 * 60 * 1000);
+syncPruneTimer.unref?.();

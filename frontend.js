@@ -144,6 +144,9 @@ const projectStatusSaveBtn = document.getElementById("projectStatusSaveBtn");
 const newProjectBtn = document.getElementById("newProjectBtn");
 const openSavedProjectsBtn = document.getElementById("openSavedProjectsBtn");
 const deviceTransferBtn = document.getElementById("deviceTransferBtn");
+const syncKeyBtn = document.getElementById("syncKeyBtn");
+const projectSyncStatus = document.getElementById("projectSyncStatus");
+const syncConflictBar = document.getElementById("syncConflictBar");
 const templatesBtn = document.getElementById("templatesBtn");
 const publishProjectBtn = document.getElementById("publishProjectBtn");
 const connectGitHubBtn = document.getElementById("connectGitHubBtn");
@@ -3649,6 +3652,14 @@ let activeDialogResolver = null;
 let deviceTransferScannerStream = null;
 let deviceTransferScannerFrame = 0;
 let deviceTransferCountdownTimer = null;
+let syncKeyScannerStream = null;
+let syncKeyScannerFrame = 0;
+let syncQueueFlushPromise = null;
+let lastSyncEditorInputAt = 0;
+let lastSyncFocusCheckAt = 0;
+let lastSyncTabBlurAt = Date.now();
+let activeSyncConflict = null;
+const syncProjectStatuses = new Map();
 let developerChordArmed = false;
 let developerChordTimer = null;
 let editorPresenceSocket = null;
@@ -3677,6 +3688,11 @@ const LARGE_PROJECT_DIAGNOSTIC_LIMIT = 32;
 const MAX_SAVED_PROJECTS = 24;
 const PROJECT_LIBRARY_ARCHIVE_FORMAT = "codx-project-library";
 const SAVED_PROJECTS_KEY = "codxSavedProjects";
+const SYNC_KEYS_STORAGE_KEY = "codxSyncKeysV1";
+const SYNC_QUEUE_STORAGE_KEY = "codxSyncUploadQueueV1";
+const SYNC_BLOB_MAX_BYTES = 1024 * 1024;
+const SYNC_FOCUS_CHECK_INTERVAL_MS = 60 * 1000;
+const SYNC_EDITOR_IDLE_MS = 1500;
 const AUTOSAVE_PROJECT_KEY = "codxAutosaveProject";
 const AUTOSAVE_META_KEY = "codxAutosaveMeta";
 const WORKSPACE_SETTINGS_KEY = "codxWorkspaceSettings";
@@ -5132,6 +5148,7 @@ function syncAppDialogCloseButton() {
 
 function closeAppDialog(result = null) {
   stopDeviceTransferScanner();
+  stopSyncKeyScanner();
   stopDeviceTransferCountdown();
   resetAppDialogScroll();
   if (appDialog) appDialog.style.display = "none";
@@ -7973,6 +7990,7 @@ function formatProjectStatusTime(timestamp) {
 }
 
 function updateProjectStatusUI() {
+  updateSyncStatusUI();
   if (!projectStatusBadge || !projectStatusMeta) return;
   const statusSignature = [
     hasUnsavedChanges ? "unsaved" : "saved",
@@ -9267,6 +9285,923 @@ function maybeOpenDeviceTransferFromUrl() {
   setTimeout(() => receiveDeviceTransfer(code), 250);
 }
 
+// PART 14.5 - PER-PROJECT SYNC KEYS
+function getSyncKeyRecords() {
+  try {
+    const records = JSON.parse(safeLocalStorage("get", SYNC_KEYS_STORAGE_KEY) || "[]");
+    return Array.isArray(records)
+      ? records.filter((record) => record?.projectId && window.CodxSync?.isValidKey(record.key))
+      : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function setSyncKeyRecords(records) {
+  return safeLocalStorage("set", SYNC_KEYS_STORAGE_KEY, JSON.stringify(records)) === true;
+}
+
+function getSyncKeyRecord(projectId) {
+  return getSyncKeyRecords().find((record) => String(record.projectId) === String(projectId)) || null;
+}
+
+function saveSyncKeyRecord(nextRecord) {
+  const records = getSyncKeyRecords();
+  const index = records.findIndex((record) => String(record.projectId) === String(nextRecord.projectId));
+  if (index >= 0) records[index] = { ...records[index], ...nextRecord };
+  else records.unshift(nextRecord);
+  setSyncKeyRecords(records);
+  updateSyncStatusUI();
+  const savedRecord = index >= 0 ? records[index] : records[0];
+  refreshVisibleSyncKeyRow(savedRecord);
+  return savedRecord;
+}
+
+function removeSyncKeyRecord(projectId) {
+  setSyncKeyRecords(getSyncKeyRecords().filter((record) => String(record.projectId) !== String(projectId)));
+  setSyncUploadQueue(getSyncUploadQueue().filter((entry) => String(entry.projectId) !== String(projectId)));
+  syncProjectStatuses.delete(String(projectId));
+  updateSyncStatusUI();
+}
+
+function getSyncUploadQueue() {
+  try {
+    const queue = JSON.parse(safeLocalStorage("get", SYNC_QUEUE_STORAGE_KEY) || "[]");
+    return Array.isArray(queue) ? queue.filter((entry) => entry?.projectId) : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function setSyncUploadQueue(queue) {
+  return safeLocalStorage("set", SYNC_QUEUE_STORAGE_KEY, JSON.stringify(queue)) === true;
+}
+
+function getSavedProjectById(projectId) {
+  return getSavedProjects().find((project) => String(project.id) === String(projectId)) || null;
+}
+
+function getActiveSavedProject() {
+  if (!activeSavedProjectName) return null;
+  const normalizedName = String(activeSavedProjectName).trim().toLowerCase();
+  return getSavedProjects().find(
+    (project) => String(project.name || "").trim().toLowerCase() === normalizedName,
+  ) || null;
+}
+
+function parseSyncDeviceName(userAgent = navigator.userAgent) {
+  const agent = String(userAgent || "");
+  let platform = "Device";
+  if (/Windows/i.test(agent)) platform = "Windows";
+  else if (/iPhone/i.test(agent)) platform = "iPhone";
+  else if (/iPad/i.test(agent)) platform = "iPad";
+  else if (/Android/i.test(agent)) platform = "Android";
+  else if (/Macintosh|Mac OS X/i.test(agent)) platform = "Mac";
+  else if (/Linux/i.test(agent)) platform = "Linux";
+
+  let browser = "Browser";
+  if (/Edg\//i.test(agent)) browser = "Edge";
+  else if (/OPR\//i.test(agent)) browser = "Opera";
+  else if (/Firefox\//i.test(agent)) browser = "Firefox";
+  else if (/Chrome\//i.test(agent) || /CriOS\//i.test(agent)) browser = "Chrome";
+  else if (/Safari\//i.test(agent)) browser = "Safari";
+  return `${platform} - ${browser}`;
+}
+
+function formatSyncRelativeTime(timestamp) {
+  const elapsed = Math.max(0, Date.now() - Number(timestamp || 0));
+  if (!timestamp) return "never";
+  if (elapsed < 60000) return "just now";
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(Number(timestamp)).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatSyncExactTime(timestamp) {
+  const date = new Date(Number(timestamp || 0));
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return isToday
+    ? `Today, ${time}`
+    : date.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function maskSyncKey(key) {
+  const normalized = window.CodxSync?.normalizeKey(key) || "";
+  return normalized ? `codx-••••-••••-${normalized.slice(-4)}` : "codx-••••-••••-••••";
+}
+
+function updateSyncStatusUI() {
+  if (!projectSyncStatus) return;
+  const project = getActiveSavedProject();
+  const syncRecord = project ? getSyncKeyRecord(project.id) : null;
+  if (!project || !syncRecord) {
+    projectSyncStatus.hidden = true;
+    projectSyncStatus.removeAttribute("data-state");
+    return;
+  }
+  const label = projectSyncStatus.querySelector("span");
+  const status = syncProjectStatuses.get(String(project.id));
+  projectSyncStatus.hidden = false;
+  projectSyncStatus.dataset.state = status?.state || "synced";
+  if (!label) return;
+  if (status?.state === "syncing") label.textContent = `${project.name} · syncing…`;
+  else if (status?.state === "offline") label.textContent = `${project.name} · offline — will sync later`;
+  else if (status?.state === "error") label.textContent = `${project.name} · ${status.message || "sync needs attention"}`;
+  else label.textContent = `${project.name} · synced ${formatSyncRelativeTime(syncRecord.lastSyncedAt)}`;
+}
+
+async function cloneSnapshotForSync(snapshot, runtimeFiles = []) {
+  const files = [];
+  for (const sourceFile of Array.isArray(snapshot?.files) ? snapshot.files : []) {
+    const file = {
+      name: String(sourceFile?.name || "file.txt"),
+      type: String(sourceFile?.type || "txt"),
+      mediaType: String(sourceFile?.mediaType || getProjectMediaKind(sourceFile) || ""),
+      mediaSize: Number(sourceFile?.mediaSize || 0),
+      mediaMimeType: String(sourceFile?.mediaMimeType || ""),
+      content: String(sourceFile?.content || ""),
+      active: Boolean(sourceFile?.active),
+    };
+    if (file.mediaType) {
+      const runtimeFile = runtimeFiles.find((candidate) => String(candidate?.name || "") === file.name);
+      const storageId = String(sourceFile?.mediaStorageId || runtimeFile?.mediaStorageId || "");
+      if (!file.content.startsWith("data:")) {
+        let blob = runtimeFile?.mediaBlob instanceof Blob ? runtimeFile.mediaBlob : null;
+        if (!blob && storageId) blob = await readPersistedMediaBlob(storageId).catch(() => null);
+        if (blob instanceof Blob) file.content = await readMediaBlobAsDataUrl(blob);
+      }
+      if (!file.content || file.content.startsWith("blob:")) {
+        throw new Error(`Unable to read media file "${file.name}" for encrypted sync.`);
+      }
+    }
+    files.push(file);
+  }
+  return {
+    version: 1,
+    files,
+    activeFileName: String(snapshot?.activeFileName || ""),
+    previewTarget: snapshot?.previewTarget || null,
+    savedAt: Number(snapshot?.savedAt || Date.now()),
+  };
+}
+
+async function buildEncryptedSyncPayload(project, syncRecord) {
+  const activeProject = getActiveSavedProject();
+  const runtimeFiles = activeProject?.id === project.id ? projectFiles : [];
+  const snapshot = await cloneSnapshotForSync(project.snapshot, runtimeFiles);
+  const savedAt = Number(project.updatedAt || snapshot.savedAt || Date.now());
+  const payload = {
+    version: 1,
+    projectId: String(project.id),
+    projectName: String(project.name || "Untitled project"),
+    savedAt,
+    deviceName: String(syncRecord.deviceName || parseSyncDeviceName()),
+    fileCount: snapshot.files.length,
+    snapshot,
+  };
+  const encrypted = await window.CodxSync.encryptProject(syncRecord.key, payload);
+  if (new TextEncoder().encode(encrypted.blob).byteLength > SYNC_BLOB_MAX_BYTES) {
+    const error = new Error("project is over the 1 MB sync limit");
+    error.permanent = true;
+    throw error;
+  }
+  return { ...encrypted, payload };
+}
+
+function queueProjectSync(projectOrId) {
+  const project = typeof projectOrId === "object" ? projectOrId : getSavedProjectById(projectOrId);
+  if (!project || !getSyncKeyRecord(project.id)) return;
+  const queue = getSyncUploadQueue();
+  const entry = { projectId: String(project.id), savedAt: Number(project.updatedAt || Date.now()) };
+  const index = queue.findIndex((item) => String(item.projectId) === entry.projectId);
+  if (index >= 0) queue[index] = entry;
+  else queue.push(entry);
+  setSyncUploadQueue(queue);
+  syncProjectStatuses.set(entry.projectId, {
+    state: navigator.onLine ? "syncing" : "offline",
+  });
+  updateSyncStatusUI();
+  if (navigator.onLine) void flushSyncUploadQueue();
+}
+
+async function uploadQueuedSyncProject(queueEntry) {
+  const projectId = String(queueEntry.projectId);
+  const project = getSavedProjectById(projectId);
+  const syncRecord = getSyncKeyRecord(projectId);
+  if (!project || !syncRecord) {
+    setSyncUploadQueue(getSyncUploadQueue().filter((entry) => String(entry.projectId) !== projectId));
+    return;
+  }
+  syncProjectStatuses.set(projectId, { state: "syncing" });
+  updateSyncStatusUI();
+  try {
+    try {
+      const remoteHead = await window.CodxSync.head(syncRecord.key);
+      if (Number(remoteHead.savedAt || 0) > Number(syncRecord.lastRemoteSavedAt || 0)) {
+        syncProjectStatuses.set(projectId, { state: "error", message: "newer version waiting" });
+        if (getActiveSavedProject()?.id === project.id) checkSyncProjectFreshness(project.id);
+        updateSyncStatusUI();
+        return;
+      }
+    } catch (headError) {
+      if (headError?.status !== 404) throw headError;
+    }
+    const encrypted = await buildEncryptedSyncPayload(project, syncRecord);
+    await window.CodxSync.upload(syncRecord.key, encrypted.blob, {
+      savedAt: encrypted.payload.savedAt,
+      deviceName: encrypted.payload.deviceName,
+      fileCount: encrypted.payload.fileCount,
+    });
+    saveSyncKeyRecord({
+      ...syncRecord,
+      projectName: project.name,
+      lastSyncedAt: encrypted.payload.savedAt,
+      lastRemoteSavedAt: encrypted.payload.savedAt,
+      lastSyncedDeviceName: encrypted.payload.deviceName,
+    });
+    const latestProject = getSavedProjectById(projectId);
+    if (!latestProject || Number(latestProject.updatedAt || 0) <= encrypted.payload.savedAt) {
+      setSyncUploadQueue(getSyncUploadQueue().filter((entry) => String(entry.projectId) !== projectId));
+    }
+    syncProjectStatuses.set(projectId, { state: "synced" });
+  } catch (error) {
+    const permanent = Boolean(error?.permanent || error?.status === 413);
+    if (permanent) {
+      setSyncUploadQueue(getSyncUploadQueue().filter((entry) => String(entry.projectId) !== projectId));
+      syncProjectStatuses.set(projectId, { state: "error", message: error.message });
+    } else {
+      syncProjectStatuses.set(projectId, {
+        state: navigator.onLine ? "error" : "offline",
+        message: navigator.onLine ? "will retry sync" : "",
+      });
+    }
+  }
+  updateSyncStatusUI();
+}
+
+function flushSyncUploadQueue() {
+  if (syncQueueFlushPromise || !navigator.onLine || !window.CodxSync) return syncQueueFlushPromise;
+  syncQueueFlushPromise = (async () => {
+    for (const entry of getSyncUploadQueue()) {
+      if (!navigator.onLine) break;
+      await uploadQueuedSyncProject(entry);
+    }
+  })().finally(() => {
+    syncQueueFlushPromise = null;
+    updateSyncStatusUI();
+  });
+  return syncQueueFlushPromise;
+}
+
+function stopSyncKeyScanner() {
+  if (syncKeyScannerFrame) cancelAnimationFrame(syncKeyScannerFrame);
+  syncKeyScannerFrame = 0;
+  if (syncKeyScannerStream) {
+    syncKeyScannerStream.getTracks().forEach((track) => track.stop());
+    syncKeyScannerStream = null;
+  }
+}
+
+function prepareSyncKeyDialog(kind, title, messageHtml, actionsHtml) {
+  stopSyncKeyScanner();
+  activeDialogResolver = activeDialogResolver || (() => {});
+  if (appDialog) {
+    appDialog.dataset.dialogKind = kind;
+    appDialog.style.display = "flex";
+  }
+  if (appDialogTitle) appDialogTitle.textContent = title;
+  if (appDialogMessage) appDialogMessage.innerHTML = messageHtml;
+  if (appDialogInput) {
+    appDialogInput.style.display = "none";
+    appDialogInput.disabled = false;
+    appDialogInput.value = "";
+    appDialogInput.oninput = null;
+    appDialogInput.onkeydown = null;
+  }
+  if (appDialogActions) appDialogActions.innerHTML = actionsHtml;
+  resetAppDialogScroll();
+  syncAppDialogCloseButton();
+}
+
+function getSyncKeysListHtml() {
+  const projectsById = new Map(getSavedProjects().map((project) => [String(project.id), project]));
+  const records = getSyncKeyRecords().filter((record) => projectsById.has(String(record.projectId)));
+  return `
+    <section class="sync-key-list" aria-labelledby="mySyncKeysTitle">
+      <div class="sync-key-section-title">
+        <i class="fa-solid fa-cloud" aria-hidden="true"></i>
+        <strong id="mySyncKeysTitle">MY SYNC KEYS</strong>
+      </div>
+      ${records.length ? records.map((record) => {
+        const project = projectsById.get(String(record.projectId));
+        return `
+          <article class="sync-key-row" data-sync-project-id="${escapeHtmlAttributeValue(String(record.projectId))}">
+            <div class="sync-key-row-main">
+              <strong>${escapeHtml(project?.name || record.projectName || "Saved project")}</strong>
+              <button class="sync-key-mask" type="button" data-sync-action="reveal" aria-label="Reveal Sync Key" aria-pressed="false" data-key-visible="false">
+                <span>${escapeHtml(maskSyncKey(record.key))}</span>
+                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+              </button>
+              <small>${escapeHtml(record.lastSyncedDeviceName || record.deviceName || "Not synced yet")} · ${escapeHtml(formatSyncRelativeTime(record.lastSyncedAt))}</small>
+            </div>
+            <div class="sync-key-row-actions">
+              <button type="button" class="run-button" data-sync-action="copy"><i class="fa-solid fa-copy"></i><strong>COPY</strong></button>
+              <button type="button" class="run-button" data-sync-action="show"><i class="fa-solid fa-qrcode"></i><strong>SHOW QR</strong></button>
+            </div>
+          </article>`;
+      }).join("") : '<p class="sync-key-empty">No Sync Keys are saved on this device yet.</p>'}
+    </section>`;
+}
+
+function refreshVisibleSyncKeyRow(record) {
+  if (!record || !appDialogMessage) return;
+  const row = [...appDialogMessage.querySelectorAll(".sync-key-row")].find(
+    (candidate) => String(candidate.dataset.syncProjectId) === String(record.projectId),
+  );
+  const meta = row?.querySelector(".sync-key-row-main small");
+  if (meta) {
+    meta.textContent = `${record.lastSyncedDeviceName || record.deviceName || "Not synced yet"} · ${formatSyncRelativeTime(record.lastSyncedAt)}`;
+  }
+}
+
+async function copySyncKey(key) {
+  try {
+    await navigator.clipboard.writeText(key);
+    showNotification("Sync Key copied.", "success");
+  } catch (_error) {
+    const helper = document.createElement("textarea");
+    helper.value = key;
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    document.execCommand("copy");
+    helper.remove();
+    showNotification("Sync Key copied.", "success");
+  }
+}
+
+function bindSyncKeyListActions() {
+  appDialogMessage?.querySelectorAll(".sync-key-row").forEach((row) => {
+    const record = getSyncKeyRecord(row.dataset.syncProjectId);
+    if (!record) return;
+    row.querySelector('[data-sync-action="reveal"]')?.addEventListener("click", (event) => {
+      const button = event.currentTarget;
+      const visible = button.dataset.keyVisible !== "true";
+      button.dataset.keyVisible = visible ? "true" : "false";
+      button.setAttribute("aria-pressed", visible ? "true" : "false");
+      button.querySelector("span").textContent = visible ? record.key : maskSyncKey(record.key);
+      button.querySelector("i").className = `fa-solid ${visible ? "fa-eye-slash" : "fa-eye"}`;
+    });
+    row.querySelector('[data-sync-action="copy"]')?.addEventListener("click", () => copySyncKey(record.key));
+    row.querySelector('[data-sync-action="show"]')?.addEventListener("click", () => showSyncKeyStateB(record));
+  });
+}
+
+function downloadSyncKeyText(projectName, key) {
+  const safeName = getSafeArchiveFolderName(projectName, "codx-project");
+  const blob = new Blob([
+    `CodX Editor Sync Key\n\nProject: ${projectName}\nKey: ${key}\n\nKeep this file private. Anyone with this key can open the project.\n`,
+  ], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${safeName}-sync-key.txt`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+async function renderSyncKeyQr(canvas, key) {
+  if (!canvas || !window.CodxQRCode?.toCanvas) return;
+  try {
+    await window.CodxQRCode.toCanvas(canvas, key, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 220,
+      color: { dark: "#073b1d", light: "#ffffff" },
+    });
+  } catch (_error) {
+    canvas.replaceWith(Object.assign(document.createElement("p"), {
+      className: "sync-key-qr-error",
+      textContent: "QR preview is unavailable. Copy or download the key instead.",
+    }));
+  }
+}
+
+function showSyncKeyStateA(project) {
+  if (!project) return;
+  prepareSyncKeyDialog(
+    "sync-key-create",
+    `Sync "${project.name}"`,
+    `
+      <div class="sync-key-intro">
+        <span class="sync-key-hero-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+        <p>Create one private key for this project, or open a key from another device.</p>
+        <small>Your project is encrypted in this browser before it is uploaded.</small>
+      </div>
+      ${getSyncKeysListHtml()}`,
+    `
+      <button id="syncKeyExistingBtn" type="button" class="run-button sync-key-secondary"><i class="fa-solid fa-key"></i><strong>I ALREADY HAVE A KEY</strong></button>
+      <button id="syncKeyCreateBtn" type="button" class="run-button"><i class="fa-solid fa-plus"></i><strong>CREATE SYNC KEY</strong></button>`,
+  );
+  bindSyncKeyListActions();
+  document.getElementById("syncKeyExistingBtn")?.addEventListener("click", () => showSyncKeyEntry());
+  document.getElementById("syncKeyCreateBtn")?.addEventListener("click", () => {
+    if (!window.CodxSync) {
+      showNotification("Sync Key is unavailable in this browser.", "error");
+      return;
+    }
+    const key = window.CodxSync.generateKey();
+    const record = saveSyncKeyRecord({
+      projectId: String(project.id),
+      projectName: project.name,
+      key,
+      deviceName: parseSyncDeviceName(),
+      createdAt: Date.now(),
+      lastSyncedAt: 0,
+      lastRemoteSavedAt: 0,
+      lastSyncedDeviceName: "",
+    });
+    queueProjectSync(project);
+    showSyncKeyStateB(record);
+  });
+  setTimeout(() => document.getElementById("syncKeyCreateBtn")?.focus(), 0);
+}
+
+function showSyncKeyStateB(record) {
+  const project = getSavedProjectById(record?.projectId);
+  if (!record || !project) {
+    showNotification("That saved project is no longer on this device.", "error");
+    return;
+  }
+  prepareSyncKeyDialog(
+    "sync-key-details",
+    `Sync "${project.name}"`,
+    `
+      <div class="sync-key-details">
+        <label class="sync-key-label" for="syncKeyDisplay">YOUR SYNC KEY</label>
+        <input id="syncKeyDisplay" class="sync-key-display" value="${escapeHtmlAttributeValue(record.key)}" readonly spellcheck="false" aria-label="Sync Key">
+        <div class="sync-key-qr-frame"><canvas id="syncKeyQrCanvas" aria-label="QR code for this Sync Key"></canvas></div>
+        <label class="sync-key-device-field" for="syncKeyDeviceName">
+          <span>This device:</span>
+          <input id="syncKeyDeviceName" type="text" maxlength="80" value="${escapeHtmlAttributeValue(record.deviceName || parseSyncDeviceName())}">
+        </label>
+        <p class="sync-key-warning"><i class="fa-solid fa-triangle-exclamation"></i> Save this now. Lose it and this project is gone — there is no email to recover it.</p>
+        <button id="syncKeyTurnOffBtn" class="sync-key-turn-off" type="button">TURN OFF SYNC</button>
+      </div>
+      ${getSyncKeysListHtml()}`,
+    `
+      <button id="syncKeyCopyBtn" type="button" class="run-button sync-key-secondary"><i class="fa-solid fa-copy"></i><strong>COPY</strong></button>
+      <button id="syncKeyDownloadBtn" type="button" class="run-button sync-key-secondary"><i class="fa-solid fa-download"></i><strong>DOWNLOAD .TXT</strong></button>
+      <button id="syncKeyDoneBtn" type="button" class="run-button"><strong>DONE</strong></button>`,
+  );
+  bindSyncKeyListActions();
+  renderSyncKeyQr(document.getElementById("syncKeyQrCanvas"), record.key);
+  const display = document.getElementById("syncKeyDisplay");
+  display?.addEventListener("click", () => display.select());
+  document.getElementById("syncKeyCopyBtn")?.addEventListener("click", () => copySyncKey(record.key));
+  document.getElementById("syncKeyDownloadBtn")?.addEventListener("click", () => downloadSyncKeyText(project.name, record.key));
+  document.getElementById("syncKeyDoneBtn")?.addEventListener("click", () => closeAppDialog({ ok: true }));
+  const deviceInput = document.getElementById("syncKeyDeviceName");
+  const persistDeviceName = () => {
+    const deviceName = String(deviceInput?.value || "").trim() || parseSyncDeviceName();
+    if (deviceInput) deviceInput.value = deviceName;
+    saveSyncKeyRecord({ ...getSyncKeyRecord(project.id), deviceName });
+    queueProjectSync(project.id);
+  };
+  deviceInput?.addEventListener("change", persistDeviceName);
+  deviceInput?.addEventListener("blur", persistDeviceName);
+  document.getElementById("syncKeyTurnOffBtn")?.addEventListener("click", async () => {
+    const decision = await showAppConfirm(
+      "TURN OFF SYNC",
+      `Turn off Sync Key for "${project.name}" on this device? The encrypted server copy will remain until it expires.`,
+      "TURN OFF",
+      "CANCEL",
+      "background:#d32f2f;",
+    );
+    if (!decision?.ok) {
+      showSyncKeyStateB(record);
+      return;
+    }
+    removeSyncKeyRecord(project.id);
+    showNotification(`Sync turned off for "${project.name}".`, "success");
+  });
+  setTimeout(() => display?.focus(), 0);
+}
+
+function showSyncKeyEntry(entryValue = "") {
+  const cameraAvailable = Boolean(navigator.mediaDevices?.getUserMedia && window.jsQR);
+  prepareSyncKeyDialog(
+    "sync-key-entry",
+    "OPEN WITH A SYNC KEY",
+    `
+      <div class="sync-key-entry">
+        <label for="syncKeyEntryInput">Sync Key</label>
+        <input id="syncKeyEntryInput" type="text" value="${escapeHtmlAttributeValue(entryValue)}" placeholder="codx-xxxx-xxxx-xxxx" autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button id="syncKeyScanBtn" type="button" class="run-button sync-key-scan"><i class="fa-solid fa-camera"></i><strong>SCAN QR</strong></button>
+        <p id="syncKeyEntryStatus" class="sync-key-entry-status" aria-live="polite">${cameraAvailable ? "Type the key or scan its QR code." : "Camera scanning is unavailable here. Type the key instead."}</p>
+      </div>
+      ${getSyncKeysListHtml()}`,
+    `
+      <button id="syncKeyEntryCancelBtn" type="button" class="run-button sync-key-secondary"><strong>CANCEL</strong></button>
+      <button id="syncKeyEntryOpenBtn" type="button" class="run-button"><strong>FIND KEY</strong></button>`,
+  );
+  bindSyncKeyListActions();
+  const input = document.getElementById("syncKeyEntryInput");
+  const submit = () => resolveEnteredSyncKey(input?.value);
+  document.getElementById("syncKeyEntryOpenBtn")?.addEventListener("click", submit);
+  document.getElementById("syncKeyEntryCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false }));
+  document.getElementById("syncKeyScanBtn")?.addEventListener("click", () => {
+    if (!cameraAvailable) {
+      const status = document.getElementById("syncKeyEntryStatus");
+      if (status) {
+        status.dataset.state = "error";
+        status.textContent = "Camera scanning is unavailable. Enter the key manually.";
+      }
+      input?.focus();
+      return;
+    }
+    showSyncKeyScanner();
+  });
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    }
+  });
+  setTimeout(() => input?.focus(), 0);
+}
+
+async function resolveEnteredSyncKey(rawKey) {
+  const key = window.CodxSync?.normalizeKey(rawKey);
+  const status = document.getElementById("syncKeyEntryStatus");
+  if (!window.CodxSync?.isValidKey(key)) {
+    if (status) {
+      status.dataset.state = "error";
+      status.textContent = "Use the format codx-XXXX-XXXX-XXXX with the characters shown in your key.";
+    }
+    return;
+  }
+  if (status) {
+    status.dataset.state = "loading";
+    status.textContent = "Finding and decrypting this project…";
+  }
+  try {
+    const remote = await window.CodxSync.get(key);
+    const decrypted = await window.CodxSync.decryptProject(key, remote.blob);
+    const payload = decrypted.payload;
+    if (!payload?.snapshot?.files?.length || !payload?.projectName) {
+      throw new Error("This Sync Key does not contain a valid CodX project.");
+    }
+    showResolvedSyncKey(key, remote, payload);
+  } catch (error) {
+    if (status) {
+      status.dataset.state = "error";
+      status.textContent = error?.status === 404
+        ? "No project was found for that key. Check every character and try again."
+        : (error.message || "Unable to open this Sync Key.");
+    } else {
+      showNotification(error.message || "Unable to open this Sync Key.", "error");
+      showSyncKeyEntry(key);
+    }
+  }
+}
+
+function showResolvedSyncKey(key, remote, payload) {
+  const fileCount = Number(remote.fileCount || payload.fileCount || payload.snapshot.files.length);
+  const savedAt = Number(remote.savedAt || payload.savedAt || 0);
+  const deviceName = String(remote.deviceName || payload.deviceName || "Unknown device");
+  prepareSyncKeyDialog(
+    "sync-key-resolved",
+    "SYNC KEY FOUND",
+    `
+      <div class="sync-key-resolved">
+        <span class="sync-key-hero-icon success"><i class="fa-solid fa-cloud-check"></i></span>
+        <p>This key holds <strong>"${escapeHtml(payload.projectName)}"</strong> — ${fileCount} file${fileCount === 1 ? "" : "s"}, last saved ${escapeHtml(formatSyncRelativeTime(savedAt))} on ${escapeHtml(deviceName)}. Open it?</p>
+      </div>`,
+    `
+      <button id="syncKeyResolvedCancelBtn" type="button" class="run-button sync-key-secondary"><strong>CANCEL</strong></button>
+      <button id="syncKeyResolvedOpenBtn" type="button" class="run-button"><strong>OPEN</strong></button>`,
+  );
+  document.getElementById("syncKeyResolvedCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false }));
+  document.getElementById("syncKeyResolvedOpenBtn")?.addEventListener("click", () => openResolvedSyncProject(key, remote, payload));
+  setTimeout(() => document.getElementById("syncKeyResolvedOpenBtn")?.focus(), 0);
+}
+
+function getUniqueSyncedProjectName(requestedName, projectId) {
+  const projects = getSavedProjects();
+  const existing = projects.find((project) => String(project.id) === String(projectId));
+  if (existing) return existing.name;
+  const used = new Set(projects.map((project) => String(project.name || "").trim().toLowerCase()));
+  let name = String(requestedName || "Synced project").trim() || "Synced project";
+  if (!used.has(name.toLowerCase())) return name;
+  const base = `${name} (Synced)`;
+  name = base;
+  let suffix = 2;
+  while (used.has(name.toLowerCase())) name = `${base} ${suffix++}`;
+  return name;
+}
+
+async function openResolvedSyncProject(key, remote, payload) {
+  const openButton = document.getElementById("syncKeyResolvedOpenBtn");
+  if (openButton) openButton.disabled = true;
+  try {
+    const snapshot = JSON.parse(JSON.stringify(payload.snapshot));
+    await persistTransferredSnapshotMedia(snapshot, new Map());
+    const requestedId = String(payload.projectId || `project-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+    const projectName = getUniqueSyncedProjectName(payload.projectName, requestedId);
+    const projects = getSavedProjects();
+    const existingIndex = projects.findIndex((project) => String(project.id) === requestedId);
+    const savedAt = Number(remote.savedAt || payload.savedAt || Date.now());
+    const project = { id: requestedId, name: projectName, updatedAt: savedAt, snapshot };
+    if (existingIndex >= 0) projects[existingIndex] = project;
+    else projects.unshift(project);
+    setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
+    if (!applyProjectState(snapshot, "synced project")) throw new Error("Unable to load the synced project.");
+    activeSavedProjectName = projectName;
+    const remoteDevice = String(remote.deviceName || payload.deviceName || "Unknown device");
+    saveSyncKeyRecord({
+      projectId: requestedId,
+      projectName,
+      key,
+      deviceName: parseSyncDeviceName(),
+      createdAt: Date.now(),
+      lastSyncedAt: savedAt,
+      lastRemoteSavedAt: savedAt,
+      lastSyncedDeviceName: remoteDevice,
+    });
+    syncProjectStatuses.set(requestedId, { state: "synced" });
+    updateProjectStatusUI();
+    closeAppDialog({ ok: true });
+    showNotification(`Opened "${projectName}" and added it to Open Saved.`, "success");
+    const deviceDialog = await showAppPrompt(
+      "THIS DEVICE",
+      "Name this device for future Sync Key saves:",
+      parseSyncDeviceName(),
+      "Windows - Chrome",
+    );
+    const deviceName = String(deviceDialog?.value || "").trim() || parseSyncDeviceName();
+    const syncRecord = getSyncKeyRecord(requestedId);
+    if (syncRecord) saveSyncKeyRecord({ ...syncRecord, deviceName });
+  } catch (error) {
+    if (openButton) openButton.disabled = false;
+    showNotification(error.message || "Unable to open the synced project.", "error");
+  }
+}
+
+function showSyncKeyScanner() {
+  prepareSyncKeyDialog(
+    "sync-key-scanner",
+    "SCAN SYNC KEY",
+    `
+      <div class="sync-key-scanner">
+        <div class="sync-key-scanner-stage">
+          <video id="syncKeyScannerVideo" playsinline muted></video>
+          <div class="sync-key-scanner-placeholder"><i class="fa-solid fa-camera"></i><strong>POINT AT THE QR CODE</strong></div>
+          <div class="sync-key-scanner-frame" aria-hidden="true"></div>
+        </div>
+        <p id="syncKeyScannerStatus" class="sync-key-entry-status" data-state="loading" aria-live="polite">Requesting camera access…</p>
+      </div>`,
+    `
+      <button id="syncKeyScannerTypeBtn" type="button" class="run-button sync-key-secondary"><strong>TYPE KEY</strong></button>
+      <button id="syncKeyScannerCancelBtn" type="button" class="run-button"><strong>CANCEL</strong></button>`,
+  );
+  document.getElementById("syncKeyScannerTypeBtn")?.addEventListener("click", () => showSyncKeyEntry());
+  document.getElementById("syncKeyScannerCancelBtn")?.addEventListener("click", () => closeAppDialog({ ok: false }));
+  startSyncKeyCamera();
+}
+
+async function startSyncKeyCamera() {
+  const status = document.getElementById("syncKeyScannerStatus");
+  const video = document.getElementById("syncKeyScannerVideo");
+  try {
+    syncKeyScannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    if (!video || appDialog?.dataset.dialogKind !== "sync-key-scanner") {
+      stopSyncKeyScanner();
+      return;
+    }
+    video.srcObject = syncKeyScannerStream;
+    await video.play();
+    if (status) {
+      status.dataset.state = "scanning";
+      status.textContent = "Scanning locally — the camera image never leaves this device.";
+    }
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const scan = () => {
+      if (!syncKeyScannerStream || appDialog?.dataset.dialogKind !== "sync-key-scanner") return;
+      if (video.readyState >= 2 && video.videoWidth && context) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const result = window.jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
+        const key = window.CodxSync?.normalizeKey(result?.data);
+        if (window.CodxSync?.isValidKey(key)) {
+          stopSyncKeyScanner();
+          showSyncKeyEntry(key);
+          setTimeout(() => resolveEnteredSyncKey(key), 80);
+          return;
+        }
+      }
+      syncKeyScannerFrame = requestAnimationFrame(scan);
+    };
+    syncKeyScannerFrame = requestAnimationFrame(scan);
+  } catch (_error) {
+    stopSyncKeyScanner();
+    if (status) {
+      status.dataset.state = "error";
+      status.textContent = "Camera access is unavailable or was denied. Choose TYPE KEY to continue manually.";
+    }
+  }
+}
+
+async function handleSyncKey() {
+  if (!window.CodxSync || !window.crypto?.subtle) {
+    showNotification("Sync Key needs a secure browser with Web Crypto support.", "error");
+    return;
+  }
+  if (!activeSavedProjectName) {
+    const saveDialog = await showAppPrompt(
+      "Name this project to sync it.",
+      "Choose a name for this saved project:",
+      getSuggestedProjectName(),
+      "codx-project",
+    );
+    if (!saveDialog?.ok) return;
+    if (!saveCurrentProjectToLibrary(saveDialog.value)) return;
+  } else if (hasUnsavedChanges && !saveCurrentProjectToLibrary(activeSavedProjectName)) {
+    return;
+  }
+  const project = getActiveSavedProject();
+  if (!project) {
+    showNotification("Save this project before creating a Sync Key.", "error");
+    return;
+  }
+  const record = getSyncKeyRecord(project.id);
+  if (record) showSyncKeyStateB(record);
+  else showSyncKeyStateA(project);
+}
+
+function hideSyncConflictBar() {
+  activeSyncConflict = null;
+  if (!syncConflictBar) return;
+  syncConflictBar.hidden = true;
+  syncConflictBar.innerHTML = "";
+  delete syncConflictBar.dataset.state;
+}
+
+function showSyncConflictConfirmation(message) {
+  if (!syncConflictBar) return;
+  activeSyncConflict = null;
+  syncConflictBar.hidden = false;
+  syncConflictBar.dataset.state = "confirmed";
+  syncConflictBar.innerHTML = `<i class="fa-solid fa-circle-check" aria-hidden="true"></i><strong>${escapeHtml(message)}</strong>`;
+  setTimeout(hideSyncConflictBar, 6000);
+}
+
+function renderSyncConflict(project, syncRecord, remote, payload) {
+  if (!syncConflictBar || !project || !payload?.snapshot) return;
+  const savedAt = Number(remote.savedAt || payload.savedAt || 0);
+  const deviceName = String(remote.deviceName || payload.deviceName || "Unknown device");
+  activeSyncConflict = { projectId: project.id, syncRecord, remote, payload };
+  syncConflictBar.hidden = false;
+  syncConflictBar.dataset.state = "conflict";
+  syncConflictBar.innerHTML = `
+    <div class="sync-conflict-copy">
+      <strong>Newer version of "${escapeHtml(project.name)}"</strong>
+      <span>Saved on ${escapeHtml(deviceName)} · ${escapeHtml(formatSyncRelativeTime(savedAt))}</span>
+      <small>${escapeHtml(formatSyncExactTime(savedAt))}</small>
+    </div>
+    <div class="sync-conflict-actions">
+      <button type="button" class="run-button" data-sync-conflict="load"><strong>LOAD IT</strong></button>
+      <button type="button" class="run-button sync-key-secondary" data-sync-conflict="keep"><strong>KEEP MINE</strong></button>
+    </div>`;
+  syncConflictBar.querySelector('[data-sync-conflict="load"]')?.addEventListener("click", loadSyncConflictVersion);
+  syncConflictBar.querySelector('[data-sync-conflict="keep"]')?.addEventListener("click", keepLocalSyncConflictVersion);
+}
+
+async function loadSyncConflictVersion() {
+  const conflict = activeSyncConflict;
+  if (!conflict) return;
+  const button = syncConflictBar?.querySelector('[data-sync-conflict="load"]');
+  if (button) button.disabled = true;
+  try {
+    const snapshot = JSON.parse(JSON.stringify(conflict.payload.snapshot));
+    await persistTransferredSnapshotMedia(snapshot, new Map());
+    const projects = getSavedProjects();
+    const index = projects.findIndex((project) => String(project.id) === String(conflict.projectId));
+    if (index < 0) throw new Error("The local saved project was removed.");
+    const savedAt = Number(conflict.remote.savedAt || conflict.payload.savedAt || Date.now());
+    projects[index] = { ...projects[index], updatedAt: savedAt, snapshot };
+    setSavedProjects(projects);
+    if (!applyProjectState(snapshot, "newer synced version")) throw new Error("Unable to load the newer version.");
+    activeSavedProjectName = projects[index].name;
+    const deviceName = String(conflict.remote.deviceName || conflict.payload.deviceName || "Unknown device");
+    saveSyncKeyRecord({
+      ...conflict.syncRecord,
+      projectName: projects[index].name,
+      lastSyncedAt: savedAt,
+      lastRemoteSavedAt: savedAt,
+      lastSyncedDeviceName: deviceName,
+    });
+    setSyncUploadQueue(getSyncUploadQueue().filter((entry) => String(entry.projectId) !== String(conflict.projectId)));
+    syncProjectStatuses.set(String(conflict.projectId), { state: "synced" });
+    hideSyncConflictBar();
+    updateProjectStatusUI();
+    showNotification(`Loaded the version saved on ${deviceName}.`, "success");
+  } catch (error) {
+    if (button) button.disabled = false;
+    showNotification(error.message || "Unable to load the newer version.", "error");
+  }
+}
+
+async function keepLocalSyncConflictVersion() {
+  const conflict = activeSyncConflict;
+  if (!conflict) return;
+  const button = syncConflictBar?.querySelector('[data-sync-conflict="keep"]');
+  if (button) button.disabled = true;
+  try {
+    const remoteSnapshot = JSON.parse(JSON.stringify(conflict.payload.snapshot));
+    await persistTransferredSnapshotMedia(remoteSnapshot, new Map());
+    const projects = getSavedProjects();
+    const localIndex = projects.findIndex((project) => String(project.id) === String(conflict.projectId));
+    if (localIndex < 0) throw new Error("The local saved project was removed.");
+    const localProject = projects[localIndex];
+    const deviceName = String(conflict.remote.deviceName || conflict.payload.deviceName || "Unknown device");
+    const baseCopyName = `${localProject.name} (${deviceName} copy)`;
+    const copyName = getUniqueSyncedProjectName(baseCopyName, "");
+    const remoteSavedAt = Number(conflict.remote.savedAt || conflict.payload.savedAt || Date.now());
+    projects.unshift({
+      id: `project-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: copyName,
+      updatedAt: remoteSavedAt,
+      snapshot: remoteSnapshot,
+    });
+    const refreshedLocalIndex = projects.findIndex((project) => String(project.id) === String(conflict.projectId));
+    const localSavedAt = Date.now();
+    projects[refreshedLocalIndex] = {
+      ...projects[refreshedLocalIndex],
+      updatedAt: localSavedAt,
+      snapshot: serializeProjectState(),
+    };
+    setSavedProjects(projects.slice(0, MAX_SAVED_PROJECTS));
+    saveSyncKeyRecord({
+      ...conflict.syncRecord,
+      lastRemoteSavedAt: remoteSavedAt,
+      lastSyncedDeviceName: deviceName,
+    });
+    hasUnsavedChanges = false;
+    lastAutosaveAt = localSavedAt;
+    queueProjectSync(projects[refreshedLocalIndex]);
+    updateProjectStatusUI();
+    showSyncConflictConfirmation(`Kept yours. The remote version is safe in Open Saved as "${copyName}".`);
+  } catch (error) {
+    if (button) button.disabled = false;
+    showNotification(error.message || "Unable to preserve both versions.", "error");
+  }
+}
+
+function checkSyncProjectFreshness(projectId, { force = false } = {}) {
+  const project = projectId ? getSavedProjectById(projectId) : getActiveSavedProject();
+  const syncRecord = project ? getSyncKeyRecord(project.id) : null;
+  if (!project || !syncRecord || !navigator.onLine || activeSyncConflict) return;
+  const editorIdleFor = Date.now() - lastSyncEditorInputAt;
+  if (!force && editorIdleFor < SYNC_EDITOR_IDLE_MS) {
+    setTimeout(() => checkSyncProjectFreshness(project.id), SYNC_EDITOR_IDLE_MS - editorIdleFor + 100);
+    return;
+  }
+  void (async () => {
+    try {
+      const head = await window.CodxSync.head(syncRecord.key);
+      if (Number(head.savedAt || 0) <= Number(syncRecord.lastRemoteSavedAt || 0)) return;
+      if (Date.now() - lastSyncEditorInputAt < SYNC_EDITOR_IDLE_MS) {
+        setTimeout(() => checkSyncProjectFreshness(project.id), SYNC_EDITOR_IDLE_MS + 100);
+        return;
+      }
+      const remote = await window.CodxSync.get(syncRecord.key);
+      const decrypted = await window.CodxSync.decryptProject(syncRecord.key, remote.blob);
+      if (Date.now() - lastSyncEditorInputAt < SYNC_EDITOR_IDLE_MS) {
+        setTimeout(() => checkSyncProjectFreshness(project.id), SYNC_EDITOR_IDLE_MS + 100);
+        return;
+      }
+      const latestLocal = getSavedProjectById(project.id);
+      if (!latestLocal || Number(remote.savedAt || decrypted.payload?.savedAt || 0) <= Number(syncRecord.lastRemoteSavedAt || 0)) return;
+      if (getActiveSavedProject()?.id !== project.id) return;
+      renderSyncConflict(latestLocal, syncRecord, remote, decrypted.payload);
+    } catch (error) {
+      if (error?.status !== 404) console.warn("Sync freshness check failed.", error);
+    }
+  })();
+}
+
 function saveCurrentProjectToLibrary(projectName) {
   if (
     activeSessionId && !isHost() && collabPermissions.disableSaveProject
@@ -9305,6 +10240,11 @@ function saveCurrentProjectToLibrary(projectName) {
   updateProjectStatusUI();
   scheduleProjectAutosave();
   showNotification(`Saved project "${trimmedName}".`, "success");
+  const syncRecord = getSyncKeyRecord(nextRecord.id);
+  if (syncRecord) {
+    saveSyncKeyRecord({ ...syncRecord, projectName: trimmedName });
+    queueProjectSync(nextRecord);
+  }
   return true;
 }
 
@@ -9372,13 +10312,16 @@ async function openSavedProjectFromLibrary(projectId) {
     }
   }
 
+  hideSyncConflictBar();
   if (!applyProjectState(project.snapshot, "saved project")) return;
   activeSavedProjectName = project.name;
   closeProjectLibrary();
   updateProjectStatusUI();
+  setTimeout(() => checkSyncProjectFreshness(project.id), 250);
 }
 
 async function startFreshProject() {
+  hideSyncConflictBar();
   applyProjectState(getFreshProjectState(), "new project");
   activeSavedProjectName = null;
   document.title = "CodX Editor";
@@ -9419,6 +10362,7 @@ async function deleteSavedProject(projectId) {
   if (!dialog?.ok) return;
   const projects = getSavedProjects().filter((entry) => entry.id !== projectId);
   setSavedProjects(projects);
+  removeSyncKeyRecord(projectId);
   renderProjectLibrary("saved");
   showNotification("Saved project removed.", "success");
 }
@@ -16996,6 +17940,7 @@ function initializeEditor() {
 
   // MODIFIED: Combined input listener
   editor.addEventListener("input", (e) => {
+    lastSyncEditorInputAt = Date.now();
     closeEditorValuePopover();
     if (getProjectMediaKind(activeFile)) {
       displayActiveFileInEditor();
@@ -28539,7 +29484,32 @@ window.addEventListener("load", () => {
       updateProjectStatusUI();
       updatePreview();
       maybeOpenDeviceTransferFromUrl();
+      if (navigator.onLine) void flushSyncUploadQueue();
+      setTimeout(() => checkSyncProjectFreshness(), 250);
     });
+});
+
+window.addEventListener("online", () => {
+  getSyncUploadQueue().forEach((entry) => syncProjectStatuses.set(String(entry.projectId), { state: "syncing" }));
+  updateSyncStatusUI();
+  void flushSyncUploadQueue();
+});
+
+window.addEventListener("offline", () => {
+  getSyncUploadQueue().forEach((entry) => syncProjectStatuses.set(String(entry.projectId), { state: "offline" }));
+  updateSyncStatusUI();
+});
+
+window.addEventListener("focus", () => {
+  const now = Date.now();
+  if (now - lastSyncTabBlurAt < SYNC_FOCUS_CHECK_INTERVAL_MS) return;
+  if (now - lastSyncFocusCheckAt < SYNC_FOCUS_CHECK_INTERVAL_MS) return;
+  lastSyncFocusCheckAt = now;
+  checkSyncProjectFreshness();
+});
+
+window.addEventListener("blur", () => {
+  lastSyncTabBlurAt = Date.now();
 });
 
 window.addEventListener("beforeunload", function (e) {
@@ -28571,6 +29541,9 @@ if (openSavedProjectsBtn) {
 }
 if (deviceTransferBtn) {
   deviceTransferBtn.addEventListener("click", handleDeviceTransfer);
+}
+if (syncKeyBtn) {
+  syncKeyBtn.addEventListener("click", handleSyncKey);
 }
 if (templatesBtn) {
   templatesBtn.addEventListener("click", () => renderProjectLibrary("templates"));

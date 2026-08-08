@@ -42,7 +42,7 @@
       referrerpolicy="no-referrer"
     />
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/frontend.css?v=20260724-autofix1" />
+    <link rel="stylesheet" href="/frontend.css?v=20260808-sync-key1" />
   </head>
   <body class="mobile-pane-editor">
     <a
@@ -217,6 +217,15 @@
               <strong>DEVICE TRANSFER</strong>
             </button>
             <button
+              id="syncKeyBtn"
+              class="run-button header-more-action"
+              aria-label="Sync this saved project across devices with an encrypted key"
+              type="button"
+            >
+              <i class="fa-solid fa-cloud"></i>
+              <strong>SYNC KEY</strong>
+            </button>
+            <button
               id="templatesBtn"
               class="run-button header-more-action"
               aria-label="Open starter templates"
@@ -382,6 +391,10 @@
                   <strong>SAVE</strong>
                 </button>
                 <span id="projectStatusMeta" class="project-status-meta">Ready</span>
+                <span id="projectSyncStatus" class="project-sync-status" aria-live="polite" hidden>
+                  <i class="fa-solid fa-cloud" aria-hidden="true"></i>
+                  <span></span>
+                </span>
               </div>
             </div>
             <div class="file-toolbar-actions">
@@ -416,6 +429,7 @@
         <div id="codeEditorPanel" class="code-container">
           <div class="line-numbers" id="lineNumbers" aria-hidden="true"><div class="line-numbers-content" id="lineNumbersContent">1</div></div>
           <div class="editor-wrapper">
+            <div id="syncConflictBar" class="sync-conflict-bar" role="status" aria-live="polite" hidden></div>
             <div id="projectDropOverlay" class="project-drop-overlay" role="status" aria-live="polite" hidden>
               <div class="project-drop-watermark">
                 <span class="project-drop-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-down"></i></span>
@@ -2446,8 +2460,10 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.15.0/acorn.min.js" crossorigin="anonymous"></script>
     <script src="/vendor/jsqr.js"></script>
+    <script src="/vendor/qrcode-browser.js?v=20260808-sync-key1"></script>
+    <script src="/sync-key.js?v=20260808-sync-key1"></script>
     <script src="/starter-templates.js?v=20260714-concepts3"></script>
-    <script src="/frontend.js?v=20260724-autofix1"></script>
+    <script src="/frontend.js?v=20260808-sync-key1"></script>
     <script type="module" src="/node-runtime.js?v=20260724-pkgjson-diag2"></script>
   </body>
 </html>

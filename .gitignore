@@ -25,6 +25,8 @@ temp/
 # Local application sessions
 .codx-github-sessions.enc
 .codx-github-sessions.enc.tmp
+.codx-sync-blobs.json
+.codx-sync-blobs.json.tmp
 
 # Atomic-write temp file only; the data file itself stays tracked so
 # published links are part of the deploy and survive redeploys.
