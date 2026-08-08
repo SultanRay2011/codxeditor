@@ -1563,6 +1563,7 @@ p {
 .project-card {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 13px;
   overflow: hidden;
   border: 1px solid #dce9e0;
@@ -1732,7 +1733,8 @@ p {
 
 .project-actions {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: 1.1fr 1fr auto;
+  min-width: 0;
   gap: 7px;
 }
 
@@ -1740,6 +1742,10 @@ p {
   min-height: 38px;
   padding: 8px;
   font-size: 8px;
+}
+
+.project-delete-btn {
+  min-width: 88px;
 }
 
 .project-empty {
@@ -1993,6 +1999,12 @@ p {
 
   .project-actions {
     grid-template-columns: 1fr;
+  }
+
+  .project-actions .btn {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
   }
 
   .project-dates {

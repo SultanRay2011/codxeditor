@@ -1244,6 +1244,32 @@ app.get("/admin/api/project/:id", (req, res) => {
   });
 });
 
+app.delete("/admin/api/project/:id", async (req, res) => {
+  const entry = findPublishedProjectEntry(req.params.id);
+  if (!entry?.project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const projectId = String(entry.project.id || entry.key).trim();
+  const projectName = String(entry.project.projectName || projectId || "Published project");
+  try {
+    await deletePersistedPublishedProject(projectId);
+  } catch (error) {
+    console.error(`Failed to delete published project ${projectId}:`, error);
+    res.status(503).json({
+      ok: false,
+      error: "The published link could not be deleted. Please try again shortly.",
+    });
+    return;
+  }
+  publishedProjects.delete(entry.key);
+  logAdminEvent(
+    "Published project deleted",
+    `${projectName} (${projectId}) and its public link were permanently removed.`,
+  );
+  res.json({ ok: true, deleted: true, id: projectId });
+});
+
 app.get("/admin/api/session/:sessionId", (req, res) => {
   const sessionId = normalizeSessionId(req.params.sessionId);
   const session = sessions.get(sessionId);
@@ -1715,6 +1741,28 @@ async function persistPublishedProject(projectKey, project) {
   const serialized = JSON.stringify(snapshot, null, 2);
   // Write atomically (temp file + rename) so a restart mid-write cannot corrupt
   // or truncate the store and lose every published link.
+  const tempFile = `${PUBLISHED_PROJECTS_FILE}.tmp`;
+  fs.writeFileSync(tempFile, serialized, "utf8");
+  fs.renameSync(tempFile, PUBLISHED_PROJECTS_FILE);
+}
+
+async function deletePersistedPublishedProject(projectId) {
+  const storageKey = getPublishedProjectStorageKey(projectId);
+  if (!storageKey) throw new Error("Published project id is required.");
+
+  if (publishedProjectsStorage === "postgres") {
+    if (!publishedProjectsPool) throw new Error("Published projects database is unavailable.");
+    await publishedProjectsPool.query(
+      `DELETE FROM ${PUBLISHED_PROJECTS_TABLE} WHERE id_key = $1`,
+      [storageKey],
+    );
+    return;
+  }
+
+  const snapshot = Array.from(publishedProjects.values()).filter(
+    (entry) => getPublishedProjectStorageKey(entry?.id) !== storageKey,
+  );
+  const serialized = JSON.stringify(snapshot, null, 2);
   const tempFile = `${PUBLISHED_PROJECTS_FILE}.tmp`;
   fs.writeFileSync(tempFile, serialized, "utf8");
   fs.renameSync(tempFile, PUBLISHED_PROJECTS_FILE);
