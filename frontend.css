@@ -10735,71 +10735,46 @@ iframe {
 
 @media (max-width: 520px) {
   header {
-    display: grid !important;
-    grid-template-columns: repeat(8, 20px);
-    column-gap: 4px !important;
-    row-gap: 6px !important;
+    --phone-header-button-size: clamp(32px, 10.5vw, 42px);
+    --phone-header-toggle-width: clamp(48px, 15vw, 60px);
+    display: flex !important;
+    flex-wrap: nowrap !important;
     flex-shrink: 0;
     justify-content: center !important;
+    gap: clamp(3px, 1vw, 6px) !important;
     width: 100%;
   }
 
   header > .header-switches {
     display: flex !important;
-    grid-column: 1 / span 2;
-    width: 42px;
-    min-width: 42px;
-    height: 42px;
+    width: var(--phone-header-toggle-width);
+    min-width: var(--phone-header-toggle-width);
+    height: var(--phone-header-button-size);
+    min-height: var(--phone-header-button-size);
     padding: 0;
     justify-content: center;
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   header > .run-button,
   header > .header-more-menu,
   header > .header-more-menu > .run-button {
-    width: 42px !important;
-    min-width: 42px !important;
-    max-width: 42px !important;
-    height: 42px !important;
-    min-height: 42px !important;
-    justify-self: center;
+    width: var(--phone-header-button-size) !important;
+    min-width: var(--phone-header-button-size) !important;
+    max-width: var(--phone-header-button-size) !important;
+    height: var(--phone-header-button-size) !important;
+    min-height: var(--phone-header-button-size) !important;
   }
 
   header > .header-switches .switch {
-    width: 40px;
+    width: var(--phone-header-toggle-width);
   }
 
   header > .header-switches input:checked + .slider:before {
-    transform: translateX(20px);
-  }
-
-  header > #collabBtn {
-    grid-column: 3 / span 2;
-  }
-
-  header > #previewFullscreenBtn {
-    grid-column: 5 / span 2;
-  }
-
-  header > #settingsBtn {
-    grid-column: 7 / span 2;
-  }
-
-  header > #addMediaBtn {
-    grid-column: 2 / span 2;
-  }
-
-  header > #helpPageBtn {
-    grid-column: 4 / span 2;
-  }
-
-  header > #headerMoreMenu {
-    grid-column: 6 / span 2;
-  }
-
-  .header-more-panel {
-    top: max(108px, calc(env(safe-area-inset-top, 0px) + 102px));
-    max-height: calc(100dvh - 118px - env(safe-area-inset-bottom, 0px));
+    transform: translateX(calc(var(--phone-header-toggle-width) - 22px));
   }
 
   .editor-actions {
@@ -10843,7 +10818,7 @@ iframe {
 
 @media (max-width: 360px) {
   header {
-    gap: 5px !important;
+    gap: clamp(2px, 1vw, 4px) !important;
     padding-right: max(6px, env(safe-area-inset-right, 0px)) !important;
     padding-left: max(6px, env(safe-area-inset-left, 0px)) !important;
   }
