@@ -68,6 +68,15 @@ const editorMediaViewerIcon = document.getElementById("editorMediaViewerIcon");
 const editorMediaViewerName = document.getElementById("editorMediaViewerName");
 const editorMediaViewerKind = document.getElementById("editorMediaViewerKind");
 const editorMediaViewerContent = document.getElementById("editorMediaViewerContent");
+const editorValuePopover = document.getElementById("editorValuePopover");
+const editorValueToken = document.getElementById("editorValueToken");
+const editorValueNumberInput = document.getElementById("editorValueNumberInput");
+const editorValueUnitSelect = document.getElementById("editorValueUnitSelect");
+const editorValueDecreaseBtn = document.getElementById("editorValueDecreaseBtn");
+const editorValueIncreaseBtn = document.getElementById("editorValueIncreaseBtn");
+const editorValueCloseBtn = document.getElementById("editorValueCloseBtn");
+const editorValueDoneBtn = document.getElementById("editorValueDoneBtn");
+const editorValueHint = document.getElementById("editorValueHint");
 const exportZipBtn = document.getElementById("exportZipBtn");
 const importZipBtn = document.getElementById("importZipBtn");
 const previewFullscreenBtn = document.getElementById("previewFullscreenBtn");
@@ -1747,6 +1756,14 @@ const editorTextarea = document.getElementById("activeEditor");
 const editorWrapperEl = editorTextarea
   ? editorTextarea.closest(".editor-wrapper")
   : null;
+const EDITOR_VALUE_HOVER_DELAY_MS = 2000;
+const EDITOR_VALUE_TOKEN_PATTERN = /(-?(?:\d+(?:\.\d*)?|\.\d+))(px|vh)\b/gi;
+let editorValueHoverTimer = null;
+let editorValueHoverTarget = null;
+let editorValuePointerFrame = null;
+let activeEditorValueContext = null;
+let editorValueLineCache = { value: null, starts: [0] };
+let editorValueMeasureCanvas = null;
 let errorHighlightLayer = document.getElementById("errorHighlightLayer");
 if (!errorHighlightLayer && editorWrapperEl) {
   errorHighlightLayer = document.createElement("div");
@@ -7773,6 +7790,7 @@ function renderActiveMediaFile(file, kind) {
 function displayActiveFileInEditor(options = {}) {
   const editor = document.getElementById("activeEditor");
   if (!editor) return false;
+  closeEditorValuePopover();
   const codeContainer = editor.closest(".code-container");
   const mediaKind = getProjectMediaKind(activeFile);
   const isMediaFile = Boolean(mediaKind);
@@ -16110,10 +16128,391 @@ function syncSyntaxLayerStyle(textarea) {
   highlightLayer.style.padding = computed.padding;
 }
 
+function clearEditorValueHoverTimer() {
+  clearTimeout(editorValueHoverTimer);
+  editorValueHoverTimer = null;
+  editorValueHoverTarget = null;
+}
+
+function closeEditorValuePopover(options = {}) {
+  clearEditorValueHoverTimer();
+  const wasOpen = Boolean(editorValuePopover && !editorValuePopover.hidden);
+  activeEditorValueContext = null;
+  if (editorValuePopover) {
+    editorValuePopover.hidden = true;
+    editorValuePopover.classList.remove("is-below");
+  }
+  if (options.restoreFocus && wasOpen && editorTextarea && !editorTextarea.readOnly) {
+    editorTextarea.focus({ preventScroll: true });
+  }
+}
+
+function getEditorValueLineStarts(value) {
+  const text = String(value || "");
+  if (editorValueLineCache.value === text) return editorValueLineCache.starts;
+  const starts = [0];
+  let cursor = text.indexOf("\n");
+  while (cursor !== -1) {
+    starts.push(cursor + 1);
+    cursor = text.indexOf("\n", cursor + 1);
+  }
+  editorValueLineCache = { value: text, starts };
+  return starts;
+}
+
+function getEditorValueLineIndex(starts, index) {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    if (starts[middle] <= index) low = middle + 1;
+    else high = middle - 1;
+  }
+  return Math.max(0, high);
+}
+
+function expandEditorTabsForMeasurement(text, tabSize) {
+  let output = "";
+  let column = 0;
+  for (const character of String(text || "")) {
+    if (character === "\t") {
+      const spaces = tabSize - (column % tabSize || 0);
+      output += " ".repeat(spaces);
+      column += spaces;
+    } else {
+      output += character;
+      column += 1;
+    }
+  }
+  return output;
+}
+
+function measureEditorValueText(text, style) {
+  if (!editorValueMeasureCanvas) editorValueMeasureCanvas = document.createElement("canvas");
+  const context = editorValueMeasureCanvas.getContext("2d");
+  const tabSize = Math.max(1, Number.parseInt(style.tabSize, 10) || editorTabSize || 4);
+  const expanded = expandEditorTabsForMeasurement(text, tabSize);
+  if (!context) return expanded.length * (Number.parseFloat(style.fontSize) || 13) * 0.62;
+  context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const letterSpacing = Number.parseFloat(style.letterSpacing) || 0;
+  return context.measureText(expanded).width + Math.max(0, expanded.length - 1) * letterSpacing;
+}
+
+function getEditorValueTokenGeometry(editor, start, end) {
+  if (!editor) return null;
+  const value = String(editor.value || "");
+  const safeStart = Math.max(0, Math.min(Number(start || 0), value.length));
+  const safeEnd = Math.max(safeStart, Math.min(Number(end || safeStart), value.length));
+  const lineStarts = getEditorValueLineStarts(value);
+  const lineIndex = getEditorValueLineIndex(lineStarts, safeStart);
+  const lineStart = lineStarts[lineIndex] || 0;
+  const style = window.getComputedStyle(editor);
+  const lineHeight = Number.parseFloat(style.lineHeight)
+    || (Number.parseFloat(style.fontSize) || 13) * 1.5;
+  const paddingTop = Number.parseFloat(style.paddingTop) || 0;
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+  const prefix = value.slice(lineStart, safeStart);
+  const token = value.slice(safeStart, safeEnd);
+  return {
+    left: paddingLeft + measureEditorValueText(prefix, style) - editor.scrollLeft,
+    top: paddingTop + lineIndex * lineHeight - editor.scrollTop,
+    width: Math.max(6, measureEditorValueText(token, style)),
+    lineHeight,
+    lineIndex,
+  };
+}
+
+function getHoveredEditorValueToken(editor, pointer) {
+  if (
+    !editor
+    || editor.readOnly
+    || getProjectMediaKind(activeFile)
+    || !canCurrentUserEditFile(activeFile?.name || "")
+  ) {
+    return null;
+  }
+  const value = String(editor.value || "");
+  if (!value) return null;
+  const rect = editor.getBoundingClientRect();
+  const style = window.getComputedStyle(editor);
+  const lineHeight = Number.parseFloat(style.lineHeight)
+    || (Number.parseFloat(style.fontSize) || 13) * 1.5;
+  const paddingTop = Number.parseFloat(style.paddingTop) || 0;
+  const relativeY = pointer.clientY - rect.top;
+  const contentY = relativeY + editor.scrollTop - paddingTop;
+  const lineIndex = Math.floor(contentY / lineHeight);
+  const lineStarts = getEditorValueLineStarts(value);
+  if (lineIndex < 0 || lineIndex >= lineStarts.length) return null;
+  const lineStart = lineStarts[lineIndex];
+  const lineEnd = lineIndex + 1 < lineStarts.length
+    ? lineStarts[lineIndex + 1] - 1
+    : value.length;
+  const line = value.slice(lineStart, lineEnd);
+  const tokenPattern = new RegExp(EDITOR_VALUE_TOKEN_PATTERN.source, "gi");
+  const relativeX = pointer.clientX - rect.left;
+  let match;
+  while ((match = tokenPattern.exec(line))) {
+    const start = lineStart + match.index;
+    const end = start + match[0].length;
+    if (start > 0 && /[\w$]/.test(value[start - 1])) continue;
+    const geometry = getEditorValueTokenGeometry(editor, start, end);
+    if (!geometry) continue;
+    const withinX = relativeX >= geometry.left - 2
+      && relativeX <= geometry.left + geometry.width + 2;
+    const withinY = relativeY >= geometry.top
+      && relativeY <= geometry.top + geometry.lineHeight;
+    if (!withinX || !withinY) continue;
+    return {
+      start,
+      end,
+      token: match[0],
+      numericText: match[1],
+      numericValue: Number(match[1]),
+      unit: String(match[2] || "px").toLowerCase(),
+      fileName: String(activeFile?.name || ""),
+    };
+  }
+  return null;
+}
+
+function formatEditorValueNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "0";
+  const rounded = Math.round((numeric + Number.EPSILON) * 1000) / 1000;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+}
+
+function getEditorValueStep(unit) {
+  return unit === "vh" ? 0.1 : 1;
+}
+
+function getEditorValuePreviewHeight() {
+  try {
+    const previewHeight = Number(iframe?.contentWindow?.innerHeight || 0);
+    if (previewHeight > 0) return previewHeight;
+  } catch (_error) {
+    // The preview can briefly be cross-origin while it refreshes.
+  }
+  return Math.max(1, Number(window.innerHeight || document.documentElement.clientHeight || 1));
+}
+
+function positionEditorValuePopover() {
+  if (!editorValuePopover || editorValuePopover.hidden || !activeEditorValueContext) return;
+  const geometry = getEditorValueTokenGeometry(
+    editorTextarea,
+    activeEditorValueContext.start,
+    activeEditorValueContext.end,
+  );
+  if (!geometry || !editorWrapperEl) return;
+  const cardWidth = editorValuePopover.offsetWidth;
+  const cardHeight = editorValuePopover.offsetHeight;
+  const margin = 8;
+  const anchorCenter = geometry.left + geometry.width / 2;
+  const maxLeft = Math.max(margin, editorWrapperEl.clientWidth - cardWidth - margin);
+  const left = Math.max(margin, Math.min(anchorCenter - cardWidth / 2, maxLeft));
+  let top = geometry.top - cardHeight - 11;
+  let placeBelow = false;
+  if (top < margin) {
+    top = geometry.top + geometry.lineHeight + 11;
+    placeBelow = true;
+  }
+  const maxTop = Math.max(margin, editorWrapperEl.clientHeight - cardHeight - margin);
+  top = Math.max(margin, Math.min(top, maxTop));
+  editorValuePopover.classList.toggle("is-below", placeBelow);
+  editorValuePopover.style.left = `${left}px`;
+  editorValuePopover.style.top = `${top}px`;
+  const arrowLeft = Math.max(18, Math.min(anchorCenter - left - 6, cardWidth - 30));
+  editorValuePopover.style.setProperty("--editor-value-arrow-left", `${arrowLeft}px`);
+}
+
+function openEditorValuePopover(context) {
+  if (!editorValuePopover || !editorTextarea || !context) return;
+  const currentToken = editorTextarea.value.slice(context.start, context.end);
+  if (
+    currentToken !== context.token
+    || String(activeFile?.name || "") !== context.fileName
+    || !Number.isFinite(context.numericValue)
+  ) {
+    return;
+  }
+  closeCssColorPicker();
+  hideSuggestions();
+  activeEditorValueContext = { ...context };
+  editorValueNumberInput.value = formatEditorValueNumber(context.numericValue);
+  editorValueNumberInput.step = String(getEditorValueStep(context.unit));
+  editorValueUnitSelect.value = context.unit;
+  editorValueToken.textContent = context.token;
+  editorValueHint.textContent = "Changes update your code instantly.";
+  editorValuePopover.setAttribute("aria-label", `Adjust ${context.token}`);
+  editorValuePopover.hidden = false;
+  requestAnimationFrame(positionEditorValuePopover);
+}
+
+function adjustEditorValueSelection(position, start, end, replacementLength) {
+  const cursor = Number(position || 0);
+  if (cursor <= start) return cursor;
+  if (cursor >= end) return cursor + replacementLength - (end - start);
+  return start + replacementLength;
+}
+
+function applyEditorValueChange(value, unit, options = {}) {
+  if (!activeEditorValueContext || !editorTextarea) return false;
+  const numericValue = Number(value);
+  const normalizedUnit = unit === "vh" ? "vh" : "px";
+  if (!Number.isFinite(numericValue)) return false;
+  const context = activeEditorValueContext;
+  if (
+    String(activeFile?.name || "") !== context.fileName
+    || editorTextarea.value.slice(context.start, context.end) !== context.token
+  ) {
+    closeEditorValuePopover();
+    return false;
+  }
+  const numericText = formatEditorValueNumber(numericValue);
+  const replacement = `${numericText}${normalizedUnit}`;
+  const previousStart = editorTextarea.selectionStart;
+  const previousEnd = editorTextarea.selectionEnd;
+  const nextSelectionStart = adjustEditorValueSelection(
+    previousStart,
+    context.start,
+    context.end,
+    replacement.length,
+  );
+  const nextSelectionEnd = adjustEditorValueSelection(
+    previousEnd,
+    context.start,
+    context.end,
+    replacement.length,
+  );
+  applyEditorMutation(
+    editorTextarea,
+    context.start,
+    context.end,
+    replacement,
+    nextSelectionStart,
+    nextSelectionEnd,
+  );
+  context.end = context.start + replacement.length;
+  context.token = replacement;
+  context.numericText = numericText;
+  context.numericValue = numericValue;
+  context.unit = normalizedUnit;
+  editorValueToken.textContent = replacement;
+  editorValueUnitSelect.value = normalizedUnit;
+  editorValueNumberInput.step = String(getEditorValueStep(normalizedUnit));
+  if (!options.preserveInputText) editorValueNumberInput.value = numericText;
+  renderSyntaxHighlight(editorTextarea);
+  syncInlineHtmlCorrectionDisplay(editorTextarea);
+  emitPairPresenceSoon();
+  requestAnimationFrame(positionEditorValuePopover);
+  return true;
+}
+
+function changeEditorValueByStep(direction) {
+  if (!activeEditorValueContext) return;
+  const current = Number(editorValueNumberInput.value);
+  const baseline = Number.isFinite(current)
+    ? current
+    : activeEditorValueContext.numericValue;
+  const next = baseline + direction * getEditorValueStep(activeEditorValueContext.unit);
+  editorValueNumberInput.value = formatEditorValueNumber(next);
+  applyEditorValueChange(next, activeEditorValueContext.unit);
+}
+
+function changeEditorValueUnit() {
+  if (!activeEditorValueContext) return;
+  const nextUnit = editorValueUnitSelect.value === "vh" ? "vh" : "px";
+  const previousUnit = activeEditorValueContext.unit;
+  if (nextUnit === previousUnit) return;
+  const currentValue = Number(editorValueNumberInput.value);
+  if (!Number.isFinite(currentValue)) return;
+  const previewHeight = getEditorValuePreviewHeight();
+  const convertedValue = previousUnit === "px"
+    ? (currentValue / previewHeight) * 100
+    : (currentValue * previewHeight) / 100;
+  editorValueHint.textContent = `Converted using a ${Math.round(previewHeight)}px preview height.`;
+  editorValueNumberInput.value = formatEditorValueNumber(convertedValue);
+  applyEditorValueChange(convertedValue, nextUnit);
+}
+
+function handleEditorValuePointerMove(editor, pointer) {
+  if (activeEditorValueContext && editorValuePopover && !editorValuePopover.hidden) return;
+  const hovered = getHoveredEditorValueToken(editor, pointer);
+  if (!hovered) {
+    clearEditorValueHoverTimer();
+    return;
+  }
+  const key = `${hovered.fileName}:${hovered.start}:${hovered.end}:${hovered.token}`;
+  if (editorValueHoverTarget?.key === key) return;
+  clearEditorValueHoverTimer();
+  editorValueHoverTarget = { key, context: hovered };
+  editorValueHoverTimer = setTimeout(() => {
+    const target = editorValueHoverTarget;
+    editorValueHoverTimer = null;
+    editorValueHoverTarget = null;
+    if (!target) return;
+    openEditorValuePopover(target.context);
+  }, EDITOR_VALUE_HOVER_DELAY_MS);
+}
+
+function initializeEditorValuePopover(editor) {
+  if (!editor || !editorValuePopover || editor.dataset.valuePopoverBound === "true") return;
+  editor.dataset.valuePopoverBound = "true";
+  editor.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch" || event.buttons) {
+      clearEditorValueHoverTimer();
+      return;
+    }
+    const pointer = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+    cancelAnimationFrame(editorValuePointerFrame);
+    editorValuePointerFrame = requestAnimationFrame(() => {
+      editorValuePointerFrame = null;
+      handleEditorValuePointerMove(editor, pointer);
+    });
+  });
+  editor.addEventListener("pointerleave", clearEditorValueHoverTimer);
+  editorValueNumberInput.addEventListener("input", () => {
+    if (!activeEditorValueContext || editorValueNumberInput.value === "") return;
+    const value = Number(editorValueNumberInput.value);
+    if (Number.isFinite(value)) {
+      applyEditorValueChange(value, activeEditorValueContext.unit, { preserveInputText: true });
+    }
+  });
+  editorValueNumberInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = Number(editorValueNumberInput.value);
+      if (Number.isFinite(value) && activeEditorValueContext) {
+        applyEditorValueChange(value, activeEditorValueContext.unit);
+      }
+    }
+  });
+  editorValueUnitSelect.addEventListener("change", changeEditorValueUnit);
+  editorValueDecreaseBtn.addEventListener("click", () => changeEditorValueByStep(-1));
+  editorValueIncreaseBtn.addEventListener("click", () => changeEditorValueByStep(1));
+  editorValueCloseBtn.addEventListener("click", () => closeEditorValuePopover({ restoreFocus: true }));
+  editorValueDoneBtn.addEventListener("click", () => closeEditorValuePopover({ restoreFocus: true }));
+  document.addEventListener("pointerdown", (event) => {
+    if (!editorValuePopover.hidden && !editorValuePopover.contains(event.target)) {
+      closeEditorValuePopover();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !editorValuePopover.hidden) {
+      closeEditorValuePopover({ restoreFocus: true });
+    }
+  });
+  window.addEventListener("resize", positionEditorValuePopover);
+}
+
 // PART 6 - EDITOR INITIALIZATION
 function initializeEditor() {
   const editor = document.getElementById("activeEditor");
   displayActiveFileInEditor({ resetAllHistory: true });
+  initializeEditorValuePopover(editor);
 
   editor.addEventListener("beforeinput", (e) => {
     lastEditorInputType = String(e.inputType || "");
@@ -16135,6 +16534,7 @@ function initializeEditor() {
 
   // MODIFIED: Combined input listener
   editor.addEventListener("input", (e) => {
+    closeEditorValuePopover();
     if (getProjectMediaKind(activeFile)) {
       displayActiveFileInEditor();
       return;
@@ -16222,6 +16622,7 @@ function initializeEditor() {
     emitPairPresenceSoon();
   });
   editor.addEventListener("scroll", () => {
+    closeEditorValuePopover();
     syncScroll(editor);
     if (
       activePairState &&
