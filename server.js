@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const nodemailer = require("nodemailer");
 const { Pool } = require("pg");
 const { Server } = require("socket.io");
 
@@ -72,6 +73,14 @@ const GITHUB_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "").trim();
 const GITHUB_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
 const GITHUB_OAUTH_CALLBACK_URL = String(process.env.GITHUB_OAUTH_CALLBACK_URL || "").trim();
 const GITHUB_OAUTH_SCOPE = String(process.env.GITHUB_OAUTH_SCOPE || "repo read:user").trim();
+const SMTP_HOST = String(process.env.SMTP_HOST || "").trim();
+const SMTP_PORT = Math.max(1, Math.min(65535, Number(process.env.SMTP_PORT) || 465));
+const SMTP_SECURE = /^(?:1|true|yes)$/i.test(String(process.env.SMTP_SECURE || "")) || SMTP_PORT === 465;
+const SMTP_USER = String(process.env.SMTP_USER || "").trim();
+const SMTP_PASSWORD = String(process.env.SMTP_PASSWORD || "");
+const SMTP_FROM = String(process.env.SMTP_FROM || "").trim();
+const CONTACT_TO_EMAIL = "support@codxeditor.com";
+const CONTACT_MAIL_TEST_MODE = /^(?:1|true|yes)$/i.test(String(process.env.CONTACT_MAIL_TEST_MODE || ""));
 const GITHUB_SESSIONS_FILE = path.join(DATA_DIR, ".codx-github-sessions.enc");
 const GITHUB_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const githubOAuthFlows = new Map();
@@ -93,6 +102,10 @@ const SYNC_BLOB_MAX_BYTES = 1024 * 1024;
 const SYNC_BLOB_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const SYNC_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const syncApiAttempts = new Map();
+const contactFormAttempts = new Map();
+const CONTACT_RATE_WINDOW_MS = 15 * 60 * 1000;
+const CONTACT_RATE_MAX_ATTEMPTS = 5;
+let contactMailer = null;
 loadGitHubSessions();
 const MODERN_SESSION_ID_RE = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
 const PIN_SESSION_ID_RE = /^[A-Z0-9]{6}$/;
@@ -194,6 +207,74 @@ function loadEnvFileAt(envPath) {
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return String(forwarded || req.socket?.remoteAddress || "").replace(/^::ffff:/, "").trim();
+}
+
+function getContactMailer() {
+  if (contactMailer) return contactMailer;
+  if (CONTACT_MAIL_TEST_MODE) {
+    contactMailer = nodemailer.createTransport({ jsonTransport: true });
+    return contactMailer;
+  }
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) return null;
+  contactMailer = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASSWORD,
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+  return contactMailer;
+}
+
+function normalizeContactLine(value, maxLength) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeContactMessage(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, 1000);
+}
+
+function escapeContactHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function takeContactRateLimitSlot(req) {
+  const now = Date.now();
+  const windowStart = now - CONTACT_RATE_WINDOW_MS;
+  for (const [key, timestamps] of contactFormAttempts.entries()) {
+    const active = timestamps.filter((timestamp) => timestamp > windowStart);
+    if (active.length) contactFormAttempts.set(key, active);
+    else contactFormAttempts.delete(key);
+  }
+  const key = getClientIp(req) || "unknown";
+  const attempts = contactFormAttempts.get(key) || [];
+  if (attempts.length >= CONTACT_RATE_MAX_ATTEMPTS) {
+    return {
+      allowed: false,
+      retryAfter: Math.max(1, Math.ceil((attempts[0] + CONTACT_RATE_WINDOW_MS - now) / 1000)),
+    };
+  }
+  attempts.push(now);
+  contactFormAttempts.set(key, attempts);
+  return { allowed: true, retryAfter: 0 };
 }
 
 function isPublicClientIp(ip) {
@@ -547,6 +628,101 @@ function findActiveDeviceTransfer(code) {
   }
   return { compact, transfer };
 }
+
+app.post("/api/contact", express.json({ limit: "16kb" }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const rateLimit = takeContactRateLimitSlot(req);
+  if (!rateLimit.allowed) {
+    res.setHeader("Retry-After", String(rateLimit.retryAfter));
+    return res.status(429).json({
+      ok: false,
+      error: "Too many messages were sent from this connection. Please try again later.",
+    });
+  }
+
+  // A normal visitor never fills this hidden field. Silently accepting it
+  // keeps simple form bots from learning how to bypass the trap.
+  if (normalizeContactLine(req.body?.website, 120)) {
+    return res.json({ ok: true, message: "Your message has been sent to CodX Editor Support." });
+  }
+
+  const name = normalizeContactLine(req.body?.name, 80);
+  const email = normalizeContactLine(req.body?.email, 254).toLowerCase();
+  const topic = normalizeContactLine(req.body?.topic, 40);
+  const message = normalizeContactMessage(req.body?.message);
+  const allowedTopics = new Set([
+    "General Question",
+    "Support",
+    "Bug Report",
+    "Feature Request",
+    "Feedback",
+    "Privacy",
+  ]);
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (name.length < 2 || !emailPattern.test(email) || !allowedTopics.has(topic) || message.length < 10) {
+    return res.status(400).json({
+      ok: false,
+      error: "Please provide your name, a valid email, a topic, and a message of at least 10 characters.",
+    });
+  }
+
+  const mailer = getContactMailer();
+  if (!mailer) {
+    return res.status(503).json({
+      ok: false,
+      error: "Message delivery is not configured yet. Please email support@codxeditor.com directly.",
+    });
+  }
+
+  const safeName = escapeContactHtml(name);
+  const safeEmail = escapeContactHtml(email);
+  const safeTopic = escapeContactHtml(topic);
+  const safeMessage = escapeContactHtml(message).replace(/\n/g, "<br />");
+  const fromAddress = SMTP_FROM || `"CodX Editor Website" <${SMTP_USER || CONTACT_TO_EMAIL}>`;
+  try {
+    await mailer.sendMail({
+      from: fromAddress,
+      to: CONTACT_TO_EMAIL,
+      replyTo: { name, address: email },
+      subject: `[CodX Contact] ${topic} - ${name}`,
+      text: [
+        "New CodX Editor contact message",
+        "",
+        `Name: ${name}`,
+        `Email: ${email}`,
+        `Topic: ${topic}`,
+        "",
+        message,
+      ].join("\n"),
+      html: `
+        <div style="background:#f4f8f5;padding:28px;font-family:Arial,sans-serif;color:#173722">
+          <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dce9e0;border-radius:16px;overflow:hidden">
+            <div style="padding:22px 24px;background:linear-gradient(135deg,#087638,#16a34a);color:#ffffff">
+              <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.8">CodX Editor</div>
+              <h1 style="margin:7px 0 0;font-size:24px">New contact message</h1>
+            </div>
+            <div style="padding:24px">
+              <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:22px">
+                <tr><td style="padding:7px 0;color:#6f8176;width:90px">Name</td><td style="padding:7px 0;font-weight:700">${safeName}</td></tr>
+                <tr><td style="padding:7px 0;color:#6f8176">Email</td><td style="padding:7px 0"><a href="mailto:${safeEmail}" style="color:#087638">${safeEmail}</a></td></tr>
+                <tr><td style="padding:7px 0;color:#6f8176">Topic</td><td style="padding:7px 0;font-weight:700">${safeTopic}</td></tr>
+              </table>
+              <div style="border-top:1px solid #e5eee8;padding-top:20px;line-height:1.65">${safeMessage}</div>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+    return res.json({ ok: true, message: "Your message has been sent to CodX Editor Support." });
+  } catch (error) {
+    console.error("Failed to send contact form email:", error?.code || error?.message || error);
+    return res.status(503).json({
+      ok: false,
+      error: "Your message could not be sent right now. Please try again or email support@codxeditor.com directly.",
+    });
+  }
+});
 
 app.use(express.json({ limit: "25mb" }));
 app.use((req, res, next) => {

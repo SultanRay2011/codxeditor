@@ -108,6 +108,21 @@ The default `repo read:user` scope allows updates to public and private reposito
 
 When a backend restart is required, active collaboration hosts reconnect and restore the room link, PIN, permissions, participant controls, chat history, file access, and pair-programming state. Admin authentication also remains valid across normal restarts. In production, keep `SESSION_RECOVERY_SECRET` stable across deployments; changing it intentionally expires protected collaboration recovery data and admin sessions.
 
+### Contact form mail delivery
+
+The contact page sends messages through the server to `support@codxeditor.com`. Configure the mailbox's outgoing SMTP details in `.env` locally or in the hosting environment:
+
+```env
+SMTP_HOST=mail.example.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=support@codxeditor.com
+SMTP_PASSWORD=your-mailbox-password
+SMTP_FROM="CodX Editor Support <support@codxeditor.com>"
+```
+
+Use the exact outgoing-server values shown by the email provider. In cPanel, open **Email Accounts**, find the support mailbox, and choose **Connect Devices** to see the SMTP hostname and ports. Port `465` normally uses `SMTP_SECURE=true`; port `587` normally uses `SMTP_SECURE=false`. Restart the Node.js application after changing these variables. Never put the mailbox password in `contact.html` or commit it to Git.
+
 ### Persistent published links
 
 Published projects use PostgreSQL whenever `DATABASE_URL` is configured. On the first database-backed start, the server creates its table and imports any projects already bundled in `published-projects.json`. Creating or updating a link is acknowledged only after the database write succeeds.

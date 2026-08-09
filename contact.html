@@ -447,7 +447,11 @@
       }
 
       .contact-submit {
+        display: inline-flex;
         justify-self: start;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
         border: none;
         border-radius: 10px;
         background: linear-gradient(135deg, #4caf50, #43a047);
@@ -467,6 +471,46 @@
         transform: translateY(-2px);
         box-shadow: 0 12px 24px rgba(76, 175, 80, 0.28);
         background: linear-gradient(135deg, #43a047, #388e3c);
+      }
+
+      .contact-submit:disabled {
+        cursor: wait;
+        opacity: 0.72;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .contact-submit.is-sending i {
+        animation: contactSpinner 0.8s linear infinite;
+      }
+
+      .form-submit-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .form-status {
+        margin: 0;
+        color: #b42318;
+        font-size: 0.92em;
+        font-weight: 650;
+        line-height: 1.5;
+      }
+
+      .form-status:empty {
+        display: none;
+      }
+
+      .contact-honeypot {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
 
       .contact-success {
@@ -533,6 +577,12 @@
         to {
           opacity: 1;
           transform: scale(1);
+        }
+      }
+
+      @keyframes contactSpinner {
+        to {
+          transform: rotate(360deg);
         }
       }
 
@@ -939,15 +989,19 @@
               class="contact-form"
               novalidate
             >
+              <div class="contact-honeypot" aria-hidden="true">
+                <label for="contactWebsite">Website</label>
+                <input id="contactWebsite" name="website" type="text" tabindex="-1" autocomplete="off" />
+              </div>
               <div class="contact-form-grid">
                 <div class="form-group">
                   <label class="form-label" for="contactName">Name</label>
-                  <input class="form-input" id="contactName" name="Name" type="text" placeholder="Your full name" required />
+                  <input class="form-input" id="contactName" name="Name" type="text" placeholder="Your full name" maxlength="80" autocomplete="name" required />
                   <div class="form-error" id="contactNameError" aria-live="polite"></div>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="contactEmail">Your Email</label>
-                  <input class="form-input" id="contactEmail" name="Email" type="email" placeholder="you@example.com" required />
+                  <input class="form-input" id="contactEmail" name="Email" type="email" placeholder="you@example.com" maxlength="254" autocomplete="email" required />
                   <div class="form-error" id="contactEmailError" aria-live="polite"></div>
                 </div>
                 <div class="form-group full-width">
@@ -959,6 +1013,7 @@
                     <option value="Bug Report">Bug Report</option>
                     <option value="Feature Request">Feature Request</option>
                     <option value="Feedback">Feedback</option>
+                    <option value="Privacy">Privacy</option>
                   </select>
                   <div class="form-error" id="contactTopicError" aria-live="polite"></div>
                 </div>
@@ -972,10 +1027,16 @@
                 </div>
               </div>
               <p class="form-note">
-                When you submit, your filled-in details will be prepared and sent to us for review, so we can respond to your question, feedback, support request, bug report, or feature suggestion more efficiently. If you need any more info, contact us on
-                <a href="mailto:support@codxeditor.com">support@codxeditor.com</a>.
+                Your name, email, topic, and message will be sent securely to
+                <a href="mailto:support@codxeditor.com">support@codxeditor.com</a> so we can reply. Do not include passwords, secret keys, or private code. See our <a href="privacy.html">privacy policy</a> for details.
               </p>
-              <button class="contact-submit" type="submit">Send Message</button>
+              <div class="form-submit-row">
+                <button class="contact-submit" id="contactSubmit" type="submit">
+                  <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                  <span id="contactSubmitLabel">Send Message</span>
+                </button>
+                <p class="form-status" id="contactFormStatus" role="status" aria-live="polite" tabindex="-1"></p>
+              </div>
             </form>
             <div
               class="contact-success"
@@ -989,8 +1050,8 @@
               <div class="success-checkmark" aria-hidden="true">
                 <i class="fa-solid fa-check"></i>
               </div>
-              <h4>Message Submitted Successfully</h4>
-              <p>Your message has been submitted successfully. Your email application will open with the details filled in so you can complete delivery.</p>
+              <h4>Message Sent Successfully</h4>
+              <p>Your message was delivered to <strong>support@codxeditor.com</strong>. We can reply directly to the email address you provided.</p>
             </div>
           </div>
         </div>
@@ -1015,7 +1076,7 @@
             <article class="faq-card"><h3>Feature request</h3><p>Explain the task you are trying to finish, who it helps, and how you expect the workflow to behave. That context is more actionable than only naming a button.</p></article>
             <article class="faq-card"><h3>Privacy question</h3><p>Read the <a href="privacy.html">privacy and data guide</a>, then contact us if you need clarification about browser storage, connected services, cookies, publishing, or collaboration data.</p></article>
           </div>
-          <div class="content-callout"><strong>About the form:</strong> it opens your configured email application using a <code>mailto:</code> action. If no email application opens, send the same details directly to <a href="mailto:support@codxeditor.com">support@codxeditor.com</a>.</div>
+          <div class="content-callout"><strong>About the form:</strong> it sends your message directly to the CodX Editor support mailbox. If delivery is temporarily unavailable, you can still email <a href="mailto:support@codxeditor.com">support@codxeditor.com</a>.</div>
         </section>
       </div>
     </div>
@@ -1042,6 +1103,10 @@
       const contactTopic = document.getElementById("contactTopic");
       const contactMessage = document.getElementById("contactMessage");
       const contactMessageCount = document.getElementById("contactMessageCount");
+      const contactWebsite = document.getElementById("contactWebsite");
+      const contactSubmit = document.getElementById("contactSubmit");
+      const contactSubmitLabel = document.getElementById("contactSubmitLabel");
+      const contactFormStatus = document.getElementById("contactFormStatus");
       const contactSuccess = document.getElementById("contactSuccess");
       const contactCardEl = document.querySelector('.contact-card');
       const pageHeader = document.querySelector('header');
@@ -1092,8 +1157,8 @@
 
       function validateName() {
         const value = String(contactName.value || "").trim();
-        if (!value) {
-          return setFieldError(contactName, "contactNameError", "Please enter your full name.");
+        if (value.length < 2) {
+          return setFieldError(contactName, "contactNameError", "Please enter at least 2 characters.");
         }
         return setFieldError(contactName, "contactNameError", "");
       }
@@ -1125,8 +1190,8 @@
 
       function validateMessage() {
         const value = String(contactMessage.value || "").trim();
-        if (!value) {
-          return setFieldError(contactMessage, "contactMessageError", "Please fill out your message.");
+        if (value.length < 10) {
+          return setFieldError(contactMessage, "contactMessageError", "Please enter at least 10 characters.");
         }
         return setFieldError(contactMessage, "contactMessageError", "");
       }
@@ -1156,7 +1221,8 @@
       }
 
       if (contactForm) {
-        contactForm.addEventListener("submit", (event) => {
+        contactForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
           const currentScrollY = window.scrollY;
           const isNameValid = validateName();
           const isEmailValid = validateEmail();
@@ -1164,7 +1230,6 @@
           const isMessageValid = validateMessage();
 
           if (!isNameValid || !isEmailValid || !isTopicValid || !isMessageValid) {
-            event.preventDefault();
             const firstInvalid = document.querySelector(".has-error");
             if (firstInvalid && typeof firstInvalid.focus === "function") {
               firstInvalid.focus({ preventScroll: true });
@@ -1173,26 +1238,50 @@
             return;
           }
 
-          event.preventDefault();
-          const subject = encodeURIComponent(`CodX Editor: ${contactTopic.value}`);
-          const body = encodeURIComponent([
-            `Name: ${contactName.value.trim()}`,
-            `Email: ${contactEmail.value.trim()}`,
-            `Topic: ${contactTopic.value}`,
-            "",
-            contactMessage.value.trim(),
-          ].join("\n"));
-          const mailtoUrl = `mailto:support@codxeditor.com?subject=${subject}&body=${body}`;
+          contactFormStatus.textContent = "";
+          contactSubmit.disabled = true;
+          contactSubmit.classList.add("is-sending");
+          contactSubmit.querySelector("i").className = "fa-solid fa-circle-notch";
+          contactSubmitLabel.textContent = "Sending...";
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
-          contactForm.hidden = true;
-          contactSuccess.classList.add("visible");
-          contactSuccess.setAttribute("aria-hidden", "false");
-          contactSuccess.focus({ preventScroll: true });
-          contactSuccess.scrollIntoView({ behavior: "smooth", block: "center" });
+          try {
+            const response = await fetch("/api/contact", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: contactName.value.trim(),
+                email: contactEmail.value.trim(),
+                topic: contactTopic.value,
+                message: contactMessage.value.trim(),
+                website: contactWebsite.value,
+              }),
+              signal: controller.signal,
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.ok === false) {
+              throw new Error(result.error || "Your message could not be sent right now.");
+            }
 
-          window.setTimeout(() => {
-            window.location.href = mailtoUrl;
-          }, 450);
+            contactForm.hidden = true;
+            contactSuccess.classList.add("visible");
+            contactSuccess.setAttribute("aria-hidden", "false");
+            contactSuccess.focus({ preventScroll: true });
+            contactSuccess.scrollIntoView({ behavior: "smooth", block: "center" });
+          } catch (error) {
+            contactFormStatus.textContent = error?.name === "AbortError"
+              ? "Sending took too long. Please check your connection and try again."
+              : error.message;
+            contactFormStatus.focus({ preventScroll: true });
+          } finally {
+            window.clearTimeout(timeoutId);
+            contactSubmit.disabled = false;
+            contactSubmit.classList.remove("is-sending");
+            contactSubmit.querySelector("i").className = "fa-solid fa-paper-plane";
+            contactSubmitLabel.textContent = "Send Message";
+          }
         });
       }
     </script>

@@ -857,7 +857,7 @@
         <div class="privacy-guarantee">
           <h3><i class="fa-solid fa-shield-halved"></i> Your Code Privacy Commitment</h3>
           <p>
-            <span class="brand-wordmark"><span class="cod">Cod</span><span class="x">X</span><span class="editor"> Editor</span></span> does not sell personal information or build advertising profiles from the code you write. Standard project drafts stay in your browser, while optional features such as collaboration, publishing, GitHub, and translation use the limited data needed to provide those features.
+            <span class="brand-wordmark"><span class="cod">Cod</span><span class="x">X</span><span class="editor"> Editor</span></span> does not sell personal information or build advertising profiles from the code you write. Standard project drafts stay in your browser, while optional features such as collaboration, publishing, GitHub, translation, and the contact form use the limited data needed to provide those features.
           </p>
         </div>
 
@@ -872,6 +872,7 @@
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-globe"></i></span><h3>Publishing</h3><p>Files included in a published project are sent to the service and stored so the public link keeps working. After an update, the service also keeps the immediately previous published version so a verified user can preview or restore it; restoring swaps the current and previous versions. Publishing creates a verification key that is required to update, review, restore, or open the project's full source code. Anyone who has the key can perform those actions and load every file into the editor, so treat it like a password and never post it publicly. Do not publish secrets, private messages, credentials, or material you do not have permission to share.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-cube"></i></span><h3>Optional browser runtime</h3><p>Runtime project files and packages can run in an isolated browser container supplied by the runtime provider. A temporary preview URL bridges the selected localhost port to the browser tab.</p></article>
             <article class="data-card"><span class="card-icon"><i class="fa-solid fa-language"></i></span><h3>Localization</h3><p>Country headers, a public IP lookup when necessary, or browser language may be used to choose an interface language. Visible interface phrases can be sent to a translation provider and cached.</p></article>
+            <article class="data-card"><span class="card-icon"><i class="fa-solid fa-envelope"></i></span><h3>Contact messages</h3><p>When you submit the contact form, your name, email address, selected topic, and message are sent through the CodX Editor server to support@codxeditor.com. They remain in the support mailbox as needed to answer you and maintain a reasonable support history. Your connection address is held temporarily in server memory for up to 15 minutes to limit spam; it is not added to the support email.</p></article>
           </div>
           <div class="content-callout"><strong>Your safest default:</strong> keep credentials out of project files, export important work, close collaboration sessions when finished, disconnect GitHub when no longer needed, and review a project before publishing it.</div>
         </section>
@@ -1045,8 +1046,8 @@
             </li>
             <li>
               <span class="checkmark"><i class="fa-solid fa-check"></i></span>
-              <strong>Personal Information</strong> - We don't ask for or store
-              names, emails, or contact details
+              <strong>Personal Information by Default</strong> - We don't require
+              names, emails, or contact details to use the editor. We ask for a name and reply address only when you deliberately submit the contact form
             </li>
             <li>
               <span class="checkmark"><i class="fa-solid fa-check"></i></span>
@@ -1224,8 +1225,7 @@
           <ul>
             <li>Our website is served over HTTPS to encrypt data in transit</li>
             <li>
-              We don't store sensitive information on our servers because your
-              data never reaches them
+              Standard editor projects stay in your browser unless you choose a connected or sharing feature. Contact-form details pass through the server to the support mailbox and should never include passwords, secret keys, or private code
             </li>
             <li>
               We regularly update dependencies and monitor for security
@@ -1268,6 +1268,9 @@
           <p>
             You can contact us via the <a href="contact.html">Contact</a> page
             on our website.
+          </p>
+          <p>
+            Contact-form submissions include the name, reply email, topic, and message you provide. We use them to answer your request, and you may ask us to delete a support conversation when it is no longer needed.
           </p>
           <div class="important-note">
             <p>
