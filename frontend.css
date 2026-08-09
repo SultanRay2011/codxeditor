@@ -3059,12 +3059,18 @@ iframe {
   flex: 0 0 auto;
   gap: 5px;
 }
-.node-server-actions .run-button,
-.node-server-actions .run-button strong {
+#nodeViewToggleBtn,
+#nodeClearTerminalBtn {
   font-family: var(--editor-control-font-family, var(--font-code)) !important;
   font-style: normal !important;
   font-weight: 700 !important;
   letter-spacing: var(--editor-control-letter-spacing, 0);
+}
+
+#nodeViewToggleBtn strong,
+#nodeClearTerminalBtn strong {
+  font: inherit !important;
+  letter-spacing: inherit;
 }
 .node-server-btn {
   display: inline-flex;
