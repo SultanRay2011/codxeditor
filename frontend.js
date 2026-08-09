@@ -16755,7 +16755,7 @@ function highlightHtmlSegment(code) {
     index = match.index + match[0].length;
   }
   result += highlightText(code.slice(index));
-  return result || " ";
+  return result;
 }
 
 function highlightHtml(code) {
@@ -16804,12 +16804,18 @@ function getCssLiteralColorSwatch(value) {
   return "";
 }
 
-function highlightCss(code, sourceOffset = 0) {
+function highlightCss(code, sourceOffset = 0, dialect = "css") {
   let result = "";
   let index = 0;
   let blockDepth = 0;
   let expectingProperty = false;
   let afterPropertyColon = false;
+  let variableDeclarationPending = false;
+  const normalizedDialect = String(dialect || "css").toLowerCase();
+  const supportsLineComments = ["scss", "sass", "less"].includes(normalizedDialect);
+  const cssAtRuleKeywords = new Set(
+    "charset color-profile container counter-style custom-media document font-face font-feature-values font-palette-values import keyframes layer media namespace page property scope starting-style supports view-transition".split(" "),
+  );
 
   const append = (text, className = "", _options = {}) => {
     if (!text) return;
@@ -16876,6 +16882,14 @@ function highlightCss(code, sourceOffset = 0) {
       continue;
     }
 
+    if (supportsLineComments && char === "/" && next === "/") {
+      const end = code.indexOf("\n", index + 2);
+      const commentEnd = end === -1 ? code.length : end;
+      append(code.slice(index, commentEnd), "comment");
+      index = commentEnd;
+      continue;
+    }
+
     if (char === "\"" || char === "'") {
       append(consumeString(char), "string");
       continue;
@@ -16909,6 +16923,23 @@ function highlightCss(code, sourceOffset = 0) {
       index += 1;
       expectingProperty = true;
       afterPropertyColon = false;
+      variableDeclarationPending = false;
+      continue;
+    }
+
+    if (char === ";") {
+      append(char, "punctuation");
+      index += 1;
+      afterPropertyColon = false;
+      variableDeclarationPending = false;
+      continue;
+    }
+
+    if (char === ":" && variableDeclarationPending) {
+      append(char, "punctuation");
+      index += 1;
+      variableDeclarationPending = false;
+      afterPropertyColon = true;
       continue;
     }
 
@@ -16920,9 +16951,30 @@ function highlightCss(code, sourceOffset = 0) {
       continue;
     }
 
+    if (normalizedDialect === "scss" && char === "$" && /[a-zA-Z_-]/.test(next || "")) {
+      const start = index;
+      index += 1;
+      consumeIdentifier();
+      append(code.slice(start, index), "variable");
+      variableDeclarationPending = /^\s*:/.test(code.slice(index));
+      continue;
+    }
+
+    if (normalizedDialect === "less" && char === "@" && next === "{") {
+      const end = code.indexOf("}", index + 2);
+      const variableEnd = end === -1 ? code.length : end + 1;
+      append(code.slice(index, variableEnd), "variable");
+      index = variableEnd;
+      variableDeclarationPending = /^\s*:/.test(code.slice(index));
+      continue;
+    }
+
     if (char === "@" && /[a-zA-Z-]/.test(next || "")) {
       index += 1;
-      append("@" + consumeIdentifier(), "keyword");
+      const name = consumeIdentifier();
+      const isLessVariable = normalizedDialect === "less" && !cssAtRuleKeywords.has(name.toLowerCase());
+      append("@" + name, isLessVariable ? "variable" : "keyword");
+      if (isLessVariable) variableDeclarationPending = /^\s*:/.test(code.slice(index));
       continue;
     }
 
@@ -16940,13 +16992,19 @@ function highlightCss(code, sourceOffset = 0) {
       continue;
     }
 
-    if (char === "#" && blockDepth === 0 && /[a-zA-Z0-9_-]/.test(next || "")) {
+    if (
+      char === "#" &&
+      !afterPropertyColon &&
+      (blockDepth === 0 || expectingProperty) &&
+      /[a-zA-Z0-9_-]/.test(next || "")
+    ) {
       index += 1;
       append("#" + consumeIdentifier(), "selector");
+      if (blockDepth > 0) expectingProperty = false;
       continue;
     }
 
-    if (char === "#" && blockDepth > 0 && /[0-9a-fA-F]/.test(next || "")) {
+    if (char === "#" && afterPropertyColon && /[0-9a-fA-F]/.test(next || "")) {
       const start = index;
       index += 1;
       consumeWhile((value) => /[0-9a-fA-F]/.test(value));
@@ -16959,9 +17017,22 @@ function highlightCss(code, sourceOffset = 0) {
       continue;
     }
 
-    if (char === "." && blockDepth === 0 && /[a-zA-Z_-]/.test(next || "")) {
+    if (
+      char === "." &&
+      (blockDepth === 0 || expectingProperty) &&
+      /[a-zA-Z_-]/.test(next || "")
+    ) {
       index += 1;
       append("." + consumeIdentifier(), "selector");
+      if (blockDepth > 0) expectingProperty = false;
+      continue;
+    }
+
+    if (char === "&" && blockDepth > 0) {
+      append(char, "selector");
+      index += 1;
+      expectingProperty = false;
+      afterPropertyColon = false;
       continue;
     }
 
@@ -17032,10 +17103,12 @@ function highlightCss(code, sourceOffset = 0) {
   return result || " ";
 }
 
-function highlightJs(code) {
+function highlightJs(code, options = {}) {
   let result = "";
   let index = 0;
   let previousSignificant = "";
+  const allowJsx = options.allowJsx !== false;
+  const isTypeScript = options.typescript === true;
 
   const keywords = new Set(
     "as async await break case catch class const continue debugger default delete do else enum export extends finally for from function get if implements import in instanceof interface let namespace new of package private protected public readonly return set static super switch this throw try type typeof var void while with yield satisfies declare abstract override keyof infer unknown never any".split(" "),
@@ -17122,6 +17195,11 @@ function highlightJs(code) {
     }
     return ![")", "]", "++", "--"].includes(prev);
   };
+  const looksLikeTypeParameterList = () => {
+    if (!isTypeScript || peek() !== "<") return false;
+    const candidate = code.slice(index);
+    return /^<[A-Za-z_$][\w$]*(?:\s+extends\s+[^=>\n,]+)?(?:\s*,\s*[A-Za-z_$][\w$]*(?:\s+extends\s+[^=>\n,]+)?)*\s*,?>\s*\(/.test(candidate);
+  };
 
   // A {...} block inside JSX: the contents are ordinary JavaScript.
   const consumeJsxExpression = () => {
@@ -17143,7 +17221,7 @@ function highlightJs(code) {
       index += 1;
     }
     const inner = code.slice(start, index);
-    if (inner) result += highlightJs(inner);
+    if (inner) result += highlightJs(inner, { allowJsx: true, typescript: isTypeScript });
     if (code[index] === "}") {
       append("}", "punctuation");
       index += 1;
@@ -17280,6 +17358,7 @@ function highlightJs(code) {
       else if (builtins.has(word)) append(word, "builtin");
       else if (beforeWord === "." && /^\s*\(/.test(afterWord)) append(word, "method");
       else if (beforeWord === ".") append(word, "property-access");
+      else if (previousSignificant === "function") append(word, "function");
       else if (["class", "extends", "implements", "new"].includes(previousSignificant)) append(word, "class-name");
       else if (["const", "let", "var", "import", "catch"].includes(previousSignificant)) append(word, "declaration");
       else if (/^\s*:/.test(afterWord)) append(word, "property");
@@ -17292,7 +17371,13 @@ function highlightJs(code) {
 
     // JSX: treat "<" as a tag when it cannot be a comparison, so React markup
     // is coloured as tags/attributes rather than operators and identifiers.
-    if (char === "<" && (isIdStart(next) || next === "/" || next === ">") && jsxCanStart()) {
+    if (
+      allowJsx &&
+      char === "<" &&
+      (isIdStart(next) || next === "/" || next === ">") &&
+      jsxCanStart() &&
+      !looksLikeTypeParameterList()
+    ) {
       consumeJsxElement();
       continue;
     }
@@ -17316,15 +17401,84 @@ function highlightJs(code) {
   return result || " ";
 }
 
-function highlightJson(code) {
-  return wrapTokens(code, [
-    { className: "json-key", regex: /"(?:\\.|[^"\\])*"(?=\s*:)/g },
-    { className: "string", regex: /"(?:\\.|[^"\\])*"/g },
-    { className: "number", regex: /-?\b(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g },
-    { className: "constant", regex: /\b(?:true|false|null)\b/g },
-    { className: "operator", regex: /:/g },
-    { className: "punctuation", regex: /[{}[\],]/g },
-  ]);
+function highlightJson(code, options = {}) {
+  let result = "";
+  let index = 0;
+  const allowComments = options.allowComments === true;
+  const append = (text, className = "") => {
+    if (!text) return;
+    result += className
+      ? `<span class="token ${className}">${escapeHtml(text)}</span>`
+      : escapeHtml(text);
+  };
+
+  while (index < code.length) {
+    const char = code[index];
+    const next = code[index + 1];
+
+    if (/\s/.test(char)) {
+      const start = index;
+      while (index < code.length && /\s/.test(code[index])) index += 1;
+      append(code.slice(start, index));
+      continue;
+    }
+
+    if (allowComments && char === "/" && next === "/") {
+      const start = index;
+      index = code.indexOf("\n", index + 2);
+      if (index === -1) index = code.length;
+      append(code.slice(start, index), "comment");
+      continue;
+    }
+
+    if (allowComments && char === "/" && next === "*") {
+      const start = index;
+      const end = code.indexOf("*/", index + 2);
+      index = end === -1 ? code.length : end + 2;
+      append(code.slice(start, index), "comment");
+      continue;
+    }
+
+    if (char === '"') {
+      const start = index;
+      index += 1;
+      while (index < code.length) {
+        if (code[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (code[index] === '"') {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      const isKey = /^\s*:/.test(code.slice(index));
+      append(code.slice(start, index), isKey ? "json-key" : "string");
+      continue;
+    }
+
+    const numberMatch = code.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+    if (numberMatch) {
+      append(numberMatch[0], "number");
+      index += numberMatch[0].length;
+      continue;
+    }
+
+    const constantMatch = code.slice(index).match(/^(?:true|false|null)\b/);
+    if (constantMatch) {
+      append(constantMatch[0], "constant");
+      index += constantMatch[0].length;
+      continue;
+    }
+
+    if (char === ":") append(char, "operator");
+    else if ("{}[],".includes(char)) append(char, "punctuation");
+    else append(char, "identifier");
+    index += 1;
+  }
+
+  return result || " ";
 }
 
 function highlightEnv(code) {
@@ -17343,12 +17497,139 @@ function highlightPlainText(code) {
   return escapeHtml(code) || " ";
 }
 
-function highlightCodeByFileType(code, fileType) {
+function getMarkdownFenceFileType(language) {
+  const normalized = String(language || "").trim().toLowerCase().replace(/^language-/, "");
+  const aliases = {
+    bash: "txt",
+    cjs: "cjs",
+    css: "css",
+    env: "env",
+    htm: "htm",
+    html: "html",
+    javascript: "js",
+    js: "js",
+    json: "json",
+    json5: "jsonc",
+    jsonc: "jsonc",
+    jsx: "jsx",
+    less: "less",
+    markdown: "md",
+    md: "md",
+    mjs: "mjs",
+    plaintext: "txt",
+    sass: "scss",
+    scss: "scss",
+    shell: "txt",
+    text: "txt",
+    ts: "ts",
+    tsx: "tsx",
+    typescript: "ts",
+    xml: "html",
+  };
+  return aliases[normalized] || "txt";
+}
+
+function highlightMarkdownInline(text) {
+  if (!text) return "";
+  return wrapTokens(text, [
+    { className: "string", regex: /`+[^`\n]+`+/g },
+    { className: "attr", regex: /!?\[[^\]\n]*\]\([^\s)]+(?:\s+["'][^"']*["'])?\)/g },
+    { className: "tag", regex: /<\/?[A-Za-z][^>\n]*>/g },
+    { className: "entity", regex: /&[A-Za-z0-9#]+;/g },
+    { className: "keyword", regex: /(?:\*\*|__)[^\n]+?(?:\*\*|__)/g },
+    { className: "keyword", regex: /(?:\*[^*\n]+\*|_[^_\n]+_)/g },
+    { className: "builtin", regex: /https?:\/\/[^\s<]+/g },
+  ]);
+}
+
+function highlightMarkdown(code) {
+  const lines = String(code || "").split("\n");
+  const rendered = [];
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})\s*([^\s`]*)?.*$/);
+    if (fenceMatch) {
+      const marker = fenceMatch[2];
+      const fenceCharacter = marker[0];
+      const minimumLength = marker.length;
+      const body = [];
+      let closingLine = -1;
+      for (let candidateIndex = lineIndex + 1; candidateIndex < lines.length; candidateIndex += 1) {
+        const candidate = lines[candidateIndex];
+        const closingMatch = candidate.match(/^\s*(`{3,}|~{3,})\s*$/);
+        if (
+          closingMatch &&
+          closingMatch[1][0] === fenceCharacter &&
+          closingMatch[1].length >= minimumLength
+        ) {
+          closingLine = candidateIndex;
+          break;
+        }
+        body.push(candidate);
+      }
+
+      rendered.push(`<span class="token keyword">${escapeHtml(line)}</span>`);
+      if (body.length) {
+        const fenceType = getMarkdownFenceFileType(fenceMatch[3]);
+        rendered.push(highlightCodeByFileType(body.join("\n"), fenceType, { fromMarkdown: true }));
+      }
+      if (closingLine !== -1) {
+        rendered.push(`<span class="token keyword">${escapeHtml(lines[closingLine])}</span>`);
+        lineIndex = closingLine;
+      } else {
+        lineIndex = lines.length;
+      }
+      continue;
+    }
+
+    const heading = line.match(/^(\s*)(#{1,6})(\s+)(.*)$/);
+    if (heading) {
+      rendered.push(`${escapeHtml(heading[1])}<span class="token keyword">${escapeHtml(heading[2])}</span>${escapeHtml(heading[3])}${highlightMarkdownInline(heading[4])}`);
+      continue;
+    }
+
+    const quote = line.match(/^(\s*)(>+)(\s?)(.*)$/);
+    if (quote) {
+      rendered.push(`${escapeHtml(quote[1])}<span class="token operator">${escapeHtml(quote[2])}</span>${escapeHtml(quote[3])}${highlightMarkdownInline(quote[4])}`);
+      continue;
+    }
+
+    const unorderedList = line.match(/^(\s*)([-+*])(\s+)(.*)$/);
+    if (unorderedList) {
+      rendered.push(`${escapeHtml(unorderedList[1])}<span class="token operator">${escapeHtml(unorderedList[2])}</span>${escapeHtml(unorderedList[3])}${highlightMarkdownInline(unorderedList[4])}`);
+      continue;
+    }
+
+    const orderedList = line.match(/^(\s*)(\d+)([.)])(\s+)(.*)$/);
+    if (orderedList) {
+      rendered.push(`${escapeHtml(orderedList[1])}<span class="token number">${escapeHtml(orderedList[2])}</span><span class="token punctuation">${escapeHtml(orderedList[3])}</span>${escapeHtml(orderedList[4])}${highlightMarkdownInline(orderedList[5])}`);
+      continue;
+    }
+
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      rendered.push(`<span class="token punctuation">${escapeHtml(line)}</span>`);
+      continue;
+    }
+
+    rendered.push(highlightMarkdownInline(line));
+  }
+
+  return rendered.join("\n") || " ";
+}
+
+function highlightCodeByFileType(code, fileType, options = {}) {
   if (["html", "htm", "svg", "xml"].includes(fileType)) return highlightHtml(code);
-  if (["css", "scss", "sass", "less"].includes(fileType)) return highlightCss(code);
-  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) return highlightJs(code);
-  if (["json", "jsonc"].includes(fileType)) return highlightJson(code);
+  if (["css", "scss", "sass", "less"].includes(fileType)) return highlightCss(code, 0, fileType);
+  if (["js", "mjs", "cjs", "jsx", "ts", "tsx"].includes(fileType)) {
+    return highlightJs(code, {
+      allowJsx: fileType !== "ts",
+      typescript: ["ts", "tsx"].includes(fileType),
+    });
+  }
+  if (["json", "jsonc"].includes(fileType)) return highlightJson(code, { allowComments: fileType === "jsonc" });
   if (fileType === "env" || /^\.env(?:\.|$)/i.test(activeFile?.name || "")) return highlightEnv(code);
+  if (["md", "markdown"].includes(fileType) && !options.fromMarkdown) return highlightMarkdown(code);
   return highlightPlainText(code);
 }
 
