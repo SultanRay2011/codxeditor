@@ -149,6 +149,7 @@ const projectSyncStatus = document.getElementById("projectSyncStatus");
 const syncConflictBar = document.getElementById("syncConflictBar");
 const templatesBtn = document.getElementById("templatesBtn");
 const publishProjectBtn = document.getElementById("publishProjectBtn");
+const publishedChangesBtn = document.getElementById("publishedChangesBtn");
 const connectGitHubBtn = document.getElementById("connectGitHubBtn");
 const connectGitHubBtnLabel = document.getElementById("connectGitHubBtnLabel");
 const enableNodeRuntimeBtn = document.getElementById("enableNodeRuntimeBtn");
@@ -447,6 +448,7 @@ function getCommandPaletteCommands() {
     createButtonCommand("project.transfer", "Device Transfer", "Move projects and settings to another device", "fa-solid fa-mobile-screen-button", "deviceTransferBtn", "phone laptop import sync code"),
     createButtonCommand("project.templates", "Open starter templates", "Start from a ready-made project", "fa-solid fa-layer-group", "templatesBtn", "gallery examples"),
     createButtonCommand("project.publish", "Publish / share project", "Create or update a public link", "fa-solid fa-share-nodes", "publishProjectBtn", "deploy link"),
+    createButtonCommand("project.publishedChanges", "Published changes", "Preview or restore the previous version of a public link", "fa-solid fa-clock-rotate-left", "publishedChangesBtn", "history rollback recovery verification key"),
     createButtonCommand("project.export", "Export project as ZIP", "Download every project file", "fa-solid fa-file-zipper", "exportZipBtn", "download backup"),
     createButtonCommand("project.import", "Import project ZIP", "Open files from a ZIP archive", "fa-solid fa-file-import", "importZipBtn", "upload restore"),
     createButtonCommand("project.search", "Find and replace", "Find code across every project file", "fa-solid fa-magnifying-glass", "projectSearchBtn", "search project replace all files regex case whole word"),
@@ -10970,6 +10972,317 @@ async function publishCurrentProject() {
     if (error?.name === "AbortError") return;
     showNotification(error.message || (mode === "update" ? "Failed to update link." : "Failed to publish project."), "error");
   }
+}
+
+function parsePublishedProjectId(rawValue) {
+  const value = String(rawValue || "").trim();
+  if (/^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(value)) return value;
+  try {
+    const url = new URL(value, window.location.origin);
+    const match = url.pathname.match(/^\/(?:p|published)\/([^/?#]+)\/?$/i);
+    const id = match ? decodeURIComponent(match[1]) : "";
+    return /^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/.test(id) ? id : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function formatPublishedHistoryTime(timestamp) {
+  const value = new Date(Number(timestamp || 0));
+  if (Number.isNaN(value.getTime())) return "Unknown time";
+  return value.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function showPublishedHistoryAccessDialog() {
+  return new Promise((resolve) => {
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "published-history-access";
+    if (appDialogTitle) appDialogTitle.textContent = "REVIEW PUBLISHED CHANGES";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <div class="published-history-access">
+          <p>Enter the published link and its verification key to privately review the version before the last update.</p>
+          <label for="publishedHistoryLinkInput">
+            <span>Published link</span>
+            <input id="publishedHistoryLinkInput" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://codxeditor.com/p/my-project">
+          </label>
+          <label for="publishedHistoryKeyInput">
+            <span>Verification key</span>
+            <input id="publishedHistoryKeyInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="cxprojkey-XXXXXX">
+          </label>
+          <span id="publishedHistoryAccessError" class="published-history-error" role="alert" hidden></span>
+          <small><i class="fa-solid fa-lock"></i> The key is checked only for this request and is not saved on this device.</small>
+        </div>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="publishedHistoryCancelBtn" class="run-button published-history-secondary"><strong>CANCEL</strong></button>
+        <button type="button" id="publishedHistoryReviewBtn" class="run-button"><i class="fa-solid fa-clock-rotate-left"></i><strong>REVIEW CHANGES</strong></button>
+      `;
+    }
+    syncAppDialogCloseButton();
+    if (appDialog) appDialog.style.display = "flex";
+
+    const linkInput = document.getElementById("publishedHistoryLinkInput");
+    const keyInput = document.getElementById("publishedHistoryKeyInput");
+    const errorLabel = document.getElementById("publishedHistoryAccessError");
+    const reviewButton = document.getElementById("publishedHistoryReviewBtn");
+    const setError = (message) => {
+      if (!errorLabel) return;
+      errorLabel.textContent = String(message || "");
+      errorLabel.hidden = !message;
+    };
+    const review = async () => {
+      const projectId = parsePublishedProjectId(linkInput?.value);
+      const verificationKey = String(keyInput?.value || "").trim();
+      if (!projectId) {
+        setError("Enter a valid CodX published link or link name.");
+        linkInput?.focus();
+        return;
+      }
+      if (!verificationKey) {
+        setError("Enter the verification key for this published link.");
+        keyInput?.focus();
+        return;
+      }
+      if (!ensureInternetConnection()) return;
+      setError("");
+      if (reviewButton) {
+        reviewButton.disabled = true;
+        reviewButton.setAttribute("aria-busy", "true");
+      }
+      try {
+        const response = await fetch(`/api/published/${encodeURIComponent(projectId)}/history`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verificationKey }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "The published changes could not be loaded.");
+        }
+        closeAppDialog({
+          ok: true,
+          projectId,
+          verificationKey,
+          history: payload.history || {},
+        });
+      } catch (error) {
+        setError(error.message || "The published changes could not be loaded.");
+      } finally {
+        if (reviewButton?.isConnected) {
+          reviewButton.disabled = false;
+          reviewButton.removeAttribute("aria-busy");
+        }
+      }
+    };
+    document.getElementById("publishedHistoryCancelBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: false });
+    });
+    reviewButton?.addEventListener("click", review);
+    [linkInput, keyInput].forEach((input) => {
+      input?.addEventListener("input", () => setError(""));
+      input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          review();
+        }
+      });
+    });
+    setTimeout(() => linkInput?.focus(), 0);
+  });
+}
+
+function renderPublishedHistoryFileGroup(label, files, className, icon) {
+  const names = Array.isArray(files) ? files : [];
+  return `
+    <section class="published-history-file-group ${className}">
+      <span><i class="${icon}"></i> ${escapeHtml(label)} <b>${names.length}</b></span>
+      ${names.length
+        ? `<ul>${names.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}</ul>`
+        : "<small>None</small>"}
+    </section>
+  `;
+}
+
+function showPublishedHistoryViewer(history) {
+  return new Promise((resolve) => {
+    const changes = history?.changes || {};
+    const characterDelta = Number(changes.characterDelta || 0);
+    activeDialogResolver = resolve;
+    if (appDialog) appDialog.dataset.dialogKind = "published-history-view";
+    if (appDialogTitle) appDialogTitle.textContent = "LAST PUBLISHED CHANGES";
+    if (appDialogMessage) {
+      appDialogMessage.innerHTML = `
+        <div class="published-history-view">
+          <div class="published-history-heading">
+            <span class="published-history-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+            <span>
+              <strong>${escapeHtml(history.projectName || "Published project")}</strong>
+              <small>Current: ${escapeHtml(formatPublishedHistoryTime(history.currentSavedAt))} · Previous: ${escapeHtml(formatPublishedHistoryTime(history.previousSavedAt))}</small>
+            </span>
+          </div>
+          <div class="published-history-summary" aria-label="File change summary">
+            ${renderPublishedHistoryFileGroup("Modified", changes.modified, "is-modified", "fa-solid fa-pen")}
+            ${renderPublishedHistoryFileGroup("Added", changes.added, "is-added", "fa-solid fa-plus")}
+            ${renderPublishedHistoryFileGroup("Removed", changes.removed, "is-removed", "fa-solid fa-minus")}
+          </div>
+          <p class="published-history-delta">${Number(changes.unchangedCount || 0)} unchanged · ${characterDelta >= 0 ? "+" : ""}${characterDelta.toLocaleString()} characters in the current version</p>
+          <section class="published-history-preview">
+            <div class="published-history-preview-toolbar" role="group" aria-label="Choose version to preview">
+              <button type="button" id="publishedHistoryPreviousPreviewBtn" class="is-active" aria-pressed="true">BEFORE LAST UPDATE</button>
+              <button type="button" id="publishedHistoryCurrentPreviewBtn" aria-pressed="false">CURRENT</button>
+              <a id="publishedHistoryOpenLink" href="${escapeHtml(history.shareLink || "#")}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i><span>OPEN LINK</span></a>
+            </div>
+            <iframe id="publishedHistoryPreviewFrame" title="Previous published project preview" sandbox="allow-scripts allow-forms"></iframe>
+          </section>
+          <p class="published-history-note"><i class="fa-solid fa-circle-info"></i> Restoring changes the public link only. It does not replace files currently open in your editor.</p>
+        </div>
+      `;
+    }
+    if (appDialogInput) {
+      appDialogInput.style.display = "none";
+      appDialogInput.value = "";
+      appDialogInput.onkeydown = null;
+    }
+    if (appDialogActions) {
+      appDialogActions.innerHTML = `
+        <button type="button" id="publishedHistoryKeepBtn" class="run-button published-history-secondary"><i class="fa-solid fa-check"></i><strong>LEAVE AS IS</strong></button>
+        <button type="button" id="publishedHistoryRestoreBtn" class="run-button published-history-restore"><i class="fa-solid fa-rotate-left"></i><strong>RESTORE PREVIOUS</strong></button>
+      `;
+    }
+    syncAppDialogCloseButton();
+    if (appDialog) appDialog.style.display = "flex";
+    resetAppDialogScroll();
+
+    const frame = document.getElementById("publishedHistoryPreviewFrame");
+    const previousButton = document.getElementById("publishedHistoryPreviousPreviewBtn");
+    const currentButton = document.getElementById("publishedHistoryCurrentPreviewBtn");
+    const showPrevious = () => {
+      if (frame) {
+        frame.removeAttribute("src");
+        frame.srcdoc = history.previousPreviewAvailable
+          ? String(history.previousPreviewHtml || "")
+          : "<!doctype html><html><body style='font-family:sans-serif;padding:2rem'><h1>Preview unavailable</h1><p>The previous project did not have an HTML file to preview.</p></body></html>";
+        frame.title = "Previous published project preview";
+      }
+      previousButton?.classList.add("is-active");
+      currentButton?.classList.remove("is-active");
+      previousButton?.setAttribute("aria-pressed", "true");
+      currentButton?.setAttribute("aria-pressed", "false");
+    };
+    const showCurrent = () => {
+      if (frame) {
+        frame.removeAttribute("srcdoc");
+        frame.src = String(history.shareLink || "about:blank");
+        frame.title = "Current published project preview";
+      }
+      previousButton?.classList.remove("is-active");
+      currentButton?.classList.add("is-active");
+      previousButton?.setAttribute("aria-pressed", "false");
+      currentButton?.setAttribute("aria-pressed", "true");
+    };
+    previousButton?.addEventListener("click", showPrevious);
+    currentButton?.addEventListener("click", showCurrent);
+    document.getElementById("publishedHistoryKeepBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "keep" });
+    });
+    document.getElementById("publishedHistoryRestoreBtn")?.addEventListener("click", () => {
+      closeAppDialog({ ok: true, action: "restore" });
+    });
+    showPrevious();
+    setTimeout(() => previousButton?.focus(), 0);
+  });
+}
+
+async function restorePublishedHistory(access) {
+  const confirmation = await showAppDialog({
+    title: "RESTORE PREVIOUS VERSION?",
+    messageHtml: `<span class="published-history-confirm"><i class="fa-solid fa-triangle-exclamation"></i><span><strong>The public link will show the previous version.</strong><small>The current version will be kept as the new previous version, so this action can be undone.</small></span></span>`,
+    okText: "RESTORE PUBLIC LINK",
+    cancelText: "CANCEL",
+    okVariant: "background:#b45309",
+    keepOpenOnOk: true,
+  });
+  if (!confirmation?.ok) return false;
+  if (!ensureInternetConnection()) {
+    closeAppDialog({ ok: false });
+    return false;
+  }
+  const button = confirmation.actionButton;
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  }
+  if (appDialog) appDialog.dataset.dialogKind = "published-history-restoring";
+  try {
+    const response = await fetch(`/api/published/${encodeURIComponent(access.projectId)}/history/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        verificationKey: access.verificationKey,
+        expectedCurrentSavedAt: access.history.currentSavedAt,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || "The previous version could not be restored.");
+    }
+    closeAppDialog({ ok: true });
+    const resultPromise = showAppDialog({
+      title: "VERSION RESTORED",
+      messageHtml: `<span class="published-history-restored"><i class="fa-solid fa-circle-check"></i><span><strong>The public link now shows the previous version.</strong><a id="publishedHistoryRestoredLink" target="_blank" rel="noopener noreferrer">Open restored link</a></span></span>`,
+      okText: "DONE",
+      cancelText: "",
+    });
+    const restoredLink = document.getElementById("publishedHistoryRestoredLink");
+    if (restoredLink) restoredLink.href = String(payload.shareLink || access.history.shareLink || "#");
+    await resultPromise;
+    showNotification("Previous published version restored.", "success");
+    return true;
+  } catch (error) {
+    closeAppDialog({ ok: false });
+    await showAppDialog({
+      title: "RESTORE FAILED",
+      message: error.message || "The previous version could not be restored.",
+      okText: "OK",
+      cancelText: "",
+    });
+    return false;
+  }
+}
+
+async function handlePublishedChanges() {
+  if (activeSessionId && !isHost() && collabPermissions.disablePublishShare) {
+    showNotification("The host disabled publish/share for participants.", "error");
+    return;
+  }
+  if (!ensureInternetConnection()) return;
+  const access = await showPublishedHistoryAccessDialog();
+  if (!access?.ok) return;
+  if (!access.history?.hasPrevious) {
+    await showAppDialog({
+      title: "NO PREVIOUS VERSION",
+      messageHtml: `<span class="published-history-empty"><i class="fa-solid fa-clock"></i><span><strong>${escapeHtml(access.history?.projectName || "This published link")} has no saved history yet.</strong><small>A previous version becomes available after the link is updated. Links updated before this feature was added start building history with their next update.</small></span></span>`,
+      okText: "DONE",
+      cancelText: "",
+    });
+    return;
+  }
+  const choice = await showPublishedHistoryViewer(access.history);
+  if (choice?.action === "restore") await restorePublishedHistory(access);
 }
 
 function renderProjectLibrary(mode = "saved") {
@@ -23251,6 +23564,10 @@ function enforceCollabPermissionsUI() {
       publishProjectBtn.disabled = false;
       publishProjectBtn.title = "";
     }
+    if (publishedChangesBtn) {
+      publishedChangesBtn.disabled = false;
+      publishedChangesBtn.title = "";
+    }
     if (runPreviewBtn) {
       runPreviewBtn.disabled = false;
       runPreviewBtn.title = "";
@@ -23331,6 +23648,10 @@ function enforceCollabPermissionsUI() {
   if (publishProjectBtn) {
     publishProjectBtn.disabled = lockPublishShare;
     publishProjectBtn.title = lockPublishShare ? "The host disabled publish/share for participants." : "";
+  }
+  if (publishedChangesBtn) {
+    publishedChangesBtn.disabled = lockPublishShare;
+    publishedChangesBtn.title = lockPublishShare ? "The host disabled publish/share for participants." : "";
   }
   if (runPreviewBtn) {
     runPreviewBtn.disabled = lockRun;
@@ -29639,6 +29960,9 @@ if (templatesBtn) {
 }
 if (publishProjectBtn) {
   publishProjectBtn.addEventListener("click", publishCurrentProject);
+}
+if (publishedChangesBtn) {
+  publishedChangesBtn.addEventListener("click", handlePublishedChanges);
 }
 if (closeProjectLibraryBtn) {
   closeProjectLibraryBtn.addEventListener("click", closeProjectLibrary);

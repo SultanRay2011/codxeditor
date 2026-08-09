@@ -1555,7 +1555,7 @@ app.post("/api/publish", async (req, res) => {
       });
       return;
     }
-    if (verificationKey.toUpperCase() !== existingKey.toUpperCase()) {
+    if (!publishVerificationKeyMatches(existingKey, verificationKey)) {
       res.status(403).json({ ok: false, error: "Verification key does not match this link." });
       return;
     }
@@ -1565,6 +1565,7 @@ app.post("/api/publish", async (req, res) => {
       projectName,
       files,
       activeFileName,
+      lastRevision: createPublishedRevision(existingEntry.project),
       updatedAt: Date.now(),
     };
   } else {
@@ -1654,7 +1655,7 @@ app.post("/api/published/:id/source", (req, res) => {
     res.status(400).json({ ok: false, error: "Enter the verification key for this link." });
     return;
   }
-  if (providedKey.toUpperCase() !== existingKey.toUpperCase()) {
+  if (!publishVerificationKeyMatches(existingKey, providedKey)) {
     res.status(403).json({ ok: false, error: "Verification key does not match this link." });
     return;
   }
@@ -1666,6 +1667,140 @@ app.post("/api/published/:id/source", (req, res) => {
       files: cloneFiles(project.files),
       activeFileName: project.activeFileName,
     },
+  });
+});
+
+app.post("/api/published/:id/history", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.id || "").trim();
+  const project = findPublishedProjectEntry(id)?.project;
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const verification = validatePublishedProjectVerification(
+    project,
+    req.body?.verificationKey,
+    "Its previous version cannot be reviewed.",
+  );
+  if (!verification.ok) {
+    res.status(verification.status).json({ ok: false, error: verification.error });
+    return;
+  }
+
+  const previous = normalizeStoredPublishedRevision(project.lastRevision);
+  const origin = `${req.protocol}://${req.get("host")}`;
+  const shareLink = `${origin}/${PUBLISH_PATH}/${encodeURIComponent(project.id)}`;
+  if (!previous) {
+    res.json({
+      ok: true,
+      history: {
+        hasPrevious: false,
+        id: project.id,
+        projectName: project.projectName,
+        currentSavedAt: Number(project.updatedAt || project.createdAt || Date.now()),
+        currentFileCount: Array.isArray(project.files) ? project.files.length : 0,
+        shareLink,
+      },
+    });
+    return;
+  }
+
+  const previousProject = {
+    id: project.id,
+    projectName: previous.projectName,
+    files: cloneFiles(previous.files),
+    activeFileName: previous.activeFileName,
+  };
+  const previousPreviewHtml = buildPublishedHtml(
+    previousProject,
+    "",
+    "",
+    { includeSourceOverlay: false },
+  ) || "";
+  res.json({
+    ok: true,
+    history: {
+      hasPrevious: true,
+      id: project.id,
+      projectName: project.projectName,
+      previousProjectName: previous.projectName,
+      currentSavedAt: Number(project.updatedAt || project.createdAt || Date.now()),
+      previousSavedAt: Number(previous.savedAt || project.createdAt || Date.now()),
+      currentFileCount: Array.isArray(project.files) ? project.files.length : 0,
+      previousFileCount: previous.files.length,
+      changes: summarizePublishedProjectChanges(previous, project),
+      previousPreviewHtml,
+      previousPreviewAvailable: Boolean(previousPreviewHtml),
+      shareLink,
+    },
+  });
+});
+
+app.post("/api/published/:id/history/restore", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.id || "").trim();
+  const entry = findPublishedProjectEntry(id);
+  const project = entry?.project;
+  if (!entry || !project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const verification = validatePublishedProjectVerification(
+    project,
+    req.body?.verificationKey,
+    "Its previous version cannot be restored.",
+  );
+  if (!verification.ok) {
+    res.status(verification.status).json({ ok: false, error: verification.error });
+    return;
+  }
+  const previous = normalizeStoredPublishedRevision(project.lastRevision);
+  if (!previous) {
+    res.status(409).json({ ok: false, error: "This link does not have a previous published version yet." });
+    return;
+  }
+  const expectedCurrentSavedAt = Number(req.body?.expectedCurrentSavedAt || 0);
+  const actualCurrentSavedAt = Number(project.updatedAt || project.createdAt || 0);
+  if (expectedCurrentSavedAt && expectedCurrentSavedAt !== actualCurrentSavedAt) {
+    res.status(409).json({
+      ok: false,
+      error: "This published link changed after you opened the preview. Review its latest changes before restoring.",
+    });
+    return;
+  }
+
+  const restoredAt = Date.now();
+  const restored = {
+    ...project,
+    projectName: previous.projectName,
+    files: cloneFiles(previous.files),
+    activeFileName: previous.activeFileName,
+    lastRevision: createPublishedRevision(project),
+    updatedAt: restoredAt,
+  };
+  try {
+    await persistPublishedProject(entry.key, restored);
+  } catch (error) {
+    console.error(`Failed to restore published project ${id}:`, error);
+    res.status(503).json({
+      ok: false,
+      error: "The previous published version could not be restored. Try again shortly.",
+    });
+    return;
+  }
+  publishedProjects.set(entry.key, restored);
+  logAdminEvent(
+    "Published version restored",
+    `${restored.projectName || restored.id} was restored to its immediately previous published version.`,
+  );
+  res.json({
+    ok: true,
+    restored: true,
+    id: restored.id,
+    projectName: restored.projectName,
+    restoredAt,
+    shareLink: `${req.protocol}://${req.get("host")}/${PUBLISH_PATH}/${encodeURIComponent(restored.id)}`,
   });
 });
 
@@ -1692,6 +1827,95 @@ function generatePublishVerificationKey() {
   const bytes = crypto.randomBytes(6);
   const suffix = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
   return `cxprojkey-${suffix}`;
+}
+
+function publishVerificationKeyMatches(expectedKey, providedKey) {
+  const expected = Buffer.from(String(expectedKey || "").trim().toUpperCase(), "utf8");
+  const provided = Buffer.from(String(providedKey || "").trim().toUpperCase(), "utf8");
+  if (!expected.length || expected.length !== provided.length) return false;
+  return crypto.timingSafeEqual(expected, provided);
+}
+
+function validatePublishedProjectVerification(project, providedKey, legacyAction) {
+  const existingKey = String(project?.verificationKey || "").trim();
+  const provided = String(providedKey || "").trim();
+  if (!existingKey) {
+    return {
+      ok: false,
+      status: 403,
+      error: `This link was created before verification keys were added. ${legacyAction}`,
+    };
+  }
+  if (!provided) {
+    return { ok: false, status: 400, error: "Enter the verification key for this link." };
+  }
+  if (!publishVerificationKeyMatches(existingKey, provided)) {
+    return { ok: false, status: 403, error: "Verification key does not match this link." };
+  }
+  return { ok: true, status: 200, error: "" };
+}
+
+function createPublishedRevision(project) {
+  if (!project || !Array.isArray(project.files)) return null;
+  return {
+    projectName: String(project.projectName || "CodX Editor Project"),
+    files: cloneFiles(project.files),
+    activeFileName: String(project.activeFileName || ""),
+    savedAt: Number(project.updatedAt || project.createdAt || Date.now()),
+  };
+}
+
+function normalizeStoredPublishedRevision(candidate) {
+  if (!candidate || !Array.isArray(candidate.files)) return null;
+  return {
+    projectName: String(candidate.projectName || "CodX Editor Project"),
+    files: cloneFiles(candidate.files),
+    activeFileName: String(candidate.activeFileName || ""),
+    savedAt: Number(candidate.savedAt || candidate.updatedAt || Date.now()),
+  };
+}
+
+function summarizePublishedProjectChanges(previous, current) {
+  const toFileMap = (files) => new Map(
+    (Array.isArray(files) ? files : []).map((file) => [
+      String(file?.name || "").trim().toLowerCase(),
+      file,
+    ]).filter(([name]) => name),
+  );
+  const previousFiles = toFileMap(previous?.files);
+  const currentFiles = toFileMap(current?.files);
+  const added = [];
+  const removed = [];
+  const modified = [];
+
+  currentFiles.forEach((file, name) => {
+    const before = previousFiles.get(name);
+    if (!before) {
+      added.push(String(file.name || name));
+      return;
+    }
+    if (
+      String(before.content || "") !== String(file.content || "") ||
+      String(before.type || "") !== String(file.type || "") ||
+      String(before.mediaType || "") !== String(file.mediaType || "")
+    ) {
+      modified.push(String(file.name || name));
+    }
+  });
+  previousFiles.forEach((file, name) => {
+    if (!currentFiles.has(name)) removed.push(String(file.name || name));
+  });
+  const countCharacters = (files) => (Array.isArray(files) ? files : []).reduce(
+    (total, file) => total + String(file?.content || "").length,
+    0,
+  );
+  return {
+    added,
+    removed,
+    modified,
+    unchangedCount: Math.max(0, currentFiles.size - added.length - modified.length),
+    characterDelta: countCharacters(current?.files) - countCharacters(previous?.files),
+  };
 }
 
 function extractHtmlTitle(html) {
@@ -1731,6 +1955,7 @@ function normalizeStoredPublishedProject(entry) {
     verificationKey: String(candidate.verificationKey || ""),
     createdAt: Number(candidate.createdAt || Date.now()),
     updatedAt: Number(candidate.updatedAt || candidate.createdAt || Date.now()),
+    lastRevision: normalizeStoredPublishedRevision(candidate.lastRevision),
   };
 }
 
@@ -2424,7 +2649,7 @@ function buildShareLink(baseUrl, sessionId) {
   return `/frontend/${sessionId}`;
 }
 
-function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") {
+function buildPublishedHtml(project, requestedFileName = "", requestTitle = "", options = {}) {
   const files = Array.isArray(project?.files) ? project.files : [];
   const activeFileName = String(project?.activeFileName || "");
   const requestedFile = String(requestedFileName || "").trim();
@@ -2605,7 +2830,9 @@ function buildPublishedHtml(project, requestedFileName = "", requestTitle = "") 
     html = `${publishBaseReset}${html}`;
   }
 
-  html = injectOpenSourceOverlay(html, String(project?.id || ""));
+  if (options.includeSourceOverlay !== false) {
+    html = injectOpenSourceOverlay(html, String(project?.id || ""));
+  }
 
   return html;
 }
