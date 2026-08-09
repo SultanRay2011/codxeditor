@@ -2116,6 +2116,7 @@ p {
 /* Verification / project key on published project cards. */
 .project-key {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-top: -2px;
@@ -2182,6 +2183,33 @@ p {
 .key-copy-btn:hover {
   background: var(--accent-dark);
   transform: translateY(-1px);
+}
+
+.project-change-key-btn {
+  flex: 0 0 auto;
+  border: 1px solid #f0cf9b;
+  background: #fff8eb;
+  color: #9a570c;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.project-change-key-btn:hover {
+  border-color: #d99c42;
+  background: #ffedcc;
+  transform: translateY(-1px);
+}
+
+.project-change-key-btn:focus-visible {
+  outline: 2px solid #d99c42;
+  outline-offset: 2px;
+}
+
+.project-change-key-btn:disabled {
+  cursor: wait;
+  opacity: 0.68;
+  transform: none;
 }
 
 /* Compact key row inside the "freshly published" latest links. */

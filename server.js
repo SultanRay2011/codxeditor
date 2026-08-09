@@ -1333,6 +1333,7 @@ app.get("/admin/api/projects", (req, res) => {
         ),
         createdAt: Number(project?.createdAt || Date.now()),
         updatedAt: Number(project?.updatedAt || project?.createdAt || Date.now()),
+        verificationKeyUpdatedAt: Number(project?.verificationKeyUpdatedAt || 0),
       };
     })
     .sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1365,6 +1366,60 @@ app.get("/admin/api/project/:id", (req, res) => {
           activeFileName,
       },
     },
+  });
+});
+
+app.patch("/admin/api/project/:id/verification-key", async (req, res) => {
+  const entry = findPublishedProjectEntry(req.params.id);
+  if (!entry?.project) {
+    res.status(404).json({ ok: false, error: "Published project not found." });
+    return;
+  }
+  const requestedKey = String(req.body?.verificationKey || "").trim();
+  const nextVerificationKey = requestedKey
+    ? normalizePublishVerificationKey(requestedKey)
+    : generatePublishVerificationKey();
+  if (requestedKey && !nextVerificationKey) {
+    res.status(400).json({
+      ok: false,
+      error: "Use cxprojkey- followed by 6 letters or numbers. The characters 0, O, 1, I, and L are not allowed.",
+    });
+    return;
+  }
+  const currentVerificationKey = String(entry.project.verificationKey || "").trim();
+  if (publishVerificationKeyMatches(currentVerificationKey, nextVerificationKey)) {
+    res.status(409).json({ ok: false, error: "Enter a different verification key." });
+    return;
+  }
+
+  const changedAt = Date.now();
+  const updatedProject = {
+    ...entry.project,
+    verificationKey: nextVerificationKey,
+    verificationKeyUpdatedAt: changedAt,
+  };
+  try {
+    await persistPublishedProject(entry.key, updatedProject);
+  } catch (error) {
+    console.error(`Failed to change verification key for ${entry.project.id || entry.key}:`, error);
+    res.status(503).json({
+      ok: false,
+      error: "The verification key could not be changed. Please try again shortly.",
+    });
+    return;
+  }
+  publishedProjects.set(entry.key, updatedProject);
+  const projectId = String(updatedProject.id || entry.key);
+  const projectName = String(updatedProject.projectName || projectId || "Published project");
+  logAdminEvent(
+    currentVerificationKey ? "Published project key changed" : "Published project key created",
+    `${projectName} (${projectId}) received a new verification key. The previous key no longer works.`,
+  );
+  res.json({
+    ok: true,
+    id: projectId,
+    verificationKey: nextVerificationKey,
+    verificationKeyUpdatedAt: changedAt,
   });
 });
 
@@ -1829,6 +1884,11 @@ function generatePublishVerificationKey() {
   return `cxprojkey-${suffix}`;
 }
 
+function normalizePublishVerificationKey(value) {
+  const match = String(value || "").trim().match(/^cxprojkey-([A-HJ-NP-Z2-9]{6})$/i);
+  return match ? `cxprojkey-${match[1].toUpperCase()}` : "";
+}
+
 function publishVerificationKeyMatches(expectedKey, providedKey) {
   const expected = Buffer.from(String(expectedKey || "").trim().toUpperCase(), "utf8");
   const provided = Buffer.from(String(providedKey || "").trim().toUpperCase(), "utf8");
@@ -1955,6 +2015,7 @@ function normalizeStoredPublishedProject(entry) {
     verificationKey: String(candidate.verificationKey || ""),
     createdAt: Number(candidate.createdAt || Date.now()),
     updatedAt: Number(candidate.updatedAt || candidate.createdAt || Date.now()),
+    verificationKeyUpdatedAt: Number(candidate.verificationKeyUpdatedAt || 0),
     lastRevision: normalizeStoredPublishedRevision(candidate.lastRevision),
   };
 }

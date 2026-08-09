@@ -387,7 +387,7 @@
       }
     </style>
     <link rel="stylesheet" href="/theme.css" />
-    <link rel="stylesheet" href="/adminprivate.css?v=20260722-admin-advanced1" />
+    <link rel="stylesheet" href="/adminprivate.css?v=20260809-project-key-controls1" />
   </head>
   <body>
     <main id="loginView" class="login-wrap">
@@ -577,7 +577,7 @@
               <div>
                 <span class="section-label">Published experiences</span>
                 <h2 id="projectsTitle">Published projects</h2>
-                <p>Review every project, its real publication date, public URL, files, and editor access.</p>
+                <p>Review every project, its publication details, files, editor access, and verification key controls.</p>
               </div>
               <label class="project-search">
                 <span>Search projects</span>
@@ -995,6 +995,14 @@
                     ? `<code class="project-key-value">${escapeHtml(project.verificationKey)}</code>
                        <button class="project-copy-btn key-copy-btn" data-copy="${escapeHtml(project.verificationKey)}" aria-label="Copy project verification key">COPY</button>`
                     : `<span class="project-key-value muted">Created before keys — not available</span>`}
+                  <button
+                    class="project-copy-btn project-change-key-btn"
+                    type="button"
+                    data-id="${escapeHtml(project.id)}"
+                    data-name="${escapeHtml(project.projectName || project.id)}"
+                    data-key="${escapeHtml(project.verificationKey || "")}"
+                    aria-label="${project.verificationKey ? "Change" : "Create"} verification key for ${escapeHtml(project.projectName || project.id)}"
+                  >${project.verificationKey ? "CHANGE KEY" : "CREATE KEY"}</button>
                 </div>
                 <div class="project-dates">
                   <time datetime="${escapeHtml(formatIsoDate(project.createdAt))}">
@@ -1187,6 +1195,50 @@
         }
       }
 
+      async function changePublishedProjectKey(button) {
+        const projectId = String(button?.dataset.id || "").trim();
+        const projectName = String(button?.dataset.name || projectId || "this project").trim();
+        const currentKey = String(button?.dataset.key || "").trim();
+        if (!projectId) return;
+        const requested = window.prompt(
+          `Enter a new verification key for "${projectName}".\n\nUse cxprojkey- followed by 6 letters or numbers. Leave the field blank to generate a secure key automatically.`,
+          "",
+        );
+        if (requested === null) return;
+        const enteredKey = String(requested || "").trim();
+        const match = enteredKey.match(/^cxprojkey-([A-HJ-NP-Z2-9]{6})$/i);
+        if (enteredKey && !match) {
+          alert("Use cxprojkey- followed by 6 letters or numbers. The characters 0, O, 1, I, and L are not allowed.");
+          return;
+        }
+        const normalizedKey = match ? `cxprojkey-${match[1].toUpperCase()}` : "";
+        if (normalizedKey && normalizedKey.toUpperCase() === currentKey.toUpperCase()) {
+          alert("Enter a different verification key.");
+          return;
+        }
+        const changeDescription = normalizedKey
+          ? `change the key to ${normalizedKey}`
+          : "generate a secure new key";
+        if (!confirm(`Are you sure you want to ${changeDescription} for "${projectName}"? The previous key will stop working immediately.`)) return;
+
+        const originalLabel = button.textContent;
+        button.disabled = true;
+        button.textContent = "CHANGING...";
+        try {
+          const result = await api(`/admin/api/project/${encodeURIComponent(projectId)}/verification-key`, {
+            method: "PATCH",
+            body: JSON.stringify({ verificationKey: normalizedKey }),
+          });
+          await loadDashboard();
+          alert(`Verification key changed successfully.\n\nNew key: ${result.verificationKey}\n\nThe previous key no longer works.`);
+        } finally {
+          if (button.isConnected) {
+            button.disabled = false;
+            button.textContent = originalLabel;
+          }
+        }
+      }
+
       loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
@@ -1246,6 +1298,8 @@
             await copyText(target.dataset.pin);
             target.textContent = "COPIED";
             setTimeout(() => (target.textContent = "COPY PIN"), 1000);
+          } else if (target.classList.contains("project-change-key-btn")) {
+            await changePublishedProjectKey(target);
           } else if (target.classList.contains("project-copy-btn")) {
             await copyText(target.dataset.copy || target.dataset.link);
             const original = target.textContent;
